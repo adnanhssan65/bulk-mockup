@@ -1,0 +1,239 @@
+name: Bulk Mockup Build
+
+# Manual build: Actions tab -> "Bulk Mockup Build" -> Run workflow.
+# Secrets zaroori hain: BULK_KEYSTORE_BASE64 / BULK_KEYSTORE_PASS /
+# BULK_KEY_ALIAS / BULK_KEY_PASS (README_BULK.md dekho).
+#
+# Package naam com.termux hi hai (owner ka faisla) — is liye koi path
+# rewrite nahi: official packages seedha istemal hote hain, pkg bhi chalta hai.
+#
+# Job 1 (arm64 runner): termux-docker me packages install karke usr archive
+#   banta hai, phir usi container me asal Project 1 scripts ke tests.
+# Job 2 (x86 runner): APK build (NDK sirf x86 hosts par hai), manifest
+#   checks, unit tests, signed release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  packages:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Usr archive cache
+        id: usr-cache
+        uses: actions/cache@v4
+        with:
+          path: out/termux-usr.tar.gz
+          key: usr-v3-${{ hashFiles('ci/packages-key.txt') }}-${{ github.run_number }}
+          restore-keys: |
+            usr-v3-${{ hashFiles('ci/packages-key.txt') }}-
+
+      - name: Docker me packages install + usr tar
+        if: steps.usr-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p out && chmod 777 out
+          docker run --rm --user 1000:1000 --entrypoint bash \
+            -v "$PWD/out:/out" termux/termux-docker:aarch64 -lc '
+              set -e
+              pkg update -y
+              pkg install -y x11-repo
+              pkg update -y
+              pkg install -y python python-numpy opencv-python python-pillow python-pip dbus nano curl wget zip unzip
+              python -m pip install tqdm
+              python -c "import cv2, numpy, PIL, tqdm; print(\"SAB OK\")"
+              dpkg -l > /out/dpkg-list.txt
+              tar -zcf /out/termux-usr.tar.gz -C /data/data/com.termux/files ./usr
+            '
+          ls -lh out/
+
+      - name: Test container tayyar karo
+        run: |
+          mkdir -p testenv/termux_files previews reports
+          tar -xzf out/termux-usr.tar.gz -C testenv/termux_files
+          # Built-in API wrappers usr/bin me (app phone par pehle setup me yahi karta hai)
+          for mode in scan wakelock wakeunlock; do
+            name=termux-media-scan; [ "$mode" = wakelock ] && name=termux-wake-lock; [ "$mode" = wakeunlock ] && name=termux-wake-unlock
+            { echo "#!/data/data/com.termux/files/usr/bin/python3";
+              sed -e "s|__SOCK__|/data/data/com.termux/files/bulk_api.sock|" -e "s|__MODE__|$mode|" \
+                app/src/main/assets/bulk/bulk_api_client.py; } > "testenv/termux_files/usr/bin/$name"
+            chmod 755 "testenv/termux_files/usr/bin/$name"
+          done
+          # Wrapper fail-fast test (server nahi hai -> 2s me saaf fail, hang nahi)
+          sed -e "s|__SOCK__|/nonexistent/bulk.sock|" -e "s|__MODE__|scan|" \
+            app/src/main/assets/bulk/bulk_api_client.py > /tmp/wrap_test.py
+          timeout 10 python3 /tmp/wrap_test.py /tmp/x.jpg; test $? -eq 1 && echo "WRAPPER FAIL-FAST OK"
+
+      - name: Container tests — SAB OK + cv2/PIL asal kaam
+        run: |
+          docker run --rm --entrypoint bash \
+            -v "$PWD/testenv/termux_files/usr:/data/data/com.termux/files/usr" \
+            -v "$PWD:/repo" termux/termux-docker:aarch64 -lc '
+              set -e
+              PY=/data/data/com.termux/files/usr/bin/python
+              $PY -c "import cv2, numpy, PIL, tqdm; print(\"SAB OK\")"
+              $PY - << "PYEOF"
+          import cv2, numpy as np
+          from PIL import Image
+          import PIL.ImageCms as cms
+          img = (np.random.default_rng(3).integers(0, 255, (800, 600, 3))).astype("uint8")
+          cv2.imwrite("/tmp/t.png", img)
+          back = cv2.imread("/tmp/t.png")
+          assert back is not None and back.shape == img.shape
+          small = cv2.resize(back, (300, 400), interpolation=cv2.INTER_LANCZOS4)
+          src = np.float32([[0, 0], [600, 0], [600, 800], [0, 800]])
+          dst = np.float32([[50, 30], [550, 60], [580, 760], [20, 720]])
+          warped = cv2.warpPerspective(back, cv2.getPerspectiveTransform(src, dst), (600, 800))
+          assert warped.shape == (800, 600, 3)
+          srgb = cms.ImageCmsProfile(cms.createProfile("sRGB")).tobytes()
+          Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB)).save(
+              "/tmp/t.jpg", format="JPEG", quality=87, subsampling=0, icc_profile=srgb)
+          with Image.open("/tmp/t.jpg") as im:
+              assert im.info.get("icc_profile"), "ICC missing"
+          print("CV2/PIL REAL OPS OK")
+          PYEOF
+              # site-packages ke tamam modules import karne ki koshish (report only)
+              $PY - << "PYEOF" || true
+          import pkgutil, importlib
+          bad = []
+          for m in pkgutil.iter_modules():
+              try:
+                  importlib.import_module(m.name)
+              except Exception as e:
+                  bad.append(m.name + ": " + type(e).__name__)
+          print("IMPORT-ALL: failures =", len(bad))
+          for b in bad[:30]:
+              print("  ", b)
+          PYEOF
+            '
+
+      - name: Project 1 asal tests (owner ke asal scripts ke sath)
+        run: |
+          docker run --rm --entrypoint bash \
+            -v "$PWD/testenv/termux_files/usr:/data/data/com.termux/files/usr" \
+            -v "$PWD:/repo" -v "$PWD/previews:/previews" -v "$PWD/reports:/work" \
+            termux/termux-docker:aarch64 -lc '
+              set -e
+              mkdir -p /storage/emulated/0 /work/stock
+              PY=/data/data/com.termux/files/usr/bin/python
+              $PY /repo/ci/project1_test.py --label stock --sut-python $PY \
+                --fixtures /repo/ci/fixtures/mockup_project_1 --work /work/stock \
+                | tee /work/report_stock.txt
+              # previews: pehle mockup + ready output chhoti karke
+              $PY - << "PYEOF"
+          from PIL import Image
+          import glob
+          for i, p in enumerate(sorted(glob.glob("/storage/emulated/0/mockup_project_1/1_Mockups/*.jpg"))[:1] +
+                                 sorted(glob.glob("/storage/emulated/0/mockup_project_1/1_Ready_Wallpapers/*.jpg"))[:1]):
+              with Image.open(p) as im:
+                  im.convert("RGB").resize((270, 480)).save(f"/previews/preview_{i}.jpg", quality=80)
+          print("previews saved")
+          PYEOF
+            '
+
+      - name: Test reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-tests
+          path: |
+            out/dpkg-list.txt
+            previews/
+            reports/
+          if-no-files-found: ignore
+
+      - name: Usr tar (build job ke liye)
+        uses: actions/upload-artifact@v4
+        with:
+          name: usr-termux
+          path: out/termux-usr.tar.gz
+
+  build:
+    needs: packages
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Usr tar download
+        uses: actions/download-artifact@v4
+        with:
+          name: usr-termux
+
+      - name: Asset rakho
+        run: |
+          cp termux-usr.tar.gz app/src/main/assets/termux-usr.tar.gz
+          ls -lh app/src/main/assets/
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK + NDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+      - name: Keystore secrets se banao
+        env:
+          BULK_KEYSTORE_BASE64: ${{ secrets.BULK_KEYSTORE_BASE64 }}
+        run: |
+          echo "$BULK_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/bulk.jks"
+          ls -l "$RUNNER_TEMP/bulk.jks"
+
+      - name: Unit tests (projects.conf parser)
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --stacktrace
+
+      - name: APK build (release, signed)
+        env:
+          BULK_KEYSTORE_FILE: ${{ runner.temp }}/bulk.jks
+          BULK_KEYSTORE_PASS: ${{ secrets.BULK_KEYSTORE_PASS }}
+          BULK_KEY_ALIAS: ${{ secrets.BULK_KEY_ALIAS }}
+          BULK_KEY_PASS: ${{ secrets.BULK_KEY_PASS }}
+        run: |
+          ./gradlew :app:assembleRelease --stacktrace
+          find app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
+
+      - name: Manifest check — package com.termux + sharedUserId nahi hona chahiye
+        run: |
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          AAPT=$(ls "$ANDROID_SDK_ROOT"/build-tools/36.0.0/aapt2)
+          echo "APK: $APK"
+          "$AAPT" dump xmltree "$APK" --file AndroidManifest.xml > /tmp/tree.txt
+          grep -q 'package="com.termux"' /tmp/tree.txt && echo "package = com.termux OK"
+          if grep -q "sharedUserId" /tmp/tree.txt; then
+            echo "FAIL: sharedUserId abhi bhi mojood hai"; exit 1
+          fi
+          echo "MANIFEST CHECK OK"
+
+      - name: APK tayyar + size
+        id: apk
+        run: |
+          mkdir -p dist
+          cp "$(find app/build/outputs/apk/release -name '*.apk' | head -1)" dist/BulkMockup.apk
+          SIZE=$(du -h dist/BulkMockup.apk | cut -f1)
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          ls -lh dist/
+
+      - name: Release (tag = v<versionCode>)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CODE=$(grep -oP 'versionCode\s+\K[0-9]+' app/build.gradle | head -1)
+          TAG="v$CODE"
+          echo "Release tag: $TAG (APK size: ${{ steps.apk.outputs.size }})"
+          gh release create "$TAG" dist/BulkMockup.apk \
+            --title "Bulk Mockup $TAG" \
+            --notes "Bulk Mockup — Termux fork (package com.termux), tamam packages pehle se andar. APK size: ${{ steps.apk.outputs.size }}. NOTE: agar phone me official Termux pehle se hai to pehle use uninstall karna hoga (package naam aik hi hai, signature alag hai) — mockup project folders /storage/emulated/0 me mehfooz rahenge. README_BULK.md dekho." \
+            || gh release upload "$TAG" dist/BulkMockup.apk --clobber

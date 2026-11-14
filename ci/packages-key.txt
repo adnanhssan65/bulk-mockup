@@ -1,0 +1,1 @@
+x11-repo python python-numpy opencv-python python-pillow python-pip dbus nano curl wget zip unzip + pip:tqdm

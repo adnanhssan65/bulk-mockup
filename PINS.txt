@@ -1,0 +1,8 @@
+Bulk Mockup — pinned versions (Override G2.11)
+==============================================
+termux-app upstream base : 8629e63 (neeche full SHA dekho — clone ke waqt ka master, app 0.118.0)
+termux-docker image      : termux/termux-docker:aarch64 (arch-specific tag)
+Packages                 : har build par "dpkg -l" ki list release artifact me mehfooz hoti hai
+                           (packages repo ki taaza versions istemal hoti hain; cache monthly refresh)
+Python packages          : tqdm (pip, taaza) — baqi sab Termux repos se
+8629e632fcb95da272221be327db653fb24befe9
