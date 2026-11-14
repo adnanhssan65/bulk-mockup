@@ -54,7 +54,7 @@ jobs:
 
       - name: Test container tayyar karo
         run: |
-          mkdir -p testenv/termux_files previews reports
+          mkdir -p testenv/termux_files previews reports testwork
           tar -xzf out/termux-usr.tar.gz -C testenv/termux_files
           # Built-in API wrappers usr/bin me (app phone par pehle setup me yahi karta hai)
           for mode in scan wakelock wakeunlock; do
@@ -77,6 +77,7 @@ jobs:
         run: |
           docker run --rm --entrypoint bash \
             -v "$PWD/testenv/termux_files/usr:/data/data/com.termux/files/usr" \
+            -v "$PWD/testwork:/testwork" \
             -v "$PWD:/repo" termux/termux-docker:aarch64 -lc '
               set -e
               PY=/data/data/com.termux/files/usr/bin/python
@@ -86,8 +87,8 @@ jobs:
           from PIL import Image
           import PIL.ImageCms as cms
           img = (np.random.default_rng(3).integers(0, 255, (800, 600, 3))).astype("uint8")
-          cv2.imwrite("/tmp/t.png", img)
-          back = cv2.imread("/tmp/t.png")
+          assert cv2.imwrite("/testwork/t.png", img), "imwrite failed"
+          back = cv2.imread("/testwork/t.png")
           assert back is not None and back.shape == img.shape
           small = cv2.resize(back, (300, 400), interpolation=cv2.INTER_LANCZOS4)
           src = np.float32([[0, 0], [600, 0], [600, 800], [0, 800]])
@@ -96,8 +97,8 @@ jobs:
           assert warped.shape == (800, 600, 3)
           srgb = cms.ImageCmsProfile(cms.createProfile("sRGB")).tobytes()
           Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB)).save(
-              "/tmp/t.jpg", format="JPEG", quality=87, subsampling=0, icc_profile=srgb)
-          with Image.open("/tmp/t.jpg") as im:
+              "/testwork/t.jpg", format="JPEG", quality=87, subsampling=0, icc_profile=srgb)
+          with Image.open("/testwork/t.jpg") as im:
               assert im.info.get("icc_profile"), "ICC missing"
           print("CV2/PIL REAL OPS OK")
           PYEOF
