@@ -63,12 +63,12 @@ public final class ProjectsConf {
         sb.append("# Bulk Mockup — projects list\n");
         sb.append("# Format: Naam | work command | batch command | delete command\n");
         sb.append("# In lines ko badal sakte ho; app har dafa file fresh parhti hai.\n");
-        for (int i = 1; i <= 10; i++) {
-            sb.append("Project ").append(i)
-              .append(" | w").append(i)
-              .append(" | p").append(i)
-              .append(" | d").append(i).append("\n");
-        }
+        // Sirf wohi projects jinke asal shortcuts app me pehle se lage hain
+        // (owner ki asal convention: w = process, b = batch, d = delete).
+        // Baqi projects ki line owner khud jor sakta hai.
+        sb.append("Project 1 | w1 | b1 | d1\n");
+        sb.append("Project 2 | w2 | b2 | d2\n");
+        sb.append("Project 8 | w8 | b8 | d8\n");
         return sb.toString();
     }
 }

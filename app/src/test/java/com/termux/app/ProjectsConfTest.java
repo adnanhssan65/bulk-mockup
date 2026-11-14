@@ -56,10 +56,13 @@ public class ProjectsConfTest {
     }
 
     @Test
-    public void defaultContentHasTenProjects() {
+    public void defaultContentHasRealProjects() {
         List<ProjectsConf.Project> ps = ProjectsConf.parse(ProjectsConf.defaultContent());
-        assertEquals(10, ps.size());
-        assertEquals("w10", ps.get(9).workCmd);
-        assertTrue(ps.get(0).deleteCmd.equals("d1"));
+        assertEquals(3, ps.size());
+        assertEquals("w1", ps.get(0).workCmd);
+        assertEquals("b1", ps.get(0).batchCmd);
+        assertEquals("d1", ps.get(0).deleteCmd);
+        assertEquals("Project 8", ps.get(2).name);
+        assertEquals("b8", ps.get(2).batchCmd);
     }
 }
