@@ -64,12 +64,12 @@ jobs:
           for mode in scan wakelock wakeunlock; do
             name=termux-media-scan; [ "$mode" = wakelock ] && name=termux-wake-lock; [ "$mode" = wakeunlock ] && name=termux-wake-unlock
             { echo "#!/data/data/com.termux/files/usr/bin/python3";
-              sed -e "s|__SOCK__|/data/data/com.termux/files/bulk_api.sock|" -e "s|__MODE__|$mode|" \
+              sed -e "s|__SOCK__|com.termux.bulkapi|" -e "s|__MODE__|$mode|" \
                 app/src/main/assets/bulk/bulk_api_client.py; } > "testenv/termux_files/usr/bin/$name"
             chmod 755 "testenv/termux_files/usr/bin/$name"
           done
           # Wrapper fail-fast test (server nahi hai -> 2s me saaf fail, hang nahi)
-          sed -e "s|__SOCK__|/nonexistent/bulk.sock|" -e "s|__MODE__|scan|" \
+          sed -e "s|__SOCK__|bulk-nonexistent|" -e "s|__MODE__|scan|" \
             app/src/main/assets/bulk/bulk_api_client.py > /tmp/wrap_test.py
           if timeout 20 python3 /tmp/wrap_test.py /tmp/x.jpg; then
             echo "FAIL: wrapper ko fail hona chahiye tha (server nahi hai)"; exit 1

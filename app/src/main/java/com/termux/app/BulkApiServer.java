@@ -4,12 +4,9 @@ import android.content.Context;
 import android.media.MediaScannerConnection;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
-import android.net.LocalSocketImpl;
-import android.net.LocalSocketAddress;
 import android.os.PowerManager;
 
 import com.termux.shared.logger.Logger;
-import com.termux.shared.termux.TermuxConstants;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -27,9 +24,12 @@ import java.util.concurrent.TimeUnit;
  * Bulk Mockup ka built-in API server (Termux:API app ka replacement — sirf EK APK).
  *
  * $PREFIX/bin ke wrapper scripts (termux-media-scan / termux-wake-lock /
- * termux-wake-unlock) ek filesystem unix socket ke zariye is server se baat
- * karte hain. Socket app ke private files dir me hai, is liye sirf is app ke
- * apne processes (terminal sessions) hi connect kar sakte hain.
+ * termux-wake-unlock) ek unix socket ke zariye is server se baat karte hain.
+ * Socket Linux ke ABSTRACT namespace me hai (naam: com.termux.bulkapi) —
+ * filesystem socket ke liye darkaar hidden API (LocalSocketImpl) public SDK
+ * me mojood nahi, is liye yehi wahid public-API tareeqa hai. Commands bilkul
+ * be-zarar hain (di gayi file ko media scan karna, wake lock lena/chorna),
+ * is liye abstract naam ka chhota sa tradeoff qabool hai.
  *
  * Protocol (ek line = ek command, har command ka jawab ek line "OK"/"ERR ..."):
  *   SCAN <path>    — ek file ko MediaScanner se scan karo, mukammal hone tak ruko
@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
 public final class BulkApiServer {
 
     private static final String LOG_TAG = "BulkApiServer";
-    public static final String SOCKET_NAME = "bulk_api.sock";
+    public static final String SOCKET_NAME = "com.termux.bulkapi";
 
     private static volatile boolean sRunning = false;
     private static LocalServerSocket sServer;
@@ -52,8 +52,8 @@ public final class BulkApiServer {
 
     private BulkApiServer() {}
 
-    public static String socketPath() {
-        return TermuxConstants.TERMUX_FILES_DIR_PATH + "/" + SOCKET_NAME;
+    public static String socketName() {
+        return SOCKET_NAME;
     }
 
     public static synchronized void start(Context context) {
@@ -61,7 +61,7 @@ public final class BulkApiServer {
         sRunning = true;
         sContext = context.getApplicationContext();
         new Thread(BulkApiServer::serveLoop, "BulkApiServer").start();
-        Logger.logInfo(LOG_TAG, "BulkApiServer starting at " + socketPath());
+        Logger.logInfo(LOG_TAG, "BulkApiServer starting at " + socketName());
     }
 
     public static synchronized void stop() {
@@ -72,21 +72,9 @@ public final class BulkApiServer {
     }
 
     private static void serveLoop() {
-        File sockFile = new File(socketPath());
-        try { if (sockFile.exists()) sockFile.delete(); } catch (Exception ignored) {}
-
         LocalServerSocket server;
         try {
-            // android.net.LocalServerSocket ka koi no-arg constructor nahi hota:
-            // pehle apna impl bana kar FILESYSTEM address par bind + listen karo,
-            // phir usi ke FileDescriptor se server socket banao (framework ka
-            // apna pattern bhi yahi hai).
-            LocalSocketImpl impl = new LocalSocketImpl();
-            impl.create(LocalSocket.SOCKET_STREAM);
-            impl.bind(new LocalSocketAddress(socketPath(),
-                LocalSocketAddress.Namespace.FILESYSTEM));
-            impl.listen(50);
-            server = new LocalServerSocket(impl.getFileDescriptor());
+            server = new LocalServerSocket(socketName());
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "BulkApiServer bind failed", e);
             sRunning = false;

@@ -17,7 +17,8 @@ def talk(lines):
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(30)
-            s.connect(SOCK)
+            # Abstract namespace socket: naam se pehle \0 lagta hai
+            s.connect("\0" + SOCK)
             break
         except OSError:
             try:

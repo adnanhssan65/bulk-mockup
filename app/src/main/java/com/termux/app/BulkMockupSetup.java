@@ -288,7 +288,7 @@ public final class BulkMockupSetup {
     private static String wrapperScript(Context context, String mode) throws Exception {
         String template = readAssetText(context, "bulk/bulk_api_client.py");
         return "#!" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/python3\n"
-            + template.replace("__SOCK__", BulkApiServer.socketPath())
+            + template.replace("__SOCK__", BulkApiServer.socketName())
                       .replace("__MODE__", mode);
     }
 

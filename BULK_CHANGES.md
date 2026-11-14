@@ -46,7 +46,7 @@ The owner's scripts use exactly `termux-media-scan` (file and `-r`),
 scripts). Implementation:
 - `BulkApiServer` (new, in `com.termux.app`) runs inside `TermuxService`
   (started in `onCreate`, stopped in `onDestroy`) and listens on a
-  **filesystem** unix socket at `/data/data/com.termux/files/bulk_api.sock`
+  unix socket in the Linux **abstract namespace** (name `com.termux.bulkapi`; filesystem sockets need the hidden `LocalSocketImpl` API, which is not in the public SDK — found via CI compile, fixed 2026-11-14)
   (app-private directory → only this app's processes can connect).
   Connections are handled sequentially, so scan order is exactly the order
   the scripts request. `SCAN` waits for `MediaScannerConnection`
