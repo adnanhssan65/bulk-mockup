@@ -48,6 +48,20 @@ def sha256(path):
 
 # ---------------------------------------------------------------- inputs
 
+def big_photo_image():
+    """6000x8000 photo-like image (smooth gradients + texture + halki noise).
+    Pure random noise jaan bujh kar nahi — wo JPEG ke liye pathological
+    worst case hai, asal wallpaper photo jesa kabhi nahi hota."""
+    import numpy as np
+    rng = np.random.default_rng(11)
+    small = rng.integers(0, 255, (500, 375, 3), dtype=np.uint8)
+    tex = Image.fromarray(small, "RGB").resize((6000, 8000), Image.LANCZOS)
+    arr = np.asarray(tex).astype(np.int16)
+    yy = np.linspace(0, 120, 8000, dtype=np.int16)[:, None, None]
+    arr = np.clip(arr // 2 + 64 + yy, 0, 255).astype(np.uint8)
+    return Image.fromarray(arr, "RGB")
+
+
 def gen_inputs(dest):
     """9 test inputs, creation order hi process order hai (ctime sort)."""
     import numpy as np
@@ -85,19 +99,13 @@ def gen_inputs(dest):
     save(gradient(90, 160, (255, 120, 0), (0, 120, 255)), "06_tiny.jpg", quality=85)
     save(gradient(720, 1280, (60, 200, 160), (200, 60, 120)), "07_portrait2.jpg", quality=90)
     save(gradient(1600, 900, (90, 90, 200), (240, 160, 40)), "08_land2.jpg", quality=90)
-    import numpy as np
-    rng = np.random.default_rng(7)
-    arr = rng.integers(0, 255, (8000, 6000, 3), dtype=np.uint8)
-    save(Image.fromarray(arr, "RGB"), "09_big.jpg", quality=88)
+    save(big_photo_image(), "09_big.jpg", quality=88)
     return made
 
 
 def gen_big(dest):
-    import numpy as np
     os.makedirs(dest, exist_ok=True)
-    rng = np.random.default_rng(7)
-    arr = rng.integers(0, 255, (8000, 6000, 3), dtype=np.uint8)
-    Image.fromarray(arr, "RGB").save(os.path.join(dest, "01_big.jpg"), quality=88)
+    big_photo_image().save(os.path.join(dest, "01_big.jpg"), quality=88)
 
 
 def gen_many(dest, n=20):

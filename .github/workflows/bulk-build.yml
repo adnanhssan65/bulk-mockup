@@ -35,8 +35,12 @@ jobs:
             usr-v3-${{ hashFiles('ci/packages-key.txt') }}-
 
       - name: Docker me packages install + usr tar
-        if: steps.usr-cache.outputs.cache-hit != 'true'
         run: |
+          if [ -s out/termux-usr.tar.gz ]; then
+            echo "Cache se usr tar mil gaya — packages install SKIP"
+            ls -lh out/
+            exit 0
+          fi
           mkdir -p out && chmod 777 out
           docker run --rm --user 1000:1000 --entrypoint bash \
             -v "$PWD/out:/out" termux/termux-docker:aarch64 -lc '
@@ -183,8 +187,9 @@ jobs:
 
       - name: Setup Android SDK + NDK
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+          SDKM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
         env:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
