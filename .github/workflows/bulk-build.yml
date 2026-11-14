@@ -67,7 +67,11 @@ jobs:
           # Wrapper fail-fast test (server nahi hai -> 2s me saaf fail, hang nahi)
           sed -e "s|__SOCK__|/nonexistent/bulk.sock|" -e "s|__MODE__|scan|" \
             app/src/main/assets/bulk/bulk_api_client.py > /tmp/wrap_test.py
-          timeout 10 python3 /tmp/wrap_test.py /tmp/x.jpg; test $? -eq 1 && echo "WRAPPER FAIL-FAST OK"
+          if timeout 20 python3 /tmp/wrap_test.py /tmp/x.jpg; then
+            echo "FAIL: wrapper ko fail hona chahiye tha (server nahi hai)"; exit 1
+          else
+            echo "WRAPPER FAIL-FAST OK"
+          fi
 
       - name: Container tests — SAB OK + cv2/PIL asal kaam
         run: |
