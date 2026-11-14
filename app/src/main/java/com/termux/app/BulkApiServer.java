@@ -4,6 +4,7 @@ import android.content.Context;
 import android.media.MediaScannerConnection;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
+import android.net.LocalSocketImpl;
 import android.net.LocalSocketAddress;
 import android.os.PowerManager;
 
@@ -76,9 +77,16 @@ public final class BulkApiServer {
 
         LocalServerSocket server;
         try {
-            server = new LocalServerSocket();
-            server.bind(new LocalSocketAddress(socketPath(),
+            // android.net.LocalServerSocket ka koi no-arg constructor nahi hota:
+            // pehle apna impl bana kar FILESYSTEM address par bind + listen karo,
+            // phir usi ke FileDescriptor se server socket banao (framework ka
+            // apna pattern bhi yahi hai).
+            LocalSocketImpl impl = new LocalSocketImpl();
+            impl.create(LocalSocket.SOCKET_STREAM);
+            impl.bind(new LocalSocketAddress(socketPath(),
                 LocalSocketAddress.Namespace.FILESYSTEM));
+            impl.listen(50);
+            server = new LocalServerSocket(impl.getFileDescriptor());
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "BulkApiServer bind failed", e);
             sRunning = false;
