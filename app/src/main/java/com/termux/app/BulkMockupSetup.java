@@ -30,7 +30,7 @@ import java.nio.charset.StandardCharsets;
  * Bulk Mockup first-run setup.
  *
  * Normal Termux bootstrap ke BAAD chalta hai (sirf pehli dafa):
- *  1. APK ke andar mojood termux-usr.tar.gz (owner ke working phone ke tamam
+ *  1. APK ke andar mojood termux-usr.dat (owner ke working phone ke tamam
  *     packages) ko $PREFIX ke upar extract karta hai — koi pkg install nahi.
  *  2. ~/.bashrc, ~/.termux/colors.properties aur ~/projects.conf sirf tab
  *     lagata hai jab wo pehle se mojood na hon (kabhi overwrite nahi).
@@ -41,7 +41,10 @@ import java.nio.charset.StandardCharsets;
 public final class BulkMockupSetup {
 
     private static final String LOG_TAG = "BulkMockupSetup";
-    private static final String USR_ASSET = "termux-usr.tar.gz";
+    // NOTE: .gz naam bilkul nahi rakhna — AAPT packaging ke waqt .gz asset ko
+    // khud khol kar naam se .gz hata deta hai (v119 isi liye phone par fail hua:
+    // APK ke andar file assets/termux-usr.tar ban gayi thi). Is liye .dat naam.
+    private static final String USR_ASSET = "termux-usr.dat";
     private static final String MARKER_NAME = ".bulk_mockup_setup_done";
     private static final String PREFS = "bulk_mockup";
     private static final String PREF_BATTERY_ASKED = "battery_asked";
@@ -152,8 +155,16 @@ public final class BulkMockupSetup {
         String stagingCanonical = staging.getCanonicalPath();
 
         InputStream raw = context.getAssets().open(USR_ASSET);
-        TarArchiveInputStream tar = new TarArchiveInputStream(
-            new GzipCompressorInputStream(new BufferedInputStream(raw, 1 << 16)), "UTF-8");
+        BufferedInputStream buffered = new BufferedInputStream(raw, 1 << 16);
+        buffered.mark(2);
+        int magic1 = buffered.read();
+        int magic2 = buffered.read();
+        buffered.reset();
+        // Andar ka data gzip hai ya seedha tar — magic bytes (1f 8b) se khud
+        // pehchano, naam/extension par kabhi bharosa nahi (v119 wala sabak).
+        InputStream untar = (magic1 == 0x1f && magic2 == 0x8b)
+            ? new GzipCompressorInputStream(buffered) : buffered;
+        TarArchiveInputStream tar = new TarArchiveInputStream(untar, "UTF-8");
 
         byte[] buffer = new byte[1 << 16];
         TarArchiveEntry entry;

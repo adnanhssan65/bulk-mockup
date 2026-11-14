@@ -176,7 +176,9 @@ jobs:
 
       - name: Asset rakho
         run: |
-          cp termux-usr.tar.gz app/src/main/assets/termux-usr.tar.gz
+          # .dat naam lazmi hai: AAPT .gz wali asset ko packaging me khol kar
+          # naam badal deta hai (v119 phone par isi liye fail hua tha).
+          cp termux-usr.tar.gz app/src/main/assets/termux-usr.dat
           ls -lh app/src/main/assets/
 
       - name: Setup JDK 17
@@ -226,6 +228,22 @@ jobs:
             echo "FAIL: sharedUserId abhi bhi mojood hai"; exit 1
           fi
           echo "MANIFEST CHECK OK"
+
+      - name: APK asset check — termux-usr.dat sahi naam + size ke sath andar ho
+        run: |
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          python3 - "$APK" <<'PYEOF'
+          import sys, zipfile
+          z = zipfile.ZipFile(sys.argv[1])
+          names = z.namelist()
+          assert "assets/termux-usr.dat" in names, "FAIL: assets/termux-usr.dat APK me nahi hai!"
+          info = z.getinfo("assets/termux-usr.dat")
+          print("asset OK:", info.filename, "packed size:", info.compress_size)
+          assert info.compress_size > 300_000_000, "FAIL: asset ka size ghair-mamooli chhota hai"
+          bad = [n for n in names if n.endswith(".tar.gz") or n == "assets/termux-usr.tar"]
+          assert not bad, "FAIL: ghalat naam wali asset APK me hai: %s" % bad
+          print("ASSET CHECK OK")
+          PYEOF
 
       - name: APK tayyar + size
         id: apk
