@@ -399,7 +399,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
                 TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
-                    // Bulk Mockup: bootstrap ke baad pehli-dafa wala packages setup (sirf ek dafa chalta hai)
+                    // Termux Mod: bootstrap ke baad pehli-dafa wala packages setup (sirf ek dafa chalta hai)
                     BulkMockupSetup.runIfNeeded(TermuxActivity.this, () -> {
                     if (mTermuxService == null) return; // Activity might have been destroyed.
                     try {
@@ -592,7 +592,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (projectsButton != null) {
             projectsButton.setOnClickListener(v -> ProjectsLauncher.show(TermuxActivity.this));
         }
-        // Bulk Mockup drawer items: Permissions / Check for updates / About
+        // Termux Mod drawer items: Permissions / Check for updates / About
         View permissionsButton = findViewById(R.id.permissions_button);
         if (permissionsButton != null) {
             permissionsButton.setOnClickListener(v -> {
@@ -624,8 +624,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
                 } catch (Exception ignored) {}
                 new AlertDialog.Builder(TermuxActivity.this)
-                    .setTitle("Bulk Mockup")
-                    .setMessage("Bulk Mockup\nVersion: " + version + "\n\n"
+                    .setTitle("Termux Mod")
+                    .setMessage("Termux Mod\nVersion: " + version + "\n\n"
                         + "Tamam mockup projects ke liye — packages pehle se andar hain, koi setup nahi.\n\n"
                         + "Owner: Mehar Adnan")
                     .setPositiveButton("OK", null)

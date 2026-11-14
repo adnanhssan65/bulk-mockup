@@ -1,4 +1,4 @@
-# Bulk Mockup — Owner Guide (asaan alfaaz, click-by-click)
+# Termux Mod — Owner Guide (asaan alfaaz, click-by-click)
 
 Ye app asal **Termux** ka fork hai. Do khaas baatein:
 
@@ -12,12 +12,12 @@ App ka package naam **com.termux** hi hai (asal Termux wala) — is liye:
   bhi bilkul asal Termux ki tarah kaam karta hai** (naye packages bhi lag sakte
   hain — waise sab zaroori cheezein pehle se andar hain: python, numpy, opencv,
   pillow, tqdm, nano, curl, wget, zip, unzip, dbus).
-- **Lekin:** ek hi phone par **asal Termux or Bulk Mockup dono aik sath install
+- **Lekin:** ek hi phone par **asal Termux or Termux Mod dono aik sath install
   NAHI ho sakti** (package naam aik, signature alag). Agar phone me asal Termux
-  pehle se hai to Bulk Mockup lagane se pehle use **uninstall** karna hoga.
+  pehle se hai to Termux Mod lagane se pehle use **uninstall** karna hoga.
   Fikr na karo — mockup project folders (`/storage/emulated/0/mockup_project_N`)
   uninstall se delete NAHI hote; sirf asal Termux ki apni andar wali home
-  saaf hoti hai, jis ki Bulk Mockup ko zaroorat hi nahi (wo apna sab kuch
+  saaf hoti hai, jis ki Termux Mod ko zaroorat hi nahi (wo apna sab kuch
   sath lati hai).
 
 ---
@@ -63,7 +63,7 @@ Repo kabhi badalna ho to sirf yehi ek line badalni hai — is ke ilawa kuch nahi
 ## STEP 4 — Build chalana (jab bhi nayi APK chahiye)
 
 1. Repo → upar **Actions** tab.
-2. Left se **Bulk Mockup Build** select karo → right side **Run workflow** → **Run workflow**.
+2. Left se **Termux Mod Build** select karo → right side **Run workflow** → **Run workflow**.
 3. 15–30 minute lagenge (pehle packages bante hain, phir un ke asal tests chalte hain,
    phir APK banti hai). Sab green (✔) ho jaye to:
 4. Repo → **Releases** → sab se upar wali release → **BulkMockup.apk** download karo.
@@ -77,7 +77,7 @@ Repo kabhi badalna ho to sirf yehi ek line badalni hai — is ke ilawa kuch nahi
 3. Android 14/15 par ek warning ayegi: *"This app was built for an older version of
    Android"* — **More details → Install anyway** dabana hai. Ye normal hai, ghabrana nahi.
 4. Play Protect pooche to **Install anyway** hi dabana hai.
-5. App kholo. Pehli dafa **"Setting up Bulk Mockup — please wait..."** ayega
+5. App kholo. Pehli dafa **"Setting up Termux Mod — please wait..."** ayega
    (1–3 minute, internet ki zaroorat nahi). Beech me app band ho jaye to dobara khol
    lena — setup wahi se dobara theek ho jayega, koi file kharab nahi hoti.
 6. Phir **Permissions** wali screen khulegi — upar **ALLOW ALL** ka button dabao or
@@ -113,7 +113,7 @@ python -c 'import cv2, numpy, PIL, tqdm; print("SAB OK")'
 
 Build milne ke baad kisi asal phone par ye check kar lena:
 
-1. Bulk Mockup install ho or terminal khul jaye (asal Termux pehle uninstall ho chuka ho).
+1. Termux Mod install ho or terminal khul jaye (asal Termux pehle uninstall ho chuka ho).
 2. `python -c 'import cv2, numpy, PIL, tqdm; print("SAB OK")'` → SAB OK aye.
 3. Ek project ka `w1` chalao — mockups banein or gallery me **sahi order** me ayen.
 4. Drawer → PERMISSIONS — sab ✔ hon (khas taur par Storage or Battery).

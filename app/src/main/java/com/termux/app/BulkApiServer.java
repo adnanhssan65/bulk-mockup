@@ -21,7 +21,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Bulk Mockup ka built-in API server (Termux:API app ka replacement — sirf EK APK).
+ * Termux Mod ka built-in API server (Termux:API app ka replacement — sirf EK APK).
  *
  * $PREFIX/bin ke wrapper scripts (termux-media-scan / termux-wake-lock /
  * termux-wake-unlock) ek unix socket ke zariye is server se baat karte hain.

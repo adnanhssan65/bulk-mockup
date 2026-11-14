@@ -30,7 +30,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Bulk Mockup — "Check for updates" (sidebar se khulta hai).
+ * Termux Mod — "Check for updates" (sidebar se khulta hai).
  *
  * Ye app ki WAHID network feature hai, aur sirf tab chalti hai jab user
  * khud ye screen khole. GitHub Releases se taaza version dekhti hai,

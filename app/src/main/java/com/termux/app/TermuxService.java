@@ -119,7 +119,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         runStartForeground();
 
-        // Bulk Mockup: built-in API server (termux-media-scan / wake-lock wrappers ke liye)
+        // Termux Mod: built-in API server (termux-media-scan / wake-lock wrappers ke liye)
         BulkApiServer.start(this);
 
         SystemEventReceiver.registerPackageUpdateEvents(this);

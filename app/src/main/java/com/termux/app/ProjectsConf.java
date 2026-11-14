@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Bulk Mockup — projects.conf ka parser (pure Java, koi Android dependency
+ * Termux Mod — projects.conf ka parser (pure Java, koi Android dependency
  * nahi, taake unit test ho sake).
  *
  * Format, ek project ek line me:
@@ -60,7 +60,7 @@ public final class ProjectsConf {
     /** Default file (Project 1..10) — sirf tab likhi jati hai jab file mojood na ho. */
     public static String defaultContent() {
         StringBuilder sb = new StringBuilder();
-        sb.append("# Bulk Mockup — projects list\n");
+        sb.append("# Termux Mod — projects list\n");
         sb.append("# Format: Naam | work command | batch command | delete command\n");
         sb.append("# In lines ko badal sakte ho; app har dafa file fresh parhti hai.\n");
         // Sirf wohi projects jinke asal shortcuts app me pehle se lage hain

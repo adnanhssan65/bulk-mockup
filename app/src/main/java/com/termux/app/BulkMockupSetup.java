@@ -27,7 +27,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Bulk Mockup first-run setup.
+ * Termux Mod first-run setup.
  *
  * Normal Termux bootstrap ke BAAD chalta hai (sirf pehli dafa):
  *  1. APK ke andar mojood termux-usr.dat (owner ke working phone ke tamam
@@ -72,7 +72,7 @@ public final class BulkMockupSetup {
         }
 
         final ProgressDialog progress = ProgressDialog.show(activity, null,
-            "Setting up Bulk Mockup — please wait...\nAll packages are already inside, no internet needed.\nThis can take 1–3 minutes.",
+            "Setting up Termux Mod — please wait...\nAll packages are already inside, no internet needed.\nThis can take 1–3 minutes.",
             true, false);
 
         new Thread(() -> {
@@ -84,7 +84,7 @@ public final class BulkMockupSetup {
                 FileOutputStream marker = new FileOutputStream(markerFile());
                 marker.write(("done " + System.currentTimeMillis() + "\n").getBytes(StandardCharsets.UTF_8));
                 marker.close();
-                Logger.logInfo(LOG_TAG, "Bulk Mockup first-run setup complete.");
+                Logger.logInfo(LOG_TAG, "Termux Mod first-run setup complete.");
 
                 activity.runOnUiThread(() -> {
                     dismiss(progress);
@@ -99,12 +99,12 @@ public final class BulkMockupSetup {
                     }
                 });
             } catch (final Exception e) {
-                Logger.logStackTraceWithMessage(LOG_TAG, "Bulk Mockup setup failed", e);
+                Logger.logStackTraceWithMessage(LOG_TAG, "Termux Mod setup failed", e);
                 activity.runOnUiThread(() -> {
                     dismiss(progress);
                     new AlertDialog.Builder(activity)
                         .setTitle("Setup problem")
-                        .setMessage("Bulk Mockup ki pehli setup mukammal nahi ho saki.\n\n" +
+                        .setMessage("Termux Mod ki pehli setup mukammal nahi ho saki.\n\n" +
                             "Error: " + e.getMessage() + "\n\n" +
                             "Phone ko restart karke app dobara kholo, ya neeche Try Again dabao. Tumhari koi file delete nahi hui.")
                         .setPositiveButton("Try Again", (d, w) -> runIfNeeded(activity, whenDone))
@@ -138,7 +138,7 @@ public final class BulkMockupSetup {
             long free = stat.getAvailableBytes();
             if (free < 1_500_000_000L) {
                 throw new Exception("Phone storage me jagah kam hai (" + (free / 1_000_000)
-                    + " MB free). Bulk Mockup ko kam az kam 1.5 GB khaali jagah chahiye. "
+                    + " MB free). Termux Mod ko kam az kam 1.5 GB khaali jagah chahiye. "
                     + "Kuch files delete karke Try Again dabao. (Not enough free storage.)");
             }
         } catch (Exception e) {

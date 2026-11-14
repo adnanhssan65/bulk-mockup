@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Bulk Mockup — Projects launcher.
+ * Termux Mod — Projects launcher.
  *
  * Drawer ke PROJECTS button se khulta hai. List ~/projects.conf se har dafa
  * fresh parhi jati hai (owner nano se ya Edit button se badal sakta hai).

@@ -1,4 +1,4 @@
-# Bulk Mockup — default .bashrc (sirf pehli dafa banta hai, kabhi overwrite nahi hota)
+# Termux Mod — default .bashrc (sirf pehli dafa banta hai, kabhi overwrite nahi hota)
 # Asal shortcuts pehle se lage hue hain — Project 1, 2 or 8 ke liye koi
 # command chalane ki zaroorat nahi, seedha w1 / w2 / w8 chalega.
 # Baqi projects ke shortcuts chahiye to un ki ek line isi tarah neeche jor do.

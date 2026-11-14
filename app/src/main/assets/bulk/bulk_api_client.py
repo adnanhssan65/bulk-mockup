@@ -1,4 +1,4 @@
-# Bulk Mockup built-in API client (termux-media-scan / termux-wake-lock /
+# Termux Mod built-in API client (termux-media-scan / termux-wake-lock /
 # termux-wake-unlock ka replacement — Termux:API app ki zaroorat nahi).
 # Ye file app ke pehle setup par $PREFIX/bin me teen naamon se lagti hai;
 # __MODE__ aur __SOCK__ setup ke waqt asli values se badal jate hain.
@@ -28,8 +28,8 @@ def talk(lines):
             s = None
             time.sleep(0.2)
     if s is None:
-        print("Bulk Mockup: app service is not running. "
-              "Open the Bulk Mockup app first.", file=sys.stderr)
+        print("Termux Mod: app service is not running. "
+              "Open the Termux Mod app first.", file=sys.stderr)
         return 1
     try:
         f = s.makefile("rwb")
@@ -38,11 +38,11 @@ def talk(lines):
             f.flush()
             reply = f.readline().decode().strip()
             if not reply.startswith("OK"):
-                print("Bulk Mockup: " + reply, file=sys.stderr)
+                print("Termux Mod: " + reply, file=sys.stderr)
                 return 1
         return 0
     except OSError as e:
-        print("Bulk Mockup: connection problem: " + str(e), file=sys.stderr)
+        print("Termux Mod: connection problem: " + str(e), file=sys.stderr)
         return 1
     finally:
         try:
@@ -67,7 +67,7 @@ def main():
         return talk(["WAKELOCK"])
     if MODE == "wakeunlock":
         return talk(["WAKEUNLOCK"])
-    print("Bulk Mockup: unknown mode", file=sys.stderr)
+    print("Termux Mod: unknown mode", file=sys.stderr)
     return 1
 
 

@@ -28,7 +28,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
 /**
- * Bulk Mockup — Permissions screen (sidebar se khulti hai, pehli dafa setup
+ * Termux Mod — Permissions screen (sidebar se khulti hai, pehli dafa setup
  * ke baad bhi yahi screen ati hai).
  *
  * Har cheez ek row me: naam, saada hint, status (✔/✖) aur theek karne ka
@@ -301,11 +301,11 @@ public class BulkPermissionsActivity extends Activity {
         }
 
         addRow("Background / Auto-start",
-            "Screen band hone par bhi app chalta rahe — apne phone ki setting kholo or Bulk Mockup ko Allow karo. (Let the app keep running in the background.)",
+            "Screen band hone par bhi app chalta rahe — apne phone ki setting kholo or Termux Mod ko Allow karo. (Let the app keep running in the background.)",
             isAutostartDone(), "Open", this::fixAutostart);
 
         TextView footer = new TextView(this);
-        footer.setText("\nApp: Bulk Mockup  •  Package: " + getPackageName()
+        footer.setText("\nApp: Termux Mod  •  Package: " + getPackageName()
             + "\nHome: " + TermuxConstants.TERMUX_HOME_DIR_PATH);
         footer.setTextColor(Color.GRAY);
         footer.setTextSize(11);
