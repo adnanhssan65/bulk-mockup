@@ -29,8 +29,10 @@ import java.util.List;
  *
  * Drawer ke PROJECTS button se khulta hai. List ~/projects.conf se har dafa
  * fresh parhi jati hai (owner nano se ya Edit button se badal sakta hai).
- * Kisi button pe tap = wohi command terminal session me type + Enter —
- * bilkul jese user khud type kare.
+ * Project ke naam par tap = Start (work command) terminal session me type +
+ * Enter — bilkul jese user khud type kare, or project ka apna menu khul
+ * jata hai. Delete / Batch ek alag option ke andar hain (owner ki hidayat
+ * 2026-11-14: naam par click = sirf Start, baqi alag).
  *
  * projects.conf format (ek project per line):
  *   Name | work_cmd | batch_cmd | delete_cmd
@@ -121,6 +123,80 @@ public final class ProjectsLauncher {
 
         final AlertDialog[] holder = new AlertDialog[1];
         for (final ProjectsConf.Project p : projects) {
+            // Ek project = ek bara button. Tap = Start (work command) — bas.
+            Button start = new Button(activity);
+            start.setText("▶  " + p.name);
+            start.setTextColor(Color.rgb(0, 255, 65));
+            start.setTextSize(16);
+            start.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            start.setGravity(Gravity.CENTER_VERTICAL);
+            start.setPadding(10 * dp, 12 * dp, 10 * dp, 12 * dp);
+            start.setOnClickListener(v -> {
+                if (holder[0] != null) holder[0].dismiss();
+                runCommand(activity, p.workCmd);
+            });
+            col.addView(start, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            View line = new View(activity);
+            line.setBackgroundColor(Color.rgb(13, 40, 18));
+            col.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        }
+
+        // Delete / Batch — alag option (owner ki hidayat 2026-11-14)
+        if (!projects.isEmpty()) {
+            Button manage = new Button(activity);
+            manage.setText("Delete / Batch — alag options");
+            manage.setTextSize(14);
+            manage.setPadding(10 * dp, 10 * dp, 10 * dp, 10 * dp);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            mlp.setMargins(0, 10 * dp, 0, 0);
+            manage.setLayoutParams(mlp);
+            manage.setOnClickListener(v -> {
+                if (holder[0] != null) holder[0].dismiss();
+                showManageDialog(activity, projects);
+            });
+            col.addView(manage);
+        }
+
+        TextView hint = new TextView(activity);
+        hint.setText("Project par tap = Start — us project ka menu terminal me khul jayega.");
+        hint.setTextColor(Color.rgb(139, 196, 147));
+        hint.setTextSize(11);
+        hint.setPadding(0, 8 * dp, 0, 0);
+        col.addView(hint);
+
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(col);
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+            .setView(scroll)
+            .setNeutralButton("Edit list", (d, w) -> showEditor(activity))
+            .setNegativeButton("Close", null)
+            .create();
+        holder[0] = dialog;
+        dialog.show();
+    }
+
+    /** Delete / Batch wali alag screen — har project ke B (batch) or D (delete) buttons. */
+    private static void showManageDialog(final TermuxActivity activity, List<ProjectsConf.Project> projects) {
+        int dp = (int) (activity.getResources().getDisplayMetrics().density + 0.5f);
+        LinearLayout col = new LinearLayout(activity);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setBackgroundColor(Color.rgb(5, 8, 5));
+        col.setPadding(14 * dp, 10 * dp, 14 * dp, 10 * dp);
+
+        TextView header = new TextView(activity);
+        header.setText("DELETE / BATCH");
+        header.setTextColor(Color.rgb(0, 255, 65));
+        header.setTextSize(17);
+        header.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        header.setPadding(0, 0, 0, 8 * dp);
+        col.addView(header);
+
+        final AlertDialog[] holder = new AlertDialog[1];
+        for (final ProjectsConf.Project p : projects) {
             LinearLayout row = new LinearLayout(activity);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -133,11 +209,7 @@ public final class ProjectsLauncher {
             name.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
             row.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
-            row.addView(cmdButton(activity, "W", dp, v -> {
-                if (holder[0] != null) holder[0].dismiss();
-                runCommand(activity, p.workCmd);
-            }));
-            row.addView(cmdButton(activity, "P", dp, v -> {
+            row.addView(cmdButton(activity, "B", dp, v -> {
                 if (holder[0] != null) holder[0].dismiss();
                 runCommand(activity, p.batchCmd);
             }));
@@ -153,7 +225,7 @@ public final class ProjectsLauncher {
         }
 
         TextView hint = new TextView(activity);
-        hint.setText("W = work/process · P = batch · D = delete");
+        hint.setText("B = batch · D = delete");
         hint.setTextColor(Color.rgb(139, 196, 147));
         hint.setTextSize(11);
         hint.setPadding(0, 8 * dp, 0, 0);
@@ -164,7 +236,6 @@ public final class ProjectsLauncher {
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
             .setView(scroll)
-            .setNeutralButton("Edit list", (d, w) -> showEditor(activity))
             .setNegativeButton("Close", null)
             .create();
         holder[0] = dialog;

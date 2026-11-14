@@ -77,11 +77,12 @@ Repo kabhi badalna ho to sirf yehi ek line badalni hai — is ke ilawa kuch nahi
 3. Android 14/15 par ek warning ayegi: *"This app was built for an older version of
    Android"* — **More details → Install anyway** dabana hai. Ye normal hai, ghabrana nahi.
 4. Play Protect pooche to **Install anyway** hi dabana hai.
-5. App kholo. Pehli dafa **"Setting up Termux Mod — please wait..."** ayega
-   (1–3 minute, internet ki zaroorat nahi). Beech me app band ho jaye to dobara khol
-   lena — setup wahi se dobara theek ho jayega, koi file kharab nahi hoti.
-6. Phir **Permissions** wali screen khulegi — upar **ALLOW ALL** ka button dabao or
-   har cheez Allow karte jao (beech me phone ki Settings khule to wahan bhi Allow).
+5. App kholo. Pehli dafa **progress bar wali loading** ayegi — percentage 0 se 100
+   tak jayegi (1–3 minute, internet ki zaroorat nahi). Beech me app band ho jaye to
+   dobara khol lena — setup wahi se dobara theek ho jayega, koi file kharab nahi hoti.
+6. Phir permissions ke **popups khud ek ek karke ayenge** (Storage, phir Battery) —
+   har ek par **Allow** dabate jao. Permissions wali screen bhi khulegi jahan sab
+   ✔ nazar ayega; kuch reh jaye to wahan **ALLOW ALL** ka button bhi hai.
 7. Terminal khul jayega. Test ke liye ye chalao:
 
 ```
@@ -89,17 +90,18 @@ python -c 'import cv2, numpy, PIL, tqdm; print("SAB OK")'
 ```
 
 `SAB OK` ajaye to sab tayyar hai. Drawer (left se swipe) → **PROJECTS** → project ke
-**W / P / D** buttons use karo.
+**naam par tap** karo — wo Start ho jayega or us ka menu khul jayega. **Delete / Batch**
+alag option ke andar hain.
 
 ## STEP 6 — Projects list or shortcuts badalna
 
 - **Projects list:** Drawer → **PROJECTS** → **Edit list** → line badlo → **Save**.
   Format: `Naam | w-command | batch-command | delete-command`
 - **Shortcuts (bashrc):** Termux me `nano ~/.bashrc` — aliases wahan hain.
-- Pehli dafa app ke sath **placeholder** shortcuts ate hain (`w1`..`w10`, `p1`..`p10`,
-  `d1`..`d10` — script ka naam `w1.py` wali shakal me). Apne asal script naamon
-  (masalan `adnan_core.py`) ke hisab se **ek dafa** badal lo — phir ye hamesha
-  mehfooz rehte hain. **App update se .bashrc or projects.conf kabhi nahi badalte.**
+- App ke sath Project 1, 2 or 8 ke **asal shortcuts tayyar** ate hain
+  (`w1/d1/b1` = adnan_core, `w2/d2/b2` = dual_core, `w8/d8/b8` = w8) — kuch set
+  nahi karna. Baqi projects Edit list / bashrc me khud add kar sakte ho.
+  **App update se .bashrc or projects.conf kabhi nahi badalte.**
 
 ## STEP 7 — App update karna
 

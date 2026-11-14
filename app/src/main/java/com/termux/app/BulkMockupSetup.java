@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -22,6 +23,7 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FilterInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -71,13 +73,27 @@ public final class BulkMockupSetup {
             return;
         }
 
-        final ProgressDialog progress = ProgressDialog.show(activity, null,
-            "Setting up Termux Mod — please wait...\nAll packages are already inside, no internet needed.\nThis can take 1–3 minutes.",
-            true, false);
+        // VIP loading: asal percentage wali progress bar (0–100). Extraction ka
+        // kaam peeche background thread me chalta hai; screen par sirf asal
+        // progress nazar ati hai — phone hang nahi hota.
+        final ProgressDialog progress = new ProgressDialog(activity);
+        progress.setTitle("Termux Mod — Pehli Setup");
+        progress.setMessage("Packages lag rahe hain... 0%\nYe sirf pehli dafa hota hai — 1–3 minute lagenge.\nInternet ki zaroorat nahi, sab kuch app ke andar hai.");
+        progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        progress.setMax(100);
+        progress.setIndeterminate(false);
+        progress.setProgress(0);
+        progress.setCancelable(false);
+        progress.show();
 
         new Thread(() -> {
             try {
-                extractUsrArchive(activity);
+                extractUsrArchive(activity, percent -> activity.runOnUiThread(() -> {
+                    try {
+                        progress.setProgress(percent);
+                        progress.setMessage("Packages lag rahe hain... " + percent + "%\nYe sirf pehli dafa hota hai — 1–3 minute lagenge.\nInternet ki zaroorat nahi, sab kuch app ke andar hai.");
+                    } catch (Exception ignored) {}
+                }));
                 seedHomeFiles(activity);
                 installBinWrappers(activity);
                 // Marker sab se aakhir me — beech me band ho jaye to agli dafa setup dobara try hoga
@@ -121,7 +137,46 @@ public final class BulkMockupSetup {
     }
 
     // ------------------------------------------------------------------ usr extract
-    private static void extractUsrArchive(Context context) throws Exception {
+    interface ProgressCallback { void onProgress(int percent); }
+
+    /** Asset stream ke parhe gaye bytes gin kar asal progress % deta hai. */
+    private static final class CountingInputStream extends FilterInputStream {
+        private final long total;
+        private final ProgressCallback cb;
+        private long read = 0;
+        private int lastPercent = -1;
+
+        CountingInputStream(InputStream in, long total, ProgressCallback cb) {
+            super(in);
+            this.total = total;
+            this.cb = cb;
+        }
+
+        @Override public int read(byte[] b, int off, int len) throws java.io.IOException {
+            int n = super.read(b, off, len);
+            if (n > 0) add(n);
+            return n;
+        }
+
+        @Override public int read() throws java.io.IOException {
+            int r = super.read();
+            if (r >= 0) add(1);
+            return r;
+        }
+
+        private void add(long n) {
+            read += n;
+            if (cb != null && total > 0) {
+                int p = (int) Math.min(99, (read * 100) / total);
+                if (p != lastPercent) {
+                    lastPercent = p;
+                    cb.onProgress(p);
+                }
+            }
+        }
+    }
+
+    private static void extractUsrArchive(Context context, ProgressCallback cb) throws Exception {
         File filesDir = new File(TermuxConstants.TERMUX_FILES_DIR_PATH);
 
         // Free space pehle check karo (G2.4): archive khulne par takreeban 4 guna jagah chahiye
@@ -155,7 +210,13 @@ public final class BulkMockupSetup {
         String stagingCanonical = staging.getCanonicalPath();
 
         InputStream raw = context.getAssets().open(USR_ASSET);
-        BufferedInputStream buffered = new BufferedInputStream(raw, 1 << 16);
+        // Asal total size: asset STORED (uncompressed) hai, openFd exact length deta hai
+        long totalBytes = -1;
+        try (AssetFileDescriptor fd = context.getAssets().openFd(USR_ASSET)) {
+            totalBytes = fd.getLength();
+        } catch (Exception ignored) {}
+        CountingInputStream counting = new CountingInputStream(raw, totalBytes, cb);
+        BufferedInputStream buffered = new BufferedInputStream(counting, 1 << 16);
         buffered.mark(2);
         int magic1 = buffered.read();
         int magic2 = buffered.read();
@@ -211,6 +272,7 @@ public final class BulkMockupSetup {
             count++;
         }
         tar.close();
+        if (cb != null) cb.onProgress(100);
         Logger.logInfo(LOG_TAG, "Extracted " + count + " entries from " + USR_ASSET + " into staging");
 
         File stagedUsr = new File(staging, "usr");

@@ -49,6 +49,10 @@ public class BulkPermissionsActivity extends Activity {
 
     private LinearLayout mRoot;
     private boolean mAllowAll = false;
+    // Pehli dafa (first run): zaroori popups khud ek ek karke samne ate hain —
+    // Storage, phir Battery, phir Notifications (owner ki hidayat 2026-11-14).
+    private boolean mAutoFirstRun = false;
+    private int mAutoLaunchedStep = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,7 +67,7 @@ public class BulkPermissionsActivity extends Activity {
         setContentView(scroll);
         setTitle("Permissions");
         if (getIntent() != null && getIntent().getBooleanExtra("first_run", false)) {
-            mAllowAll = false; // pehli dafa user khud "Allow all" dabaye — surprise nahi
+            mAutoFirstRun = true; // popups wali auto flow — onResume se shuru hogi
         }
     }
 
@@ -72,6 +76,7 @@ public class BulkPermissionsActivity extends Activity {
         super.onResume();
         rebuild();
         if (mAllowAll) advanceAllowAll();
+        else if (mAutoFirstRun) advanceAutoPopups();
     }
 
     // ------------------------------------------------------------- status checks
@@ -220,6 +225,43 @@ public class BulkPermissionsActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         rebuild();
         if (mAllowAll) advanceAllowAll();
+        else if (mAutoFirstRun) advanceAutoPopups();
+    }
+
+    // ------------------------------------------------- first-run auto popups
+
+    /**
+     * Sirf popup wali zaroori permissions, ek ek karke: Storage → Battery →
+     * Notifications. Jo pehle se mili ho wo skip. User kisi popup ko mana kar
+     * de to auto flow wahi ruk jata hai (loop nahi) — baqi list se khud kar
+     * sakta hai. Install / Auto-start is me nahi — wo settings screens hain,
+     * pehli dafa ke liye bhaari hain; Allow all me milte hain.
+     */
+    private void advanceAutoPopups() {
+        int step;
+        Runnable fix;
+        if (!testStorage()) {
+            step = 0; fix = this::fixStorage;
+        } else {
+            ensureStorageLinks();
+            if (!isBatteryOk()) {
+                step = 1; fix = this::fixBattery;
+            } else if (!isNotificationsOk()) {
+                step = 2; fix = this::fixNotifications;
+            } else {
+                mAutoFirstRun = false;
+                Toast.makeText(this, "Permissions ho gayi ✔ — ab sidebar (left) se apna Project select karo", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        if (step == mAutoLaunchedStep) {
+            // Ye step pehle try ho chuka or permission abhi tak nahi mili —
+            // user ne mana kiya hoga. Auto band; neeche list se khud kar le.
+            mAutoFirstRun = false;
+            return;
+        }
+        mAutoLaunchedStep = step;
+        fix.run();
     }
 
     // ------------------------------------------------------------- Allow all
