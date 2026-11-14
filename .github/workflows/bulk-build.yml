@@ -227,6 +227,14 @@ jobs:
           if grep -q "sharedUserId" /tmp/tree.txt; then
             echo "FAIL: sharedUserId abhi bhi mojood hai"; exit 1
           fi
+          # Bulk screens ke class naam poore (com.termux.app.*) hone chahiye —
+          # v120 me ye .Bulk* ban kar ghalat resolve hue thay or phone crash hua.
+          grep -q 'com.termux.app.BulkPermissionsActivity' /tmp/tree.txt \
+            && echo "BulkPermissionsActivity OK" \
+            || { echo "FAIL: BulkPermissionsActivity manifest me sahi naam se nahi"; exit 1; }
+          grep -q 'com.termux.app.BulkUpdateActivity' /tmp/tree.txt \
+            && echo "BulkUpdateActivity OK" \
+            || { echo "FAIL: BulkUpdateActivity manifest me sahi naam se nahi"; exit 1; }
           echo "MANIFEST CHECK OK"
 
       - name: APK asset check — termux-usr.dat sahi naam + size ke sath andar ho

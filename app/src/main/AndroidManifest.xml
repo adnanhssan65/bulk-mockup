@@ -230,13 +230,16 @@
             android:value="true" />
 
         <!-- Bulk Mockup screens -->
+        <!-- NOTE: namespace com.termux hai, is liye .app. lazmi hai — sirf
+             .BulkPermissionsActivity likhne se class com.termux.BulkPermissionsActivity
+             ban jati hai jo exist hi nahi karti (v120 phone crash isi ka tha). -->
         <activity
-            android:name=".BulkPermissionsActivity"
+            android:name=".app.BulkPermissionsActivity"
             android:exported="false"
             android:label="Permissions" />
 
         <activity
-            android:name=".BulkUpdateActivity"
+            android:name=".app.BulkUpdateActivity"
             android:exported="false"
             android:label="Check for updates" />
 

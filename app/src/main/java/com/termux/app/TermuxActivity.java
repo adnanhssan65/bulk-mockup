@@ -595,13 +595,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Bulk Mockup drawer items: Permissions / Check for updates / About
         View permissionsButton = findViewById(R.id.permissions_button);
         if (permissionsButton != null) {
-            permissionsButton.setOnClickListener(v ->
-                startActivity(new Intent(TermuxActivity.this, BulkPermissionsActivity.class)));
+            permissionsButton.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(TermuxActivity.this, BulkPermissionsActivity.class));
+                } catch (Exception e) {
+                    // Kabhi bhi poori app crash na ho sirf ek screen ki wajah se
+                    Toast.makeText(TermuxActivity.this,
+                        "Permissions screen nahi khul saki.", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
         View updatesButton = findViewById(R.id.updates_button);
         if (updatesButton != null) {
-            updatesButton.setOnClickListener(v ->
-                startActivity(new Intent(TermuxActivity.this, BulkUpdateActivity.class)));
+            updatesButton.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(TermuxActivity.this, BulkUpdateActivity.class));
+                } catch (Exception e) {
+                    Toast.makeText(TermuxActivity.this,
+                        "Update screen nahi khul saki.", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
         View aboutButton = findViewById(R.id.about_button);
         if (aboutButton != null) {
