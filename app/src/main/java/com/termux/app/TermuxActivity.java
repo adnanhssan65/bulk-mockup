@@ -175,6 +175,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float mTerminalToolbarDefaultHeight;
 
+    /**
+     * Termux Mod dashboard (v124) se ane wali command jo terminal me
+     * chalani hai, or setup ke baad dashboard kholne ki darkhwast.
+     */
+    private String mPendingBulkCommand;
+    private boolean mBulkOpenDashboardAfterSetup;
+
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
     private static final int CONTEXT_MENU_SHARE_TRANSCRIPT_ID = 1;
@@ -322,6 +329,49 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG);
 
         mIsOnResumeAfterOnCreate = false;
+
+        // Termux Mod dashboard (v124) se pending command ho to chala do
+        runPendingBulkCommand();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleBulkExtras(intent);
+        runPendingBulkCommand();
+    }
+
+    /** Dashboard (v124) ke extras parho: chalane wali command / setup ke baad dashboard. */
+    private void handleBulkExtras(Intent intent) {
+        if (intent == null) return;
+        try {
+            String cmd = intent.getStringExtra(BulkDashboardActivity.EXTRA_RUN_COMMAND);
+            if (cmd != null && !cmd.isEmpty()) mPendingBulkCommand = cmd;
+            if (intent.getBooleanExtra(BulkDashboardActivity.EXTRA_OPEN_DASHBOARD_AFTER_SETUP, false)) {
+                mBulkOpenDashboardAfterSetup = true;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /** Setup mukammal ho chuki ho or dashboard ne bheja tha — dashboard khol do. */
+    private void openDashboardAfterSetupIfRequested() {
+        if (!mBulkOpenDashboardAfterSetup) return;
+        if (!BulkMockupSetup.isSetupDone()) return;
+        mBulkOpenDashboardAfterSetup = false;
+        try {
+            startActivity(new Intent(this, BulkDashboardActivity.class));
+        } catch (Exception ignored) {}
+    }
+
+    /** Pending dashboard command ko thori der baad terminal session me type karo. */
+    private void runPendingBulkCommand() {
+        if (mPendingBulkCommand == null) return;
+        final String cmd = mPendingBulkCommand;
+        mPendingBulkCommand = null;
+        try {
+            getWindow().getDecorView().postDelayed(() -> ProjectsLauncher.runCommand(this, cmd), 700);
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -395,6 +445,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         final Intent intent = getIntent();
         setIntent(null);
+        handleBulkExtras(intent);
 
         if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
@@ -411,6 +462,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     } catch (WindowManager.BadTokenException e) {
                         // Activity finished - ignore.
                     }
+                    // Termux Mod (v124): setup ke baad dashboard, or dashboard ki bheji command
+                    openDashboardAfterSetupIfRequested();
+                    runPendingBulkCommand();
                     });
                 });
             } else {
@@ -428,6 +482,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             } else {
                 mTermuxTerminalSessionActivityClient.setCurrentSession(mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast());
             }
+            // Termux Mod (v124): dashboard ki bheji command / setup ke baad dashboard
+            openDashboardAfterSetupIfRequested();
+            runPendingBulkCommand();
         }
 
         // Update the {@link TerminalSession} and {@link TerminalEmulator} clients.

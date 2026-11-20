@@ -10,6 +10,8 @@ release/
 .externalNativeBuild
 .cxx
 *.zip
+# v124: app ke andar pehle se mojood projects — ye zips repo me jani chahiye
+!app/src/main/assets/bulk/projects/*.zip
 
 # Local configuration file (sdk path, etc)
 local.properties

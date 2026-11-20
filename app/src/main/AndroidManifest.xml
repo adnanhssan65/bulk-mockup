@@ -57,11 +57,8 @@
             android:resizeableActivity="true"
             android:theme="@style/Theme.TermuxActivity.DayNight.NoActionBar"
             tools:targetApi="n">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <!-- v124: LAUNCHER ab Dashboard (BulkDashboardActivity) hai —
+                 app wahan se khulti hai; Terminal wahan ke button se. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -242,6 +239,28 @@
             android:name=".app.BulkUpdateActivity"
             android:exported="false"
             android:label="Check for updates" />
+
+        <!-- v124: Dashboard hi app ka front door hai (LAUNCHER) -->
+        <activity
+            android:name=".app.BulkDashboardActivity"
+            android:exported="true"
+            android:label="@string/application_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".app.BulkWallpapersActivity"
+            android:exported="false"
+            android:label="Wallpapers Add Karo" />
+
+        <activity
+            android:name=".app.BulkAddProjectActivity"
+            android:exported="false"
+            android:label="Naya Project Add Karo" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

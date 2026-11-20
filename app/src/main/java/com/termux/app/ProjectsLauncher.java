@@ -61,6 +61,11 @@ public final class ProjectsLauncher {
         Logger.logInfo(LOG_TAG, "Seeded default projects.conf");
     }
 
+    /** Dashboard / chooser ke liye — projects.conf ki taaza list. */
+    public static List<ProjectsConf.Project> readProjectsList() {
+        return readProjects();
+    }
+
     private static List<ProjectsConf.Project> readProjects() {
         try {
             File f = projectsConfFile();
@@ -124,8 +129,14 @@ public final class ProjectsLauncher {
         final AlertDialog[] holder = new AlertDialog[1];
         for (final ProjectsConf.Project p : projects) {
             // Ek project = ek bara button. Tap = Start (work command) — bas.
+            // Neeche wali line me taaza counts (v124): wallpapers / mockups / ready.
             Button start = new Button(activity);
-            start.setText("▶  " + p.name);
+            String label = "▶  " + p.name;
+            int projectNumber = BulkProjects.parseProjectNumber(p.name, p.workCmd);
+            if (projectNumber > 0) {
+                label += "\n" + BulkProjects.countsLineFor(projectNumber);
+            }
+            start.setText(label);
             start.setTextColor(Color.rgb(0, 255, 65));
             start.setTextSize(16);
             start.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
@@ -313,7 +324,7 @@ public final class ProjectsLauncher {
     }
 
     /** Command ko current session me type + Enter — bilkul jese user khud likhe. */
-    private static void runCommand(TermuxActivity activity, String command) {
+    static void runCommand(TermuxActivity activity, String command) {
         // Double-tap protection: 800ms ke andar dusri command ignore
         long now = System.currentTimeMillis();
         if (now - sLastSendMs < 800) return;
