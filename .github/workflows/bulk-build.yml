@@ -27,7 +27,7 @@ jobs:
 
       - name: Usr archive cache
         id: usr-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: out/termux-usr.tar.gz
           key: usr-v3-${{ hashFiles('ci/packages-key.txt') }}-${{ github.run_number }}
