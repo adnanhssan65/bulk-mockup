@@ -260,7 +260,7 @@ def case_process(env, inputs_src, input_names, mode, mode_label):
     reset_project(env.fixtures, input_names, inputs_src)
     before = protected_hashes()
     manifest = {}
-    rc, out, secs, peak, timed_out, tail = env.run_script("adnan_core.py", "process", mode + "\n")
+    rc, out, secs, peak, timed_out, tail = env.run_script("adnan_core.py", "process", mode + "\n2\n")  # v127: dusra jawab = Size (2 = Crop 9:16, taake ready 1080x1920 hi rahe)
     check(f"{mode_label}.exit0", rc == 0 and not timed_out, f"rc={rc} secs={secs:.1f}\n{tail}")
     verify_process_run(env, mode_label, valid, manifest)
     inp = os.path.join(PROJECT, "1_wallpapers")

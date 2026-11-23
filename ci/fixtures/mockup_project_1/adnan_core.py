@@ -393,6 +393,13 @@ if action == 'process':
     choice = input(f"\n {C4}➜ {ENDC}").strip()
     is_hd = (choice != '2')
 
+    print(f" {C5}✿ {BOLD}S e l e c t  S i z e{ENDC}")
+    print(f" {C1}[1]{ENDC} Original Size - {C4}[DEFAULT]{ENDC}")
+    print(f" {C1}[2]{ENDC} Crop 9:16")
+
+    size_choice = input(f"\n {C4}➜ {ENDC}").strip()
+    crop_916 = (size_choice == '2')
+
     if not os.path.exists(M_P) or not os.path.exists(S_P):
         print(f" {C2}✖ Mockup files missing!{ENDC}")
         sys.exit()
@@ -454,7 +461,7 @@ if action == 'process':
         if w is None:
             return 'unreadable', idx, t_now
 
-        w_exact = resize_exact(w)
+        w_exact = resize_exact(w) if crop_916 else w
         w = None   # bari original image ki RAM foran free
         w_processed = apply_hd_enhance(w_exact) if is_hd else w_exact
 

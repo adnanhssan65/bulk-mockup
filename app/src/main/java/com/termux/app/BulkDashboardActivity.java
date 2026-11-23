@@ -233,16 +233,16 @@ public class BulkDashboardActivity extends Activity {
         wave.setLayoutParams(waveLp);
         column.addView(wave);
 
-        // 4 pill rows
+        // 4 pill rows (naya design): Add Wallpapers / Run / Projects / Terminal
         LinearLayout pills = new LinearLayout(this);
         pills.setOrientation(LinearLayout.VERTICAL);
         pills.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 6), BulkTheme.dp(this, 20), 0);
         pills.addView(pill(R.drawable.ic_bulk_image, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
             v -> openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki.")));
+        pills.addView(pill(R.drawable.ic_bulk_play, BulkStrings.t(this, BulkStrings.NAV_RUN),
+            v -> showQuickRun()), gapLp(dp));
         pills.addView(pill(R.drawable.ic_bulk_folder, BulkStrings.t(this, BulkStrings.PROJECTS),
             v -> openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.")), gapLp(dp));
-        pills.addView(pill(R.drawable.ic_bulk_file, BulkStrings.t(this, BulkStrings.NEW_PROJECT_ZIP),
-            v -> openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.")), gapLp(dp));
         pills.addView(pill(R.drawable.ic_bulk_terminal, BulkStrings.t(this, BulkStrings.TERMINAL),
             v -> openTerminal()), gapLp(dp));
         column.addView(pills);
@@ -299,7 +299,7 @@ public class BulkDashboardActivity extends Activity {
         column.addView(credits);
 
         TextView phone = new TextView(this);
-        phone.setText("+44 7404032136");
+        phone.setText("+44 7404 032136");
         phone.setTextSize(10);
         phone.setTypeface(Typeface.MONOSPACE);
         phone.setTextColor(BulkTheme.textMuted(this));
@@ -328,6 +328,7 @@ public class BulkDashboardActivity extends Activity {
 
         buildDrawer(frame);
         setContentView(frame);
+        BulkFonts.apply(this);
     }
 
     private LinearLayout.LayoutParams gapLp(int dp) {
@@ -434,12 +435,17 @@ public class BulkDashboardActivity extends Activity {
         dDev.setTextColor(BulkTheme.textSub(this));
         headTexts.addView(dDev);
         TextView dPhone = new TextView(this);
-        dPhone.setText("+44 7404032136");
+        dPhone.setText("+44 7404 032136");
         dPhone.setTextSize(10);
         dPhone.setTypeface(Typeface.MONOSPACE);
         dPhone.setTextColor(BulkTheme.textMuted(this));
         headTexts.addView(dPhone);
         header.addView(headTexts);
+        // v127: FONT option — drawer ke sab se upar icon; tap par font picker
+        header.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_font, 28, v -> showFontPicker()));
+        View fontGap = new View(this);
+        fontGap.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 6), 1));
+        header.addView(fontGap);
         header.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_close, 28, v -> closeDrawer()));
         drawer.addView(header);
 
@@ -465,6 +471,14 @@ public class BulkDashboardActivity extends Activity {
             closeDrawer();
             openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.");
         }));
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.PREVIEW_READY), false, v -> {
+            closeDrawer();
+            openScreen(BulkReadyAssetsActivity.class, "Ready Assets screen nahi khul saki.");
+        }));
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.OUTPUT_FOLDER), false, v -> {
+            closeDrawer();
+            openScreen(BulkOutputFolderActivity.class, "Output Folder screen nahi khul saki.");
+        }));
         drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.TERMINAL), false, v -> {
             closeDrawer();
             openTerminal();
@@ -481,6 +495,7 @@ public class BulkDashboardActivity extends Activity {
             closeDrawer();
             BulkTheme.showAboutDialog(this);
         }));
+        drawer.addView(contactAdminRow());
 
         drawer.addView(new View(this), new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
@@ -498,7 +513,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v126");
+        version.setText("Termux Mod v127");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -590,6 +605,215 @@ public class BulkDashboardActivity extends Activity {
             return;
         }
         super.onBackPressed();
+    }
+
+    /** Font picker (drawer header ke icon se) — choice tamam Bulk screens par lagu. */
+    private void showFontPicker() {
+        java.util.List<BulkFonts.FontInfo> fonts = BulkFonts.fonts();
+        String[] names = new String[fonts.size()];
+        for (int i = 0; i < fonts.size(); i++) names[i] = fonts.get(i).name;
+        BulkTheme.showChoice(this, BulkStrings.t(this, BulkStrings.FONT), names, idx -> {
+            BulkFonts.setFont(this, fonts.get(idx).id);
+            buildUi();
+        });
+    }
+
+    /**
+     * Quick Run popup (Home ki Run row se): search + sirf RUNNABLE
+     * projects (jin ke <N>_wallpapers me kam az kam 1 wallpaper ho —
+     * BulkProjects.filterRunnable). Upar gear icon = Run Settings
+     * (HD + Size + Auto/Manual). Tap par BulkRunHelper run karta hai.
+     */
+    private void showQuickRun() {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.QUICK_RUN_TITLE), dialog);
+
+        // Search + gear row
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+        final android.widget.EditText search = new android.widget.EditText(this);
+        search.setHint(BulkStrings.t(this, BulkStrings.SEARCH_PROJECT));
+        search.setSingleLine(true);
+        search.setTextSize(13);
+        search.setTextColor(BulkTheme.textMain(this));
+        search.setHintTextColor(BulkTheme.textMuted(this));
+        search.setBackground(BulkTheme.pillBg(this));
+        search.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 9),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 9));
+        topRow.addView(search, new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView gear = new TextView(this);
+        gear.setText("⚙");
+        gear.setTextSize(17);
+        gear.setTextColor(BulkTheme.accent(this));
+        gear.setGravity(Gravity.CENTER);
+        gear.setBackground(BulkTheme.circleBg(this));
+        LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 36), BulkTheme.dp(this, 36));
+        gp.leftMargin = BulkTheme.dp(this, 8);
+        gear.setLayoutParams(gp);
+        gear.setOnClickListener(v -> BulkRunHelper.showRunSettings(this));
+        topRow.addView(gear);
+        panel.addView(topRow);
+
+        final LinearLayout listBox = new LinearLayout(this);
+        listBox.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams lbp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lbp.topMargin = BulkTheme.dp(this, 10);
+        listBox.setLayoutParams(lbp);
+        panel.addView(listBox);
+
+        // Runnable projects + counts (ek dafa hisaab)
+        final java.util.List<BulkProjects.ProjectInfo> runnable = new java.util.ArrayList<>();
+        final java.util.Map<Integer, Integer> counts = new java.util.HashMap<>();
+        try {
+            java.util.List<BulkProjects.ProjectInfo> all = BulkProjects.mergeProjects(
+                ProjectsLauncher.readProjectsList(), BulkProjects.scanDiskProjects());
+            for (BulkProjects.ProjectInfo p : all) {
+                if (p.number > 0) {
+                    counts.put(p.number, BulkProjects.countFiles(
+                        BulkProjects.wallpapersDir(p.number)));
+                }
+            }
+            runnable.addAll(BulkProjects.filterRunnable(all, counts));
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Quick Run list nahi bani: " + e.getMessage());
+        }
+
+        final Runnable refreshList = () -> {
+            listBox.removeAllViews();
+            String q = search.getText() == null ? "" : search.getText().toString().trim().toLowerCase();
+            int shown = 0;
+            for (final BulkProjects.ProjectInfo p : runnable) {
+                if (!q.isEmpty() && !p.name.toLowerCase().contains(q)) continue;
+                shown++;
+                listBox.addView(quickRunRow(p, counts.get(p.number), () -> {
+                    dialog.dismiss();
+                    BulkRunHelper.startRun(this, p);
+                }));
+            }
+            if (shown == 0) {
+                TextView none = new TextView(this);
+                none.setText(BulkStrings.t(this, BulkStrings.NO_MATCHING));
+                none.setTextColor(BulkTheme.textMuted(this));
+                none.setTextSize(12);
+                none.setPadding(0, BulkTheme.dp(this, 8), 0, BulkTheme.dp(this, 4));
+                listBox.addView(none);
+            }
+            BulkFonts.applyToTree(this, listBox);
+        };
+        refreshList.run();
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { refreshList.run(); }
+            @Override public void afterTextChanged(android.text.Editable s) {}
+        });
+
+        BulkTheme.showPanelDialog(this, panel);
+    }
+
+    private LinearLayout quickRunRow(final BulkProjects.ProjectInfo p, Integer wallCount,
+                                     final Runnable onTap) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = BulkTheme.dp(this, 8);
+        row.setLayoutParams(lp);
+
+        TextView name = new TextView(this);
+        name.setText(p.name);
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(13.5f);
+        name.setTypeface(medium());
+        row.addView(name, new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        TextView badge = new TextView(this);
+        badge.setText(BulkStrings.format(this, BulkStrings.READY_COUNT,
+            wallCount == null ? 0 : wallCount));
+        badge.setTextSize(10.5f);
+        badge.setTypeface(Typeface.DEFAULT_BOLD);
+        badge.setTextColor(BulkTheme.onAccent(this));
+        badge.setBackground(BulkTheme.roundedBg(this, BulkTheme.accent(this), 8, 0, 0));
+        badge.setPadding(BulkTheme.dp(this, 8), BulkTheme.dp(this, 3),
+            BulkTheme.dp(this, 8), BulkTheme.dp(this, 3));
+        row.addView(badge);
+
+        row.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
+        return row;
+    }
+
+    /** Contact Admin row (drawer): WhatsApp icon + label + number; tap → WhatsApp. */
+    private LinearLayout contactAdminRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.drawerRowBg(this, false));
+        row.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 9), BulkTheme.dp(this, 11), BulkTheme.dp(this, 9));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, BulkTheme.dp(this, 4));
+        row.setLayoutParams(lp);
+        row.setClickable(true);
+
+        android.widget.ImageView wa = BulkTheme.icon(this, R.drawable.ic_bulk_whatsapp, 0xFF25D366, 17);
+        wa.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 17), BulkTheme.dp(this, 17)));
+        row.addView(wa);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        tp.leftMargin = BulkTheme.dp(this, 9);
+        texts.setLayoutParams(tp);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.CONTACT_ADMIN));
+        label.setTextSize(13.5f);
+        label.setTypeface(medium());
+        label.setTextColor(BulkTheme.textMain(this));
+        texts.addView(label);
+        TextView number = new TextView(this);
+        number.setText("+44 7404 032136");
+        number.setTextSize(10.5f);
+        number.setTypeface(Typeface.MONOSPACE);
+        number.setTextColor(BulkTheme.textMuted(this));
+        texts.addView(number);
+        row.addView(texts);
+
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+
+        row.setOnClickListener(v -> {
+            closeDrawer();
+            openWhatsApp();
+        });
+        return row;
+    }
+
+    /** WhatsApp par number kholo; app na ho to browser fallback (wa.me). */
+    private void openWhatsApp() {
+        android.net.Uri uri = android.net.Uri.parse("https://wa.me/447404032136");
+        try {
+            Intent wa = new Intent(Intent.ACTION_VIEW, uri);
+            wa.setPackage("com.whatsapp");
+            startActivity(wa);
+            return;
+        } catch (Exception ignored) {}
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (Exception e) {
+            Toast.makeText(this, "WhatsApp nahi khul saka.", Toast.LENGTH_SHORT).show();
+        }
     }
 
     /** Language chooser — English (default) ya Roman Urdu; choice foran lagu. */

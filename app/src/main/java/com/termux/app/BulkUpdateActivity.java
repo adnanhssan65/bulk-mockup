@@ -97,6 +97,7 @@ public class BulkUpdateActivity extends Activity {
         scroll.setBackgroundColor(Color.BLACK);
         scroll.addView(root);
         setContentView(scroll);
+        BulkFonts.apply(this);
         setTitle(BulkStrings.t(this, BulkStrings.CHECK_FOR_UPDATES));
 
         checkForUpdate();

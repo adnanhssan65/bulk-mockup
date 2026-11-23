@@ -59,6 +59,7 @@ public class BulkAddProjectActivity extends Activity {
             return;
         }
         setContentView(buildUi());
+        BulkFonts.apply(this);
         showState(0);
     }
 

@@ -70,6 +70,7 @@ public class BulkDuplicatesActivity extends Activity {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
         setContentView(buildUi());
+        BulkFonts.apply(this);
         refresh();
     }
 
@@ -318,6 +319,7 @@ public class BulkDuplicatesActivity extends Activity {
         refreshHeader();
         refreshToolbars();
         refreshGrid();
+        BulkFonts.apply(this);
         loadThumbs();
     }
 

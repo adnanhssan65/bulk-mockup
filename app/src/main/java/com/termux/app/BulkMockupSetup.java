@@ -88,6 +88,14 @@ public final class BulkMockupSetup {
         } catch (Exception ignored) {}
     }
 
+    /** v127: "Replay First-Time Popups" — flag saaf karo taake chain dobara chal sake. */
+    public static void resetFirstRunPermissionsDone(Context context) {
+        try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(PREF_FIRST_RUN_PERMS_DONE, false).apply();
+        } catch (Exception ignored) {}
+    }
+
     /** Bootstrap ke baad call karo. Setup pehle se ho chuka ho to foran whenDone chalta hai. */
     public static void runIfNeeded(final Activity activity, final Runnable whenDone) {
         if (isSetupDone()) {

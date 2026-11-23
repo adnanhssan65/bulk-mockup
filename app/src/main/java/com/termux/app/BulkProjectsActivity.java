@@ -132,6 +132,7 @@ public class BulkProjectsActivity extends Activity {
         root.addView(bottom);
 
         setContentView(root);
+        BulkFonts.apply(this);
     }
 
     private LinearLayout emptyState() {
@@ -225,15 +226,24 @@ public class BulkProjectsActivity extends Activity {
             LinearLayout actions = new LinearLayout(this);
             actions.setOrientation(LinearLayout.HORIZONTAL);
 
-            TextView run = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.RUN), v -> runInTerminal(p.workCmd));
-            run.setTextSize(12);
-            setEnabledStyle(run, p.workCmd != null);
-            actions.addView(run, actionLp(0));
+            // v127 RUN FILTER: 0 wallpapers wale project ka Run action
+            // bilkul nahi dikhta (Batch/Delete par koi asar nahi).
+            int wallCount = p.number > 0
+                ? BulkProjects.countFiles(BulkProjects.wallpapersDir(p.number)) : 0;
+            boolean first = true;
+            if (BulkProjects.canRun(wallCount)) {
+                TextView run = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.RUN),
+                    v -> BulkRunHelper.startRun(this, p));
+                run.setTextSize(12);
+                setEnabledStyle(run, p.workCmd != null);
+                actions.addView(run, actionLp(0));
+                first = false;
+            }
 
             TextView batch = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.BATCH), v -> runInTerminal(p.batchCmd));
             batch.setTextSize(12);
             setEnabledStyle(batch, p.batchCmd != null);
-            actions.addView(batch, actionLp(BulkTheme.dp(this, 8)));
+            actions.addView(batch, actionLp(first ? 0 : BulkTheme.dp(this, 8)));
 
             TextView delete = new TextView(this);
             delete.setText(BulkStrings.t(this, BulkStrings.DELETE));

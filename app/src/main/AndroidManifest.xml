@@ -280,6 +280,30 @@
             android:exported="false"
             android:label="Permission Commands" />
 
+        <!-- v127: Stage screen (Add Wallpapers hub ke andar staging) -->
+        <activity
+            android:name=".app.BulkStageActivity"
+            android:exported="false"
+            android:label="Add Wallpapers" />
+
+        <!-- v127: Preview Added Wallpapers screen -->
+        <activity
+            android:name=".app.BulkPreviewActivity"
+            android:exported="false"
+            android:label="Preview Added Wallpapers" />
+
+        <!-- v127: Preview Ready Assets screen -->
+        <activity
+            android:name=".app.BulkReadyAssetsActivity"
+            android:exported="false"
+            android:label="Preview Ready Assets" />
+
+        <!-- v127: Output Folder screen (read-only) -->
+        <activity
+            android:name=".app.BulkOutputFolderActivity"
+            android:exported="false"
+            android:label="Output Folder" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.bulkfiles"

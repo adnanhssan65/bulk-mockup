@@ -66,6 +66,7 @@ public class BulkPermissionsActivity extends Activity {
         scroll.setBackgroundColor(Color.BLACK);
         scroll.addView(mRoot);
         setContentView(scroll);
+        BulkFonts.apply(this);
         setTitle("Permissions");
         if (getIntent() != null && getIntent().getBooleanExtra("first_run", false)) {
             mFirstRunMode = true;
@@ -402,6 +403,23 @@ public class BulkPermissionsActivity extends Activity {
                     startActivity(new Intent(this, BulkPermissionsTerminalActivity.class));
                 } catch (Exception ignored) {}
             });
+
+        if (!mFirstRunMode) {
+            // v127 (design): pehli-dafa wale popups dobara chalana —
+            // flag reset karke yehi screen first-run mode me khulti hai
+            addNavRow(BulkStrings.t(this, BulkStrings.REPLAY_POPUPS),
+                BulkStrings.t(this, BulkStrings.REPLAY_POPUPS_HINT),
+                BulkStrings.t(this, BulkStrings.OPEN),
+                () -> {
+                    BulkMockupSetup.resetFirstRunPermissionsDone(this);
+                    try {
+                        Intent intent = new Intent(this, BulkPermissionsActivity.class);
+                        intent.putExtra("first_run", true);
+                        startActivity(intent);
+                    } catch (Exception ignored) {}
+                    finish();
+                });
+        }
 
         if (mFirstRunMode) {
             // First-run escape hatch: chain kisi wajah se ruk jaye to user

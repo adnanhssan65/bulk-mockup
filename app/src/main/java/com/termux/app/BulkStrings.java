@@ -152,6 +152,46 @@ public final class BulkStrings {
     public static final String UPDATE_INSTALL_OPENED = "update_install_opened";
     public static final String UPDATE_INSTALL_FAIL = "update_install_fail";
 
+    // v127 — naya design: Run / Quick Run, hub, ready assets, output folder, font, contact
+    public static final String NAV_RUN = "nav_run";
+    public static final String QUICK_RUN_TITLE = "quick_run_title";
+    public static final String SEARCH_PROJECT = "search_project";
+    public static final String READY_COUNT = "ready_count";
+    public static final String NO_MATCHING = "no_matching";
+    public static final String DUPLICATE_CHECK = "duplicate_check";
+    public static final String DROP_BOX = "drop_box";
+    public static final String DROP_BOX_EMPTY = "drop_box_empty";
+    public static final String UNLOCK_SELECT_PROJECT = "unlock_select_project";
+    public static final String UNLOCK_ADD_IMAGES = "unlock_add_images";
+    public static final String PREVIEW_READY = "preview_ready";
+    public static final String NO_READY_PROJECTS = "no_ready_projects";
+    public static final String TAP_TO_INSPECT = "tap_to_inspect";
+    public static final String MOCKUPS_TAB = "mockups_tab";
+    public static final String WALLPAPERS_TAB = "wallpapers_tab";
+    public static final String OUTPUT_FOLDER = "output_folder";
+    public static final String STORAGE_LOCATION = "storage_location";
+    public static final String MAIN_FOLDER = "main_folder";
+    public static final String PROJECT_FOLDER = "project_folder";
+    public static final String LIVE_FOLDER_TREE = "live_folder_tree";
+    public static final String OK = "ok";
+    public static final String FONT = "font";
+    public static final String CONTACT_ADMIN = "contact_admin";
+    public static final String REPLAY_POPUPS = "replay_popups";
+    public static final String REPLAY_POPUPS_HINT = "replay_popups_hint";
+    public static final String ZIP_SHORTCUT_DONE = "zip_shortcut_done";
+    public static final String RUN_SETTINGS = "run_settings";
+    public static final String ANSWER_MODE = "answer_mode";
+    public static final String AUTO_OPTION = "auto_option";
+    public static final String MANUAL_OPTION = "manual_option";
+    public static final String SELECT_MODE = "select_mode";
+    public static final String HD_OPTION = "hd_option";
+    public static final String NORMAL_OPTION = "normal_option";
+    public static final String SELECT_SIZE = "select_size";
+    public static final String ORIGINAL_OPTION = "original_option";
+    public static final String CROP_OPTION = "crop_option";
+    public static final String DEFAULT_TAG = "default_tag";
+    public static final String PROCESSING = "processing";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -327,6 +367,53 @@ public final class BulkStrings {
             "Install wali screen khul gayi hai — wahan Install dabao. Tumhara data, .bashrc aur projects list mehfooz rahegi.");
         put(UPDATE_INSTALL_FAIL, "Install screen could not open: %s",
             "Install screen nahi khul saki: %s");
+
+        // v127 — naya design + additions
+        put(NAV_RUN, "Run", "Run");
+        put(QUICK_RUN_TITLE, "Select Project to Run", "Run Karne Ke Liye Project Chunein");
+        put(SEARCH_PROJECT, "Search project...", "Project search karein...");
+        put(READY_COUNT, "%d Ready", "%d Ready");
+        put(NO_MATCHING, "No matching projects", "Koi project nahi mila");
+        put(DUPLICATE_CHECK, "Duplicate Check", "Duplicate Check");
+        put(DROP_BOX, "Drop Box", "Drop Box");
+        put(DROP_BOX_EMPTY, "Tap \"Add Wallpapers\" above to stage images",
+            "Images lane ke liye upar \"Add Wallpapers\" dabayein");
+        put(UNLOCK_SELECT_PROJECT, "Select a project to unlock",
+            "Unlock karne ke liye project select karein");
+        put(UNLOCK_ADD_IMAGES, "Add wallpapers to unlock",
+            "Unlock karne ke liye wallpapers add karein");
+        put(PREVIEW_READY, "Preview Ready Assets", "Preview Ready Assets");
+        put(NO_READY_PROJECTS, "No completed mockups yet. Run a project first.",
+            "Abhi koi mockup tayyar nahi hai. Pehle project run karein.");
+        put(TAP_TO_INSPECT, "Tap any item to inspect full preview",
+            "Full preview dekhne ke liye kisi bhi image par tap karein");
+        put(MOCKUPS_TAB, "Mockups/", "Mockups/");
+        put(WALLPAPERS_TAB, "Wallpapers/", "Wallpapers/");
+        put(OUTPUT_FOLDER, "Output Folder", "Output Folder");
+        put(STORAGE_LOCATION, "Storage Location", "Storage Location");
+        put(MAIN_FOLDER, "Main Folder Name", "Main Folder Name");
+        put(PROJECT_FOLDER, "Project Folder Name", "Project Folder Name");
+        put(LIVE_FOLDER_TREE, "Live Folder Structure", "Live Folder Structure");
+        put(OK, "OK", "OK");
+        put(FONT, "Font", "Font");
+        put(CONTACT_ADMIN, "Contact Admin", "Admin Se Rabta");
+        put(REPLAY_POPUPS, "Replay First-Time Popups", "First-Time Popups Dobara Chalayein");
+        put(REPLAY_POPUPS_HINT, "Show the first-time permission popups again",
+            "Pehli dafa wale permission popups dobara dikhao");
+        put(ZIP_SHORTCUT_DONE, "Folders & Home shortcut created",
+            "Folders aur Home shortcut ban gaya");
+        put(RUN_SETTINGS, "Run Settings", "Run Settings");
+        put(ANSWER_MODE, "Answer Mode", "Jawab Ka Tareeqa");
+        put(AUTO_OPTION, "Auto — Saved Answers", "Auto — Save Shuda Jawab");
+        put(MANUAL_OPTION, "Manual — Ask Every Time", "Manual — Har Bar Poochho");
+        put(SELECT_MODE, "Select Mode", "Mode Chunein");
+        put(HD_OPTION, "HD Mode", "HD Mode");
+        put(NORMAL_OPTION, "Normal (Fast KB Pack)", "Normal (Fast KB Pack)");
+        put(SELECT_SIZE, "Select Size", "Size Chunein");
+        put(ORIGINAL_OPTION, "Original Size", "Original Size");
+        put(CROP_OPTION, "Crop 9:16", "Crop 9:16");
+        put(DEFAULT_TAG, "(Default)", "(Default)");
+        put(PROCESSING, "Processing…", "Process Ho Raha Hai…");
     }
 
     private BulkStrings() {}

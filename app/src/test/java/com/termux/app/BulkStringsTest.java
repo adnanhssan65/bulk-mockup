@@ -47,6 +47,26 @@ public class BulkStringsTest {
         assertEquals("Project Install Ho Gaya!", BulkStrings.get(BulkStrings.INSTALLED_TITLE, true));
     }
 
+    // ------------------------------------------------------------ v127 labels
+
+    @Test
+    public void v127Labels() {
+        // Contact Admin — owner ki di hui exact Roman Urdu
+        assertEquals("Admin Se Rabta", BulkStrings.get(BulkStrings.CONTACT_ADMIN, true));
+        assertEquals("Contact Admin", BulkStrings.get(BulkStrings.CONTACT_ADMIN, false));
+        // Run dono zubano me ek hi
+        assertEquals("Run", BulkStrings.get(BulkStrings.NAV_RUN, false));
+        assertEquals("Run", BulkStrings.get(BulkStrings.NAV_RUN, true));
+        assertEquals("Select Project to Run", BulkStrings.get(BulkStrings.QUICK_RUN_TITLE, false));
+        assertEquals("Run Karne Ke Liye Project Chunein", BulkStrings.get(BulkStrings.QUICK_RUN_TITLE, true));
+        assertEquals("First-Time Popups Dobara Chalayein", BulkStrings.get(BulkStrings.REPLAY_POPUPS, true));
+        // Run Settings ke sawal
+        assertEquals("Crop 9:16", BulkStrings.get(BulkStrings.CROP_OPTION, false));
+        assertEquals("Original Size", BulkStrings.get(BulkStrings.ORIGINAL_OPTION, true));
+        assertEquals("Manual — Har Bar Poochho", BulkStrings.get(BulkStrings.MANUAL_OPTION, true));
+        assertEquals("Auto — Save Shuda Jawab", BulkStrings.get(BulkStrings.AUTO_OPTION, true));
+    }
+
     @Test
     public void englishDefaults() {
         assertEquals("Add Wallpapers", BulkStrings.get(BulkStrings.ADD_WALLPAPERS, false));

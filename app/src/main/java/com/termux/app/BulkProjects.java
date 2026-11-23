@@ -284,6 +284,35 @@ public final class BulkProjects {
         return result;
     }
 
+    // ------------------------------------------------------------ run filter (v127)
+
+    /**
+     * Run ke liye project tab hi eligible hai jab us ke wallpapers
+     * folder me kam az kam 1 wallpaper ho (owner ka rule): 0 wallpapers
+     * wale project Run list me nahi ate or un ka Run action nahi dikhta.
+     * Batch / Delete par is ka koi asar nahi.
+     */
+    public static boolean canRun(int wallpapersCount) {
+        return wallpapersCount > 0;
+    }
+
+    /**
+     * Sirf wohi projects jo Run ke eligible hain (un ke number ke
+     * wallpapers count {@link #canRun(int)} pass kare). Number <= 0 ya
+     * count maloom na ho (map me na ho) to project bahar rehta hai.
+     */
+    public static List<ProjectInfo> filterRunnable(List<ProjectInfo> projects,
+                                                   Map<Integer, Integer> wallpapersByNumber) {
+        List<ProjectInfo> out = new ArrayList<>();
+        if (projects == null) return out;
+        for (ProjectInfo p : projects) {
+            if (p == null || p.number <= 0 || wallpapersByNumber == null) continue;
+            Integer w = wallpapersByNumber.get(p.number);
+            if (w != null && canRun(w)) out.add(p);
+        }
+        return out;
+    }
+
     // ------------------------------------------------------------ disk IO helpers
 
     /** /storage/emulated/0 me jitne mockup_project_<N> folders hain, un ke numbers + scripts. */

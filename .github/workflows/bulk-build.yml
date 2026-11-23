@@ -205,7 +205,7 @@ jobs:
       - name: Unit tests (projects.conf parser + BulkProjects + BulkStaging)
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --tests "com.termux.app.BulkStringsTest" --tests "com.termux.app.BulkPermissionCommandsTest" --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --tests "com.termux.app.BulkStringsTest" --tests "com.termux.app.BulkPermissionCommandsTest" --tests "com.termux.app.BulkFontsTest" --tests "com.termux.app.BulkRunSettingsTest" --stacktrace
 
       - name: APK build (release, signed)
         env:
@@ -256,6 +256,19 @@ jobs:
           grep -q 'com.termux.app.BulkPermissionsTerminalActivity' /tmp/tree.txt \
             && echo "BulkPermissionsTerminalActivity OK" \
             || { echo "FAIL: BulkPermissionsTerminalActivity manifest me sahi naam se nahi"; exit 1; }
+          # v127 screens: Stage + Preview + Ready Assets + Output Folder
+          grep -q 'com.termux.app.BulkStageActivity' /tmp/tree.txt \
+            && echo "BulkStageActivity OK" \
+            || { echo "FAIL: BulkStageActivity manifest me sahi naam se nahi"; exit 1; }
+          grep -q 'com.termux.app.BulkPreviewActivity' /tmp/tree.txt \
+            && echo "BulkPreviewActivity OK" \
+            || { echo "FAIL: BulkPreviewActivity manifest me sahi naam se nahi"; exit 1; }
+          grep -q 'com.termux.app.BulkReadyAssetsActivity' /tmp/tree.txt \
+            && echo "BulkReadyAssetsActivity OK" \
+            || { echo "FAIL: BulkReadyAssetsActivity manifest me sahi naam se nahi"; exit 1; }
+          grep -q 'com.termux.app.BulkOutputFolderActivity' /tmp/tree.txt \
+            && echo "BulkOutputFolderActivity OK" \
+            || { echo "FAIL: BulkOutputFolderActivity manifest me sahi naam se nahi"; exit 1; }
           echo "MANIFEST CHECK OK"
 
       - name: APK asset check — termux-usr.dat sahi naam + size ke sath andar ho

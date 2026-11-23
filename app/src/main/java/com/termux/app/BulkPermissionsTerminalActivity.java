@@ -67,6 +67,7 @@ public class BulkPermissionsTerminalActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(root);
+        BulkFonts.apply(this);
     }
 
     private LinearLayout stepPanel(int number, final BulkPermissionCommands.Step step) {

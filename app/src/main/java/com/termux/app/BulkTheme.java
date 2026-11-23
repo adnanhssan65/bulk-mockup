@@ -431,7 +431,7 @@ public final class BulkTheme {
         void onChoice(int index);
     }
 
-    private static LinearLayout modalPanel(final Activity a, String title, final Dialog dialog) {
+    public static LinearLayout modalPanel(final Activity a, String title, final Dialog dialog) {
         LinearLayout panel = new LinearLayout(a);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setBackground(modalBg(a));
@@ -459,9 +459,11 @@ public final class BulkTheme {
         return panel;
     }
 
-    private static Dialog showPanelDialog(Activity a, LinearLayout panel) {
+    public static Dialog showPanelDialog(Activity a, LinearLayout panel) {
         Dialog dialog = new Dialog(a);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        // v127: muntakhab font har popup par bhi lage
+        BulkFonts.applyToTree(a, panel);
         dialog.setContentView(panel);
         Window w = dialog.getWindow();
         if (w != null) {
@@ -607,7 +609,7 @@ public final class BulkTheme {
         devName.setTextColor(textMain(a));
         devBox.addView(devName);
         TextView devContact = new TextView(a);
-        devContact.setText("Contact: +44 7404032136");
+        devContact.setText("Contact: +44 7404 032136");
         devContact.setTextSize(11.5f);
         devContact.setTypeface(Typeface.MONOSPACE);
         devContact.setTextColor(accent(a));
@@ -620,6 +622,7 @@ public final class BulkTheme {
         close.setLayoutParams(closeLp);
         panel.addView(close);
 
+        BulkFonts.applyToTree(a, panel);
         dialog.setContentView(panel);
         Window w = dialog.getWindow();
         if (w != null) {

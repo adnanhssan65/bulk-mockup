@@ -334,6 +334,32 @@ public class BulkProjectsTest {
         assertFalse(BulkProjects.isImageFile(null));
     }
 
+    // ------------------------------------------------------------ v127 run filter
+
+    @Test
+    public void canRunNeedsAtLeastOneWallpaper() {
+        assertFalse(BulkProjects.canRun(0));
+        assertFalse(BulkProjects.canRun(-1));
+        assertTrue(BulkProjects.canRun(1));
+        assertTrue(BulkProjects.canRun(250));
+    }
+
+    @Test
+    public void filterRunnableKeepsOnlyProjectsWithWallpapers() {
+        java.util.List<BulkProjects.ProjectInfo> all = java.util.Arrays.asList(
+            new BulkProjects.ProjectInfo(1, "Project 1", "w1", "b1", "d1", true),
+            new BulkProjects.ProjectInfo(2, "Project 2", "w2", "b2", "d2", true),
+            new BulkProjects.ProjectInfo(3, "Project 3", "w3", "b3", "d3", true),
+            new BulkProjects.ProjectInfo(0, "Zero", null, null, null, false));
+        java.util.Map<Integer, Integer> counts = new java.util.HashMap<>();
+        counts.put(1, 5);
+        counts.put(2, 0);
+        // Project 3 ka count maloom hi nahi — run list me nahi ayega
+        java.util.List<BulkProjects.ProjectInfo> out = BulkProjects.filterRunnable(all, counts);
+        assertEquals(1, out.size());
+        assertEquals(1, out.get(0).number);
+    }
+
     @Test
     public void dirHelpersPointInsideProject() {
         assertEquals("/storage/emulated/0/mockup_project_7/7_wallpapers",
