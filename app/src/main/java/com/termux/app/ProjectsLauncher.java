@@ -66,6 +66,23 @@ public final class ProjectsLauncher {
         return readProjects();
     }
 
+    /**
+     * v129: conf ki bare aliases (w<N>/b<N>/d<N>) poori commands me
+     * badal kar wapas karo — terminal wala rasta bhi ab alias par
+     * depend nahi karta (BulkProjects.resolveCommand, ek hi jagah).
+     */
+    static List<ProjectsConf.Project> resolveAll(List<ProjectsConf.Project> projects) {
+        java.util.Map<Integer, String> scripts = BulkProjects.scanDiskProjects();
+        List<ProjectsConf.Project> out = new ArrayList<>();
+        for (ProjectsConf.Project p : projects) {
+            out.add(new ProjectsConf.Project(p.name,
+                BulkProjects.resolveCommand(p.workCmd, scripts),
+                BulkProjects.resolveCommand(p.batchCmd, scripts),
+                BulkProjects.resolveCommand(p.deleteCmd, scripts)));
+        }
+        return out;
+    }
+
     private static List<ProjectsConf.Project> readProjects() {
         try {
             File f = projectsConfFile();
@@ -102,7 +119,7 @@ public final class ProjectsLauncher {
             seedProjectsConfIfMissing(activity);
         } catch (Exception ignored) {}
 
-        List<ProjectsConf.Project> projects = readProjects();
+        List<ProjectsConf.Project> projects = resolveAll(readProjects());
 
         int dp = (int) (activity.getResources().getDisplayMetrics().density + 0.5f);
         LinearLayout col = new LinearLayout(activity);

@@ -33,6 +33,11 @@ import java.util.Map;
  * <N>_Ready_Wallpapers (2-col grid). Kisi item par tap → full-screen
  * inspector (bara preview + naam + asal path). Sab read-only — asal
  * folders ka asal data hi dikhta hai.
+ *
+ * v129: upar "Drop Wallpapers" ka alag option — projects ki list,
+ * project kholne par us ke <N>_wallpapers (drop kiye hue) wallpapers
+ * grid me. Ye bhi read-only hai. Counts har resume par FRESH ginne
+ * jate hain (koi cache nahi).
  */
 public class BulkReadyAssetsActivity extends Activity {
 
@@ -45,6 +50,9 @@ public class BulkReadyAssetsActivity extends Activity {
     private LinearLayout mBody;
     private BulkProjects.ProjectInfo mOpenProject;
     private boolean mMockupsTab = true;
+    // v129: Drop Wallpapers wale hissay ki halat
+    private boolean mDropList = false;
+    private BulkProjects.ProjectInfo mDropProject;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,8 +65,30 @@ public class BulkReadyAssetsActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // v129: counts FRESH — bahar se folders badle hon to bhi yahan
+        // ke number purane na rahen (koi cached count nahi)
+        mProjects = loadProjects();
+        if (mDropProject != null) showDropFolder();
+        else if (mDropList) showDropList();
+        else if (mOpenProject != null) showFolder();
+        else showList();
+    }
+
+    @Override
     public void onBackPressed() {
         // Folder view khula ho to pehle list par wapas
+        if (mDropProject != null) {
+            mDropProject = null;
+            showDropList();
+            return;
+        }
+        if (mDropList) {
+            mDropList = false;
+            showList();
+            return;
+        }
         if (mOpenProject != null) {
             mOpenProject = null;
             showList();
@@ -100,6 +130,8 @@ public class BulkReadyAssetsActivity extends Activity {
 
     private void showList() {
         mBody.removeAllViews();
+        // v129: sab se upar Drop Wallpapers ka option (owner ki demand)
+        mBody.addView(dropEntryRow());
         boolean any = false;
         for (BulkProjects.ProjectInfo p : mProjects) {
             if (p.number <= 0) continue;
@@ -125,6 +157,207 @@ public class BulkReadyAssetsActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = BulkTheme.dp(this, topDp);
         return lp;
+    }
+
+    // ------------------------------------------------------------ Drop Wallpapers (v129)
+
+    /** Main list ke sab se upar wali entry row — tap par drop projects ki list. */
+    private View dropEntryRow() {
+        int total = 0;
+        for (BulkProjects.ProjectInfo p : mProjects) {
+            if (p.number > 0) total += BulkProjects.countFiles(BulkProjects.wallpapersDir(p.number));
+        }
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.glassPanelStrong(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.bottomMargin = BulkTheme.dp(this, 14);
+        row.setLayoutParams(rlp);
+
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setBackground(BulkTheme.iconBoxBg(this));
+        iconBox.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34)));
+        ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_image, BulkTheme.accent(this), 17);
+        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 17), BulkTheme.dp(this, 17));
+        ip.gravity = Gravity.CENTER;
+        iv.setLayoutParams(ip);
+        iconBox.addView(iv);
+        row.addView(iconBox);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tp.leftMargin = BulkTheme.dp(this, 11);
+        texts.setLayoutParams(tp);
+        TextView name = new TextView(this);
+        name.setText(BulkStrings.t(this, BulkStrings.DROP_WALLPAPERS));
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(14);
+        name.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        texts.addView(name);
+        TextView sub = new TextView(this);
+        sub.setText(BulkStrings.format(this, BulkStrings.WALLPAPERS_COUNT, total));
+        sub.setTextColor(BulkTheme.textMuted(this));
+        sub.setTextSize(11);
+        texts.addView(sub);
+        row.addView(texts);
+
+        FrameLayout arrow = new FrameLayout(this);
+        arrow.setBackground(BulkTheme.arrowCircleBg(this));
+        arrow.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 24), BulkTheme.dp(this, 24)));
+        ImageView av = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 12);
+        FrameLayout.LayoutParams avp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 12));
+        avp.gravity = Gravity.CENTER;
+        av.setLayoutParams(avp);
+        arrow.addView(av);
+        row.addView(arrow);
+
+        row.setOnClickListener(v -> {
+            mDropList = true;
+            showDropList();
+        });
+        return row;
+    }
+
+    /** Drop Wallpapers: jin projects ke wallpapers folder me kuch hai, un ki list. */
+    private void showDropList() {
+        mBody.removeAllViews();
+        TextView back = new TextView(this);
+        back.setText("‹  " + BulkStrings.t(this, BulkStrings.PREVIEW_READY));
+        back.setTextColor(BulkTheme.accent(this));
+        back.setTextSize(13.5f);
+        back.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        back.setPadding(0, 0, 0, BulkTheme.dp(this, 8));
+        back.setOnClickListener(v -> { mDropList = false; showList(); });
+        mBody.addView(back);
+
+        TextView title = new TextView(this);
+        title.setText(BulkStrings.t(this, BulkStrings.DROP_WALLPAPERS_SUB));
+        title.setTextColor(BulkTheme.textMuted(this));
+        title.setTextSize(11.5f);
+        title.setPadding(0, 0, 0, BulkTheme.dp(this, 8));
+        mBody.addView(title);
+
+        boolean any = false;
+        for (BulkProjects.ProjectInfo p : mProjects) {
+            if (p.number <= 0) continue;
+            int count = BulkProjects.countFiles(BulkProjects.wallpapersDir(p.number));
+            if (count <= 0) continue;
+            any = true;
+            mBody.addView(dropProjectRow(p, count));
+        }
+        if (!any) {
+            TextView hint = new TextView(this);
+            hint.setText(BulkStrings.t(this, BulkStrings.NO_WALLPAPERS));
+            hint.setTextColor(BulkTheme.textMuted(this));
+            hint.setTextSize(12.5f);
+            hint.setPadding(0, BulkTheme.dp(this, 10), 0, 0);
+            mBody.addView(hint);
+        }
+        BulkFonts.applyToTree(this, mBody);
+    }
+
+    private View dropProjectRow(final BulkProjects.ProjectInfo p, int count) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.bottomMargin = BulkTheme.dp(this, 10);
+        row.setLayoutParams(rlp);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        texts.setLayoutParams(tp);
+        TextView name = new TextView(this);
+        name.setText(p.name);
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(14);
+        name.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        texts.addView(name);
+        TextView cnt = new TextView(this);
+        cnt.setText(BulkStrings.format(this, BulkStrings.WALLPAPERS_COUNT, count));
+        cnt.setTextColor(BulkTheme.textMuted(this));
+        cnt.setTextSize(11);
+        texts.addView(cnt);
+        row.addView(texts);
+
+        FrameLayout arrow = new FrameLayout(this);
+        arrow.setBackground(BulkTheme.arrowCircleBg(this));
+        arrow.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 24), BulkTheme.dp(this, 24)));
+        ImageView av = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 12);
+        FrameLayout.LayoutParams avp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 12));
+        avp.gravity = Gravity.CENTER;
+        av.setLayoutParams(avp);
+        arrow.addView(av);
+        row.addView(arrow);
+
+        row.setOnClickListener(v -> {
+            mDropProject = p;
+            showDropFolder();
+        });
+        return row;
+    }
+
+    /** Ek project ke drop wallpapers (us ke <N>_wallpapers folder ki images) — read-only grid. */
+    private void showDropFolder() {
+        final BulkProjects.ProjectInfo p = mDropProject;
+        if (p == null) { showDropList(); return; }
+        mBody.removeAllViews();
+
+        TextView back = new TextView(this);
+        back.setText("‹  " + p.name);
+        back.setTextColor(BulkTheme.accent(this));
+        back.setTextSize(13.5f);
+        back.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        back.setPadding(0, 0, 0, BulkTheme.dp(this, 8));
+        back.setOnClickListener(v -> { mDropProject = null; showDropList(); });
+        mBody.addView(back);
+
+        File dir = BulkProjects.wallpapersDir(p.number);
+        TextView path = new TextView(this);
+        path.setText(dir.getAbsolutePath());
+        path.setTextColor(BulkTheme.textMuted(this));
+        path.setTextSize(10.5f);
+        path.setTypeface(android.graphics.Typeface.MONOSPACE);
+        mBody.addView(path);
+
+        List<File> files = imageFiles(dir);
+        if (files.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText(BulkStrings.t(this, BulkStrings.NO_WALLPAPERS));
+            none.setTextColor(BulkTheme.textMuted(this));
+            none.setTextSize(12);
+            none.setPadding(0, BulkTheme.dp(this, 12), 0, 0);
+            mBody.addView(none);
+        } else {
+            GridLayout grid = new GridLayout(this);
+            grid.setColumnCount(2);
+            LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            gp.topMargin = BulkTheme.dp(this, 10);
+            grid.setLayoutParams(gp);
+            for (File f : files) grid.addView(assetThumb(f));
+            mBody.addView(grid);
+            loadThumbs(files);
+        }
+        BulkFonts.applyToTree(this, mBody);
     }
 
     private View projectRow(final BulkProjects.ProjectInfo p, int mockups, int ready) {
@@ -358,7 +591,9 @@ public class BulkReadyAssetsActivity extends Activity {
                 if (bmp != null) {
                     mThumbs.put(key, bmp);
                     runOnUiThread(() -> {
-                        if (gen == mThumbGen && mOpenProject != null) showFolder();
+                        if (gen != mThumbGen) return;
+                        if (mDropProject != null) showDropFolder();
+                        else if (mOpenProject != null) showFolder();
                     });
                 }
             }
@@ -394,7 +629,9 @@ public class BulkReadyAssetsActivity extends Activity {
         File[] kids = dir.listFiles();
         if (kids == null) return out;
         for (File k : kids) {
-            if (k.isFile() && BulkProjects.isImageFile(k.getName())) out.add(k);
+            // v129: count wala usool hi yahan bhi — hidden files grid
+            // me bhi nahi (count aur grid kabhi alag na hon)
+            if (k.isFile() && BulkProjects.isCountableWallpaper(k.getName())) out.add(k);
         }
         java.util.Collections.sort(out, (a, b) ->
             a.getName().toLowerCase().compareTo(b.getName().toLowerCase()));

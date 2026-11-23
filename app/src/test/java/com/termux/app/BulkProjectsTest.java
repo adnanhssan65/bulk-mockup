@@ -403,4 +403,110 @@ public class BulkProjectsTest {
         assertEquals("/storage/emulated/0/mockup_project_7/7_Ready_Wallpapers",
             BulkProjects.readyDir(7).getPath());
     }
+
+    // ------------------------------------------------------------ v129: count SAKHT usool
+
+    @Test
+    public void countFilesStrictFixture() throws Exception {
+        // Brief wala fixture: 3 images + 1 video + subfolder me 10
+        // images + 1 hidden image + 1 text file → count EXACTLY 3
+        File dir = Files.createTempDirectory("bulkprojects_fixture").toFile();
+        File sub = new File(dir, "backgrounds");
+        try {
+            assertTrue(new File(dir, "one.jpg").createNewFile());
+            assertTrue(new File(dir, "two.png").createNewFile());
+            assertTrue(new File(dir, "three.webp").createNewFile());
+            assertTrue(new File(dir, "clip.mp4").createNewFile());
+            assertTrue(new File(dir, "notes.txt").createNewFile());
+            assertTrue(new File(dir, ".hidden_photo.jpg").createNewFile());
+            assertTrue(sub.mkdir());
+            for (int i = 0; i < 10; i++) {
+                assertTrue(new File(sub, "bg" + i + ".jpg").createNewFile());
+            }
+            assertEquals(3, BulkProjects.countFiles(dir));
+        } finally {
+            File[] subKids = sub.listFiles();
+            if (subKids != null) for (File k : subKids) k.delete();
+            sub.delete();
+            File[] kids = dir.listFiles();
+            if (kids != null) for (File k : kids) k.delete();
+            dir.delete();
+        }
+    }
+
+    @Test
+    public void countableWallpaperRule() {
+        assertTrue(BulkProjects.isCountableWallpaper("photo.jpg"));
+        assertTrue(BulkProjects.isCountableWallpaper("a.AVIF"));
+        assertTrue(BulkProjects.isCountableWallpaper("b.heic"));
+        assertFalse(BulkProjects.isCountableWallpaper(".hidden.jpg"));
+        assertFalse(BulkProjects.isCountableWallpaper(".keep"));
+        assertFalse(BulkProjects.isCountableWallpaper("clip.mp4"));
+        assertFalse(BulkProjects.isCountableWallpaper(null));
+    }
+
+    // ------------------------------------------------------------ v129: alias kabhi run nahi
+
+    @Test
+    public void resolveCommandTurnsBareAliasIntoFullCommand() {
+        Map<Integer, String> scripts = new HashMap<>();
+        scripts.put(1, "adnan_core.py");
+        scripts.put(12, "w12.py");
+        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py process 1",
+            BulkProjects.resolveCommand("w1", scripts));
+        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py batch 1",
+            BulkProjects.resolveCommand("b1", scripts));
+        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py del 1",
+            BulkProjects.resolveCommand("d1", scripts));
+        assertEquals("cd /storage/emulated/0/mockup_project_12 && python w12.py process 12",
+            BulkProjects.resolveCommand(" w12 ", scripts));
+    }
+
+    @Test
+    public void resolveCommandLeavesOtherCommandsAlone() {
+        Map<Integer, String> scripts = new HashMap<>();
+        scripts.put(1, "adnan_core.py");
+        String full = "cd /storage/emulated/0/mockup_project_1 && python adnan_core.py process 1";
+        assertEquals(full, BulkProjects.resolveCommand(full, scripts));
+        // Script maloom nahi — alias waisa ka waisa (ghalat script invent nahi)
+        assertEquals("w7", BulkProjects.resolveCommand("w7", scripts));
+        assertEquals("w1", BulkProjects.resolveCommand("w1", null));
+        assertEquals("kuch-or", BulkProjects.resolveCommand("kuch-or", scripts));
+        assertNull(BulkProjects.resolveCommand(null, scripts));
+    }
+
+    @Test
+    public void mergeResolvesConfAliasesToFullCommands() {
+        List<ProjectsConf.Project> conf = ProjectsConf.parse(
+            "Project 1 | w1 | b1 | d1\n");
+        Map<Integer, String> disk = new HashMap<>();
+        disk.put(1, "adnan_core.py");
+        List<BulkProjects.ProjectInfo> merged = BulkProjects.mergeProjects(conf, disk);
+        assertEquals(1, merged.size());
+        BulkProjects.ProjectInfo p = merged.get(0);
+        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py process 1",
+            p.workCmd);
+        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py batch 1",
+            p.batchCmd);
+        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py del 1",
+            p.deleteCmd);
+        // Koi command bare alias nahi rehni chahiye
+        assertFalse(p.workCmd.contains("(w1)"));
+        assertFalse(p.workCmd.trim().startsWith("w1"));
+    }
+
+    @Test
+    public void pipedRunCommandNeverUsesBareAlias() {
+        // AUTO run jo asal me popup se chalta hai — alias-free shell
+        // (bash -c, koi .bashrc nahi) me bhi chalna chahiye
+        List<ProjectsConf.Project> conf = ProjectsConf.parse("Project 1 | w1 | b1 | d1\n");
+        Map<Integer, String> disk = new HashMap<>();
+        disk.put(1, "adnan_core.py");
+        BulkProjects.ProjectInfo p = BulkProjects.mergeProjects(conf, disk).get(0);
+        String piped = BulkRunSettings.buildPipedCommand(
+            p.workCmd, Arrays.asList("1", "2"));
+        assertTrue(piped.contains("python adnan_core.py process 1"));
+        assertFalse(piped.contains("(w1)"));
+        assertFalse(piped.contains("| w1"));
+    }
 }

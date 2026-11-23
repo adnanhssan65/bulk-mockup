@@ -258,7 +258,8 @@ public class BulkPreviewActivity extends Activity {
         File[] kids = dir.listFiles();
         if (kids == null) return out;
         for (File k : kids) {
-            if (k.isFile() && BulkProjects.isImageFile(k.getName())) out.add(k);
+            // v129: count wala usool — hidden files grid me bhi nahi
+            if (k.isFile() && BulkProjects.isCountableWallpaper(k.getName())) out.add(k);
         }
         java.util.Collections.sort(out, (a, b) ->
             a.getName().toLowerCase().compareTo(b.getName().toLowerCase()));

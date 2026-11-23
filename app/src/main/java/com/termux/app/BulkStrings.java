@@ -204,6 +204,17 @@ public final class BulkStrings {
     public static final String SYSTEM_PICKER = "system_picker";
     public static final String GALLERY_EMPTY = "gallery_empty";
 
+    // v129 — Drop Wallpapers (Ready Assets ke andar), Home live logs, permission popup
+    public static final String DROP_WALLPAPERS = "drop_wallpapers";
+    public static final String DROP_WALLPAPERS_SUB = "drop_wallpapers_sub";
+    public static final String LOG_IDLE = "log_idle";
+    public static final String LOG_RUN_START = "log_run_start";
+    public static final String LOG_RUN_DONE = "log_run_done";
+    public static final String LOG_RUN_FAIL = "log_run_fail";
+    public static final String PERM_POPUP_TITLE = "perm_popup_title";
+    public static final String PERM_POPUP_MSG = "perm_popup_msg";
+    public static final String PERM_MANUAL_TAG = "perm_manual_tag";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -327,8 +338,8 @@ public final class BulkStrings {
             "Nayi update isi app se lagane ke liye.");
         put(PERM_AUTOSTART, "Background / Auto-start", "Background / Auto-start");
         put(PERM_AUTOSTART_HINT,
-            "Let the app keep running in the background — open your phone's setting and allow Termux Mod.",
-            "Screen band hone par bhi app chalta rahe — apne phone ki setting kholo aur Termux Mod ko Allow karo.");
+            "Let the app keep running in the background — open your phone's setting and allow Termux Mod. (The app cannot check this one itself, so no tick is shown — it is enabled only in the phone setting.)",
+            "Screen band hone par bhi app chalta rahe — apne phone ki setting kholo aur Termux Mod ko Allow karo. (Ye wali app khud check nahi kar sakti, is liye tick nahi dikhta — ye sirf phone ki setting se on hoti hai.)");
         put(PERM_DONE_TOAST, "Permissions done ✔ — now choose your project",
             "Permissions ho gayi ✔ — ab apna project chuno");
         put(PERM_ALL_DONE_TOAST, "All permissions done ✔", "Sab permissions ho gayi ✔");
@@ -438,6 +449,20 @@ public final class BulkStrings {
         put(ALL_IMAGES, "All Images", "Tamam Images");
         put(SYSTEM_PICKER, "System Picker", "System Picker");
         put(GALLERY_EMPTY, "No images found on this device", "Is device par koi image nahi mili");
+
+        // v129
+        put(DROP_WALLPAPERS, "Drop Wallpapers", "Drop Wallpapers");
+        put(DROP_WALLPAPERS_SUB, "Wallpapers dropped into each project",
+            "Har project me drop kiye hue wallpapers");
+        put(LOG_IDLE, "Ready — logs yahan live ayenge", "Ready — logs yahan live ayenge");
+        put(LOG_RUN_START, "▶ %s — run shuru", "▶ %s — run shuru");
+        put(LOG_RUN_DONE, "✔ %s — run mukammal", "✔ %s — run mukammal");
+        put(LOG_RUN_FAIL, "✖ %s — run fail", "✖ %s — run fail");
+        put(PERM_POPUP_TITLE, "Permission Chahiye", "Permission Chahiye");
+        put(PERM_POPUP_MSG,
+            "Storage permission ke baghair wallpapers add/run nahi ho sakte. Permissions screen se allow kar dein.",
+            "Storage permission ke baghair wallpapers add/run nahi ho sakte. Permissions screen se allow kar dein.");
+        put(PERM_MANUAL_TAG, "Manual", "Manual");
     }
 
     private BulkStrings() {}

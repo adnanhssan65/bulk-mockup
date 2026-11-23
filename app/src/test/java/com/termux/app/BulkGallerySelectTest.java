@@ -38,4 +38,18 @@ public class BulkGallerySelectTest {
     public void dragSelectionNullBase() {
         assertEquals(new HashSet<>(Arrays.asList(1, 2)), BulkGallerySelect.dragSelection(null, 1, 2));
     }
+
+    @Test
+    public void paintSweepGrowsAndShrinksWithFinger() {
+        // v129 paint-select: ungli aage jaye to range barhta hai,
+        // peeche aye to wohi range wapas sikurta hai (base mehfooz)
+        Set<Integer> base = new HashSet<>(Arrays.asList(30));
+        Set<Integer> swept = BulkGallerySelect.dragSelection(base, 2, 7);
+        assertEquals(new HashSet<>(Arrays.asList(2, 3, 4, 5, 6, 7, 30)), swept);
+        Set<Integer> back = BulkGallerySelect.dragSelection(base, 2, 4);
+        assertEquals(new HashSet<>(Arrays.asList(2, 3, 4, 30)), back);
+        // Ungli anchor se ulta (upar ki taraf) — range phir bhi sahi
+        Set<Integer> up = BulkGallerySelect.dragSelection(base, 7, 3);
+        assertEquals(new HashSet<>(Arrays.asList(3, 4, 5, 6, 7, 30)), up);
+    }
 }

@@ -70,10 +70,12 @@ public final class BulkRunSettings {
 
     /**
      * Jawab terminal command ke stdin me pipe karne wali command:
-     *   printf '%s\n' '1' '1' | (w1)
-     * Subshell wrap is liye ke alias (w1) aur compound command
-     * (cd ... && python ...) dono par pipe sahi lage. Khaali jawab → asal
-     * command waisa ka waisa.
+     *   printf '%s\n' '1' '1' | (cd ... && python adnan_core.py process 1)
+     * v129: workCmd hamesha POORI command hoti hai (BulkProjects
+     * bare aliases ko merge ke waqt hi resolve kar deta hai) — is
+     * command ko kisi bhi shell me alias ki zaroorat nahi. Subshell
+     * wrap is liye ke compound command (cd ... && python ...) par
+     * pipe sahi lage. Khaali jawab → asal command waisa ka waisa.
      */
     public static String buildPipedCommand(String workCmd, List<String> answers) {
         if (workCmd == null) return null;

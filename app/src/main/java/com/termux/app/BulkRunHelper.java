@@ -54,6 +54,7 @@ public final class BulkRunHelper {
                                 final Runnable onLaunched) {
         if (a == null || p == null || p.workCmd == null) return;
         if (!BulkRunSettings.hasVerifiedPrompts(p.number)) {
+            BulkLog.add(BulkStrings.format(a, BulkStrings.LOG_RUN_START, p.name));
             launch(a, p.workCmd, onLaunched);
             return;
         }
@@ -299,6 +300,9 @@ public final class BulkRunHelper {
             }
         });
 
+        // v129: Home ke live-log card ke liye — run ki shuruaat darj karo
+        BulkLog.add(BulkStrings.format(a, BulkStrings.LOG_RUN_START, p.name));
+
         new Thread(() -> {
             int exit = -1;
             final StringBuilder tail = new StringBuilder();
@@ -316,6 +320,10 @@ public final class BulkRunHelper {
                 String line;
                 long lastPost = 0;
                 while ((line = reader.readLine()) != null) {
+                    // v129: run output ki lines Home ke live-log buffer
+                    // me bhi jati hain (card par aakhri lines "TV" ki
+                    // tarah chalti rehti hain)
+                    BulkLog.add(line);
                     synchronized (tail) {
                         tail.append(line).append('\n');
                         String t = keepTail(tail.toString(), 6000);
@@ -343,6 +351,8 @@ public final class BulkRunHelper {
             final int fExit = exit;
             final String snap;
             synchronized (tail) { snap = tail.toString(); }
+            BulkLog.add(BulkStrings.format(a, fExit == 0
+                ? BulkStrings.LOG_RUN_DONE : BulkStrings.LOG_RUN_FAIL, p.name));
             a.runOnUiThread(() -> {
                 if (!shown.isShowing()) return;
                 spinner.setVisibility(View.GONE);

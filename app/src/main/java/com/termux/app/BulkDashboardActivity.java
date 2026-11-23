@@ -47,6 +47,24 @@ public class BulkDashboardActivity extends Activity {
     private int mDrawerWidth;
     private boolean mDrawerOpen = false;
 
+    // v129: Home ke hero card par live logs (BulkLog) — har second taaza
+    private TextView mLogView;
+    private final android.os.Handler mLogHandler =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable mLogTicker = new Runnable() {
+        @Override public void run() {
+            refreshLogCard();
+            mLogHandler.postDelayed(this, 1000);
+        }
+    };
+
+    // v129: storage permission ghayab ho to design popup — ek "missing
+    // episode" me ek dafa (process ke andar); access milte hi reset,
+    // taake agli kami par phir samne aye. App band karke kholne par
+    // (naya process) phir dikhta hai — permission na ho to har start par.
+    private static boolean sPermPopupShown = false;
+    private boolean mPermPopupOpen = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -96,10 +114,89 @@ public class BulkDashboardActivity extends Activity {
         // Duplicates expiry — dashboard khulne par TTL guzri copies saaf
         new Thread(() -> BulkDuplicatesStore.runExpiry(this)).start();
         buildUi();
+        // v129: live-log card ka ticker + ghayab permission ka design popup
+        mLogHandler.removeCallbacks(mLogTicker);
+        mLogHandler.post(mLogTicker);
+        maybeShowPermissionPopup();
         // App ke andar wale projects: jo folder na ho, peeche lag jata hai
         BulkProjectBundles.installInBackground(this, () -> runOnUiThread(() -> {
             if (!isFinishing() && !mDrawerOpen) buildUi();
         }));
+    }
+
+    @Override
+    protected void onPause() {
+        mLogHandler.removeCallbacks(mLogTicker);
+        super.onPause();
+    }
+
+    /** Hero card ki log lines taaza karo (BulkLog ki aakhri ~6 lines). */
+    private void refreshLogCard() {
+        if (mLogView == null) return;
+        String text = BulkLog.tailText(6, BulkStrings.t(this, BulkStrings.LOG_IDLE));
+        if (!text.equals(mLogView.getText().toString())) {
+            mLogView.setText(text);
+        }
+    }
+
+    /**
+     * v129 — DEFECT 2 (dusra hissa): required (storage) permission
+     * ghayab ho to DESIGN-style popup lazmi samne aye — upgrade ke baad
+     * bhi, sirf pehli install par nahi (v128 me first-run flag pehle
+     * se set hone ki wajah se popup kabhi ata hi nahi tha). Button
+     * Permissions screen ko first-run mode me kholta hai taake asal
+     * system grant wali chain wahan se samne aye.
+     */
+    private void maybeShowPermissionPopup() {
+        boolean has;
+        try {
+            has = BulkStorageAccess.hasAccess(this);
+        } catch (Exception e) {
+            has = true; // check fail ho to user ko roko mat
+        }
+        if (has) {
+            sPermPopupShown = false;
+            return;
+        }
+        if (sPermPopupShown || mPermPopupOpen) return;
+        sPermPopupShown = true;
+
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.PERM_POPUP_TITLE), dialog);
+        TextView msg = new TextView(this);
+        msg.setText(BulkStrings.t(this, BulkStrings.PERM_POPUP_MSG));
+        msg.setTextColor(BulkTheme.textSub(this));
+        msg.setTextSize(12.5f);
+        msg.setLineSpacing(0, 1.35f);
+        panel.addView(msg);
+
+        TextView permBtn = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.PERMISSIONS), v -> {
+                dialog.dismiss();
+                try {
+                    Intent intent = new Intent(this, BulkPermissionsActivity.class);
+                    intent.putExtra("first_run", true);
+                    startActivity(intent);
+                } catch (Exception ignored) {}
+            });
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pp.topMargin = BulkTheme.dp(this, 14);
+        permBtn.setLayoutParams(pp);
+        panel.addView(permBtn);
+
+        TextView closeBtn = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.CLOSE), v -> dialog.dismiss());
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cp.topMargin = BulkTheme.dp(this, 8);
+        closeBtn.setLayoutParams(cp);
+        panel.addView(closeBtn);
+
+        dialog.setOnDismissListener(d -> mPermPopupOpen = false);
+        mPermPopupOpen = true;
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     // ------------------------------------------------------------ UI
@@ -208,14 +305,23 @@ public class BulkDashboardActivity extends Activity {
             dots.addView(dot);
         }
         card.addView(dots);
-        card.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-        TextView prompt = new TextView(this);
-        prompt.setText("$_");
-        prompt.setTextSize(19);
-        prompt.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        prompt.setTextColor(BulkTheme.accent(this));
-        card.addView(prompt);
-        card.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+        // v129: sajawati "$_" ki jagah LIVE LOGS (owner: "TV ki tarah") —
+        // BulkLog ki aakhri ~6 lines, nayi line sab se neeche (gravity
+        // BOTTOM = auto-scroll wali shakal). Card ka size/position
+        // design wala hi hai; ticker onResume me har second taaza karta hai.
+        mLogView = new TextView(this);
+        mLogView.setText(BulkLog.tailText(6, BulkStrings.t(this, BulkStrings.LOG_IDLE)));
+        mLogView.setTextSize(8.5f);
+        mLogView.setTypeface(Typeface.MONOSPACE);
+        mLogView.setTextColor(BulkTheme.textSub(this));
+        mLogView.setGravity(Gravity.BOTTOM);
+        mLogView.setMaxLines(6);
+        mLogView.setLineSpacing(0, 1.15f);
+        LinearLayout.LayoutParams logLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        logLp.setMargins(0, BulkTheme.dp(this, 6), 0, BulkTheme.dp(this, 6));
+        mLogView.setLayoutParams(logLp);
+        card.addView(mLogView);
         View cardBar = new View(this);
         GradientDrawable cardBarBg = new GradientDrawable();
         cardBarBg.setColor(BulkTheme.accentSoft(this));
@@ -233,7 +339,8 @@ public class BulkDashboardActivity extends Activity {
         wave.setLayoutParams(waveLp);
         column.addView(wave);
 
-        // 4 pill rows (naya design): Add Wallpapers / Run / Projects / Terminal
+        // Pill rows (v129 tartib): Add Wallpapers / Run / Projects /
+        // Preview Ready Assets / Terminal (Terminal hamesha LAST)
         LinearLayout pills = new LinearLayout(this);
         pills.setOrientation(LinearLayout.VERTICAL);
         pills.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 6), BulkTheme.dp(this, 20), 0);
@@ -243,6 +350,8 @@ public class BulkDashboardActivity extends Activity {
             v -> showQuickRun()), gapLp(dp));
         pills.addView(pill(R.drawable.ic_bulk_folder, BulkStrings.t(this, BulkStrings.PROJECTS),
             v -> openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.")), gapLp(dp));
+        pills.addView(pill(R.drawable.ic_bulk_eye, BulkStrings.t(this, BulkStrings.PREVIEW_READY),
+            v -> openScreen(BulkReadyAssetsActivity.class, "Ready Assets screen nahi khul saki.")), gapLp(dp));
         pills.addView(pill(R.drawable.ic_bulk_terminal, BulkStrings.t(this, BulkStrings.TERMINAL),
             v -> openTerminal()), gapLp(dp));
         column.addView(pills);
@@ -518,7 +627,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v128");
+        version.setText("Termux Mod v129");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -914,6 +1023,7 @@ public class BulkDashboardActivity extends Activity {
                 pct -> runOnUiThread(() -> BulkTheme.setProgress(track, pct)));
             runOnUiThread(() -> {
                 try { dialog.dismiss(); } catch (Exception ignored) {}
+                BulkLog.add((ok ? "✔ Export: " : "✖ Export fail: ") + p.name);
                 if (ok) showExportDone(dst);
                 else BulkTheme.showToast(BulkDashboardActivity.this, "Export fail ho gaya.");
             });

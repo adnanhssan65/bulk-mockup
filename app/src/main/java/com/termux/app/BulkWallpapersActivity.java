@@ -14,7 +14,7 @@ import android.widget.TextView;
 import com.termux.R;
 
 /**
- * Termux Mod (v127) — "Add Wallpapers" HUB (naya approved design).
+ * Termux Mod (v127, v129 me dobara pakka) — "Add Wallpapers" HUB.
  * Teen chhoti pill rows:
  *   1) Add Wallpapers        → BulkStageActivity (staging / Drop Box)
  *   2) Duplicate Check       → BulkDuplicatesActivity (amber badge sirf
@@ -22,6 +22,11 @@ import com.termux.R;
  *   3) Preview Added Wallpapers → BulkPreviewActivity
  * Asal staging engine BulkStageActivity me hai; ye screen sirf rasta hai.
  * Duplicates expiry (TTL) hub khulne par chalti hai, badge refresh hota hai.
+ *
+ * v129: user ke phone par hub sirf pehli row dikha raha tha (baqi
+ * options ghayab) — is liye ab har row EXPLICIT fixed height (56dp)
+ * ke sath ScrollView ke andar banti hai; koi row measure me dab
+ * nahi sakti, teeno hamesha nazar ati hain.
  */
 public class BulkWallpapersActivity extends Activity {
 
@@ -100,15 +105,23 @@ public class BulkWallpapersActivity extends Activity {
         root.addView(BulkTheme.subHeader(this, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
             BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE)));
 
+        // v129: ScrollView ke andar body — teeno rows hamesha poori
+        // height ke sath, koi measure quirk inhe daba nahi sakta.
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.setFillViewport(true);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 14),
             BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
-        root.addView(body);
+        scroll.addView(body);
+        root.addView(scroll);
 
         body.addView(hubRow(R.drawable.ic_bulk_image,
             BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS), null,
-            () -> startActivity(new Intent(this, BulkStageActivity.class))));
+            () -> startActivity(new Intent(this, BulkStageActivity.class))),
+            rowLp(0));
 
         mDupBadge = new TextView(this);
         body.addView(hubRow(R.drawable.ic_bulk_copy,
@@ -125,9 +138,10 @@ public class BulkWallpapersActivity extends Activity {
         return root;
     }
 
+    /** Hub row ki pakki height — 56dp, kabhi wrap-measure par nahi. */
     private LinearLayout.LayoutParams rowLp(int topDp) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 56));
         lp.topMargin = BulkTheme.dp(this, topDp);
         return lp;
     }

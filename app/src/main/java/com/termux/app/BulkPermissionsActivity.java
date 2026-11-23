@@ -37,11 +37,16 @@ public class BulkPermissionsActivity extends Activity {
     private static final String LOG_TAG = "BulkPermissions";
     private static final int RED = 0xFFFF5252;
     private static final int REQ_NOTIFICATIONS = 1002;
-    private static final String PREFS = "bulk_permissions";
-    private static final String PREF_AUTOSTART_OPENED = "autostart_opened";
 
     private LinearLayout mRoot;
     private boolean mAllowAll = false;
+    // v129: Auto-start ka koi REAL system check Android/OEM par mojood
+    // nahi — is liye is ki halat KABHI ✔ nahi dikhti (v128 me sirf
+    // button dabane par ek saved flag se ✔ ajata tha, jo user ko
+    // "fake show" lagta tha — bilkul durust shikayat). Ye field sirf
+    // Allow-All chain ko ek dafa settings kholne ke baad aage barhane
+    // ke liye hai; screen par halat ke tor par kabhi istemal nahi hota.
+    private boolean mAutostartOpened = false;
     // Pehli dafa (first run): zaroori popups khud ek ek karke samne ate hain —
     // Storage, phir Battery, phir Notifications (owner ki hidayat 2026-11-14).
     private boolean mFirstRunMode = false;
@@ -111,10 +116,8 @@ public class BulkPermissionsActivity extends Activity {
         }
     }
 
-    private boolean isAutostartDone() {
-        return getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getBoolean(PREF_AUTOSTART_OPENED, false);
-    }
+    // v129: isAutostartDone() KHATAM — koi asal check hai hi nahi, to
+    // ✔ dikhana jhoot tha. Auto-start ab nav row hai (status ke baghair).
 
     // ------------------------------------------------------------- fix actions
 
@@ -170,8 +173,9 @@ public class BulkPermissionsActivity extends Activity {
 
     /** Phone ki company ke hisab se background/auto-start wali screen kholna (best effort). */
     private void fixAutostart() {
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putBoolean(PREF_AUTOSTART_OPENED, true).apply();
+        // Sirf chain ke liye yaad rakho ke settings kholi gayi — ye
+        // "permission mil gayi" NAHI hai aur screen par wesa dikhta bhi nahi.
+        mAutostartOpened = true;
         String brand = (Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase());
         Intent intent = null;
         try {
@@ -296,7 +300,7 @@ public class BulkPermissionsActivity extends Activity {
         if (!isBatteryOk()) { fixBattery(); return; }
         if (!isNotificationsOk()) { fixNotifications(); return; }
         if (!isInstallOk()) { fixInstall(); return; }
-        if (!isAutostartDone()) { fixAutostart(); return; }
+        if (!mAutostartOpened) { fixAutostart(); return; }
         mAllowAll = false;
         BulkTheme.showToast(this, BulkStrings.t(this, BulkStrings.PERM_ALL_DONE_TOAST));
         completeFirstRun();
@@ -367,9 +371,13 @@ public class BulkPermissionsActivity extends Activity {
                 isInstallOk(), BulkStrings.t(this, BulkStrings.ALLOW), this::fixInstall);
         }
 
-        addRow(BulkStrings.t(this, BulkStrings.PERM_AUTOSTART),
+        // v129: Auto-start par ✔/✖ wala jhoota status nahi — ye sirf
+        // settings kholne wali nav row hai (asal ijazat phone ki
+        // setting me hi milti hai, app use parh nahi sakta).
+        addNavRow(BulkStrings.t(this, BulkStrings.PERM_AUTOSTART)
+                + " · " + BulkStrings.t(this, BulkStrings.PERM_MANUAL_TAG),
             BulkStrings.t(this, BulkStrings.PERM_AUTOSTART_HINT),
-            isAutostartDone(), BulkStrings.t(this, BulkStrings.OPEN), this::fixAutostart);
+            BulkStrings.t(this, BulkStrings.OPEN), this::fixAutostart);
 
         // Terminal (v126 fallback): popups kaam na karen to permission
         // commands terminal me ek ek karke chalane wali screen

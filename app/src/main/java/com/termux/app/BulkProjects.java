@@ -30,6 +30,7 @@ public final class BulkProjects {
     private static final Pattern NAME_NUMBER = Pattern.compile("(?i)project\\s*[-_ ]?\\s*(\\d+)");
     private static final Pattern CMD_NUMBER = Pattern.compile("(?i)^\\s*w\\s*(\\d+)\\s*$");
     private static final Pattern FOLDER_NUMBER = Pattern.compile("(?i)^mockup_project_(\\d+)$");
+    private static final Pattern BARE_ALIAS = Pattern.compile("^\\s*([wbd])(\\d+)\\s*$");
 
     private BulkProjects() {}
 
@@ -84,7 +85,21 @@ public final class BulkProjects {
         if (name == null) return false;
         String n = name.toLowerCase();
         return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png")
-            || n.endsWith(".webp") || n.endsWith(".gif") || n.endsWith(".bmp");
+            || n.endsWith(".webp") || n.endsWith(".gif") || n.endsWith(".bmp")
+            || n.endsWith(".avif") || n.endsWith(".heic");
+    }
+
+    /**
+     * v129 — COUNT ke liye wallpaper: image file jo hidden (dot se shuru)
+     * na ho. Runner scripts khud bhi bilkul yehi usool rakhte hain
+     * (masalan adnan_core.py: endswith image ext + not startswith '.'),
+     * is liye app ka count aur script ka asal kaam ab ek hi hisaab hai.
+     * Hidden files file manager me bhi nazar nahi atin — unhe ginne se
+     * badge ka number user ko hamesha ghalat lagta tha (v128 ki shikayat).
+     */
+    public static boolean isCountableWallpaper(String name) {
+        if (name == null || name.startsWith(".")) return false;
+        return isImageFile(name);
     }
 
     /**
@@ -152,6 +167,44 @@ public final class BulkProjects {
     /** Poori command line (alias par bharosa kiye baghair): cd + python <script> <action> <N>. */
     public static String fullCommand(int n, String script, String action) {
         return "cd " + STORAGE_ROOT + "/" + projectDirName(n) + " && python " + script + " " + action + " " + n;
+    }
+
+    /** Alias ka harf → script ka action: w = process, b = batch, d = del. */
+    public static String actionForAliasLetter(char letter) {
+        switch (Character.toLowerCase(letter)) {
+            case 'w': return "process";
+            case 'b': return "batch";
+            case 'd': return "del";
+            default: return null;
+        }
+    }
+
+    /**
+     * v129 — DEFECT 1 ka asal fix. Command agar BARE ALIAS hai ("w1",
+     * "b12", "d3" — jesa projects.conf me likha hota hai) to use us
+     * project ki asal script se POORI command me badal do
+     * (cd ... && python <script> <action> <N>). Wajah: app ke background
+     * run (bash -c) me .bashrc load nahi hota, is liye alias wahan
+     * "command not found" deta tha (v128 par asal fail). Poori command
+     * kisi bhi shell me chalti hai — alias ho ya na ho.
+     * Jo command pehle se poori hai (ya koi aur shakal hai) wo waisi ki
+     * waisi rehti hai. Script maloom na ho (diskScripts me na mile) to
+     * bhi command nahi badalti — ghalat script invent nahi karni.
+     */
+    public static String resolveCommand(String cmd, Map<Integer, String> diskScripts) {
+        if (cmd == null || diskScripts == null) return cmd;
+        Matcher m = BARE_ALIAS.matcher(cmd);
+        if (!m.matches()) return cmd;
+        int n;
+        try {
+            n = Integer.parseInt(m.group(2));
+        } catch (Exception e) {
+            return cmd;
+        }
+        String action = actionForAliasLetter(m.group(1).charAt(0));
+        String script = diskScripts.get(n);
+        if (action == null || script == null) return cmd;
+        return fullCommand(n, script, action);
     }
 
     /** .bashrc ke liye ek alias line, masalan: alias w15='cd ... && python w15.py process 15' */
@@ -277,7 +330,14 @@ public final class BulkProjects {
             for (ProjectsConf.Project p : confProjects) {
                 int n = parseProjectNumber(p.name, p.workCmd);
                 if (n > 0) covered.add(n);
-                result.add(new ProjectInfo(n, p.name, p.workCmd, p.batchCmd, p.deleteCmd, true));
+                // v129: conf ki bare aliases (w<N>/b<N>/d<N>) yahin poori
+                // commands me badal jati hain — koi bhi run rasta (popup
+                // background run, terminal, Batch/Delete) ab alias par
+                // depend nahi karta.
+                result.add(new ProjectInfo(n, p.name,
+                    resolveCommand(p.workCmd, diskScripts),
+                    resolveCommand(p.batchCmd, diskScripts),
+                    resolveCommand(p.deleteCmd, diskScripts), true));
             }
         }
         if (diskScripts != null) {
@@ -361,9 +421,13 @@ public final class BulkProjects {
     }
 
     /**
-     * Ek folder me kitni IMAGE files hain (dashboard ki counts line,
-     * run filter waghera ke liye). v128: video (aur har non-image file)
-     * count nahi hoti — video wallpaper nahi hai.
+     * Ek folder me kitne WALLPAPERS hain (dashboard ki counts line,
+     * run filter waghera ke liye). SAKHT USOOL (v129): sirf IMAGE files
+     * jo seedha is folder ke ANDAR hon — recursion bilkul nahi,
+     * subfolders (masalan backgrounds/) ke andar ki files kabhi nahi,
+     * video kabhi nahi, hidden (dot) files nahi (script bhi unhe
+     * nahi chalata). Har screen/popup khulne par ye FRESH ginna hai —
+     * count kahin cache nahi hota.
      */
     public static int countFiles(File dir) {
         if (dir == null) return 0;
@@ -371,7 +435,7 @@ public final class BulkProjects {
         if (kids == null) return 0;
         int count = 0;
         for (File k : kids) {
-            if (k.isFile() && isImageFile(k.getName())) count++;
+            if (k.isFile() && isCountableWallpaper(k.getName())) count++;
         }
         return count;
     }

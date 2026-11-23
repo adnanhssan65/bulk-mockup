@@ -124,6 +124,18 @@ public class BulkStageActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        // v129: project list + spinner ke Ready counts bhi FRESH —
+        // bahar (ya pichli screen) se folders badle hon to purane
+        // number na rahen. Selection mehfooz rehti hai.
+        mProjects = loadProjects();
+        if (mSpinner != null) {
+            mSpinner.setAdapter(buildSpinnerAdapter());
+            int sel = 0;
+            for (int i = 0; i < mProjects.size(); i++) {
+                if (mProjects.get(i).number == mSelectedNumber) { sel = i + 1; break; }
+            }
+            mSpinner.setSelection(sel);
+        }
         refreshStates();
     }
 
@@ -558,6 +570,29 @@ public class BulkStageActivity extends Activity {
         wrap.addView(chev);
         panel.addView(wrap);
 
+        mSpinner.setAdapter(buildSpinnerAdapter());
+
+        int initial = 0;
+        for (int i = 0; i < mProjects.size(); i++) {
+            if (mProjects.get(i).number == mSelectedNumber) { initial = i + 1; break; }
+        }
+        mSpinner.setSelection(initial);
+        mSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view,
+                                       int position, long id) {
+                mSelectedNumber = position == 0 ? -1 : mProjects.get(position - 1).number;
+                persistStage();
+                refreshStates();
+            }
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+        return panel;
+    }
+
+    /** Spinner ke labels (Ready counts har dafa FRESH) + design wala adapter. */
+    private ArrayAdapter<String> buildSpinnerAdapter() {
         List<String> labels = new ArrayList<>();
         labels.add(BulkStrings.t(this, BulkStrings.CHOOSE_PROJECT));
         for (BulkProjects.ProjectInfo p : mProjects) {
@@ -565,7 +600,7 @@ public class BulkStageActivity extends Activity {
                 ? BulkProjects.countFiles(BulkProjects.readyDir(p.number)) : 0;
             labels.add(p.name + " (Ready: " + ready + ")");
         }
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, 0, labels) {
+        return new ArrayAdapter<String>(this, 0, labels) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
                 return spinnerText(position, convertView, false);
@@ -593,25 +628,6 @@ public class BulkStageActivity extends Activity {
                 return t;
             }
         };
-        mSpinner.setAdapter(adapter);
-
-        int initial = 0;
-        for (int i = 0; i < mProjects.size(); i++) {
-            if (mProjects.get(i).number == mSelectedNumber) { initial = i + 1; break; }
-        }
-        mSpinner.setSelection(initial);
-        mSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view,
-                                       int position, long id) {
-                mSelectedNumber = position == 0 ? -1 : mProjects.get(position - 1).number;
-                persistStage();
-                refreshStates();
-            }
-            @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
-        return panel;
     }
 
     // ------------------------------------------------------------ Drop Box (staging)
@@ -1131,6 +1147,7 @@ public class BulkStageActivity extends Activity {
                     + (result.failed > 0 ? BulkStrings.format(BulkStageActivity.this,
                         BulkStrings.FAIL_SUFFIX, result.failed) : "");
                 BulkTheme.showToast(BulkStageActivity.this, msg);
+                BulkLog.add(msg); // v129: Home live-log card ke liye
                 if (runNow) {
                     // v127: run ke sawal app manage karti hai (BulkRunHelper)
                     BulkRunHelper.startRun(BulkStageActivity.this, sel,

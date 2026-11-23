@@ -37,8 +37,9 @@ import java.util.Set;
  * primary route). MediaStore se device ki images, pehle FOLDER list,
  * folder tap karne par us ki images grid me ("All Images" view bhi hai).
  *
- * Selection FAST hai: tap = ek toggle; LONG-PRESS + DRAG = poora swept
- * range select (Google Photos style, BulkGallerySelect); Select All
+ * Selection FAST hai: tap = ek toggle; SWIPE (paint-style, v129) ya
+ * LONG-PRESS + DRAG = poora swept range select (BulkGallerySelect);
+ * drag ke doran kinare par grid auto-scroll bhi hota hai; Select All
  * current view ke liye; upar live selected count. Confirm par tamam
  * selected URIs BulkStageActivity ko wapas — wahan se wohi purana
  * staging + Duplicates SHA-256 flow chalta hai.
@@ -82,6 +83,10 @@ public class BulkGalleryActivity extends Activity {
     private int mDragAnchor = -1;
     private int mDragCurrent = -1;
     private Set<Integer> mDragBase = new HashSet<>();
+    // v129: paint-style swipe select — ungli ghaseetne ki shuruaat
+    private int mDownPos = -1;
+    private float mDownX = -1;
+    private float mDownY = -1;
 
     private final LruCache<Long, Bitmap> mThumbCache = new LruCache<>(240);
 
@@ -335,21 +340,63 @@ public class BulkGalleryActivity extends Activity {
             return true;
         });
         mGrid.setOnTouchListener((v, e) -> {
-            if (!mDragging) return false;
-            if (e.getAction() == MotionEvent.ACTION_MOVE) {
+            int action = e.getAction();
+            if (action == MotionEvent.ACTION_DOWN) {
+                // Paint-select ki tayyari: kahan se ungli chali — tap
+                // abhi bhi aam click hi rehta hai (false wapas)
+                mDownPos = mGrid.pointToPosition((int) e.getX(), (int) e.getY());
+                mDownX = e.getX();
+                mDownY = e.getY();
+                return false;
+            }
+            if (action == MotionEvent.ACTION_MOVE) {
+                if (!mDragging) {
+                    // v129 PAINT SELECT: baghair long-press ke, ungli
+                    // ghaseette hi selection shuru — jis image par se
+                    // ungli guzre wo select hoti jati hai (owner ki
+                    // demand: "hath sy swipe krty jae, image select ho
+                    // jae"). Slop se chhoti harkat = scroll/tap, drag nahi.
+                    if (mDownPos < 0) return false;
+                    float dx = Math.abs(e.getX() - mDownX);
+                    float dy = Math.abs(e.getY() - mDownY);
+                    int slop = BulkTheme.dp(this, 10);
+                    if (dx * dx + dy * dy < slop * slop) return false;
+                    // Seedha neeche scroll karna selection NA ban jaye:
+                    // paint-select tab hi shuru jab swipe kam az kam
+                    // utna hi side par ho jitna neeche (diagonal sweep
+                    // bhi chal jata hai). Ek dafa shuru ho jaye to phir
+                    // har direction me range banta hai.
+                    if (dx < dy * 0.9f) return false;
+                    mDragging = true;
+                    mDragAnchor = mDownPos;
+                    mDragCurrent = mDownPos;
+                    mDragBase = new HashSet<>(mSelected);
+                    applyDrag();
+                    return true;
+                }
                 int pos = mGrid.pointToPosition((int) e.getX(), (int) e.getY());
                 if (pos >= 0 && pos != mDragCurrent) {
                     mDragCurrent = pos;
                     applyDrag();
                 }
+                // Kinare par ungli ho to grid khud scroll ho — lambi
+                // list me bhi swipe-select rukta nahi
+                int edge = BulkTheme.dp(this, 56);
+                int step = BulkTheme.dp(this, 28);
+                if (e.getY() < edge) mGrid.smoothScrollBy(-step, 0);
+                else if (e.getY() > mGrid.getHeight() - edge) mGrid.smoothScrollBy(step, 0);
                 return true;
             }
-            if (e.getAction() == MotionEvent.ACTION_UP
-                || e.getAction() == MotionEvent.ACTION_CANCEL) {
-                mDragging = false;
-                return true;
+            if (action == MotionEvent.ACTION_UP
+                || action == MotionEvent.ACTION_CANCEL) {
+                mDownPos = -1;
+                if (mDragging) {
+                    mDragging = false;
+                    return true; // drag ke baad click fire na ho
+                }
+                return false;
             }
-            return false;
+            return mDragging;
         });
         root.addView(mGrid);
 
