@@ -205,7 +205,7 @@ jobs:
       - name: Unit tests (projects.conf parser + BulkProjects + BulkStaging)
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --tests "com.termux.app.BulkStringsTest" --tests "com.termux.app.BulkPermissionCommandsTest" --tests "com.termux.app.BulkFontsTest" --tests "com.termux.app.BulkRunSettingsTest" --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --tests "com.termux.app.BulkStringsTest" --tests "com.termux.app.BulkPermissionCommandsTest" --tests "com.termux.app.BulkFontsTest" --tests "com.termux.app.BulkRunSettingsTest" --tests "com.termux.app.BulkGallerySelectTest" --tests "com.termux.app.BulkFileManagerTest" --stacktrace
 
       - name: APK build (release, signed)
         env:
@@ -269,6 +269,9 @@ jobs:
           grep -q 'com.termux.app.BulkOutputFolderActivity' /tmp/tree.txt \
             && echo "BulkOutputFolderActivity OK" \
             || { echo "FAIL: BulkOutputFolderActivity manifest me sahi naam se nahi"; exit 1; }
+          grep -q 'com.termux.app.BulkGalleryActivity' /tmp/tree.txt \
+            && echo "BulkGalleryActivity OK" \
+            || { echo "FAIL: BulkGalleryActivity manifest me sahi naam se nahi"; exit 1; }
           echo "MANIFEST CHECK OK"
 
       - name: APK asset check — termux-usr.dat sahi naam + size ke sath andar ho

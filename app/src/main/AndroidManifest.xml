@@ -304,6 +304,12 @@
             android:exported="false"
             android:label="Output Folder" />
 
+        <!-- v127: App Gallery (drag-select image picker) -->
+        <activity
+            android:name=".app.BulkGalleryActivity"
+            android:exported="false"
+            android:label="Gallery" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.bulkfiles"

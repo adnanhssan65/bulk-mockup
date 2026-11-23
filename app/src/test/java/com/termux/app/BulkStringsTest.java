@@ -65,6 +65,13 @@ public class BulkStringsTest {
         assertEquals("Original Size", BulkStrings.get(BulkStrings.ORIGINAL_OPTION, true));
         assertEquals("Manual — Har Bar Poochho", BulkStrings.get(BulkStrings.MANUAL_OPTION, true));
         assertEquals("Auto — Save Shuda Jawab", BulkStrings.get(BulkStrings.AUTO_OPTION, true));
+        // File manager / Export — owner ki di hui exact labels
+        assertEquals("Open in File Manager", BulkStrings.get(BulkStrings.OPEN_FILE_MANAGER, false));
+        assertEquals("File Manager Me Kholo", BulkStrings.get(BulkStrings.OPEN_FILE_MANAGER, true));
+        assertEquals("Export Project", BulkStrings.get(BulkStrings.EXPORT_PROJECT, false));
+        assertEquals("Project Export Karo", BulkStrings.get(BulkStrings.EXPORT_PROJECT, true));
+        assertEquals("All Images", BulkStrings.get(BulkStrings.ALL_IMAGES, false));
+        assertEquals("Tamam Images", BulkStrings.get(BulkStrings.ALL_IMAGES, true));
     }
 
     @Test

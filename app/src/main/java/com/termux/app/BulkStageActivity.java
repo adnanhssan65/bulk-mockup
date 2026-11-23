@@ -63,6 +63,7 @@ public class BulkStageActivity extends Activity {
 
     private static final String LOG_TAG = "BulkStage";
     private static final int REQ_PICK = 41;
+    private static final int REQ_GALLERY = 43;
 
     // Staging persistence (screen band hone par bhi mehfooz)
     private static final String PREFS_STAGE = "bulk_wallpapers_stage";
@@ -198,7 +199,14 @@ public class BulkStageActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQ_PICK || resultCode != RESULT_OK || data == null) return;
+        if (resultCode != RESULT_OK || data == null) return;
+        if (requestCode == REQ_GALLERY) {
+            // App Gallery se ayi selection — aage wohi staging flow
+            ArrayList<Uri> uris = data.getParcelableArrayListExtra(BulkGalleryActivity.EXTRA_URIS);
+            if (uris != null && !uris.isEmpty()) handlePicked(uris);
+            return;
+        }
+        if (requestCode != REQ_PICK) return;
         List<Uri> picked = new ArrayList<>();
         ClipData clip = data.getClipData();
         if (clip != null) {
@@ -210,7 +218,11 @@ public class BulkStageActivity extends Activity {
             picked.add(data.getData());
         }
         if (picked.isEmpty()) return;
+        handlePicked(picked);
+    }
 
+    /** Dono routes (App Gallery / System Picker) ka mushtarka staging rasta. */
+    private void handlePicked(List<Uri> picked) {
         // Persistable permission + naam/size yahin (halka kaam); hash or
         // duplicates ka faisla background thread par hota hai
         final List<String[]> infos = new ArrayList<>();
@@ -399,6 +411,7 @@ public class BulkStageActivity extends Activity {
 
         // Naya design: pick pill row pehle, phir project, phir Drop Box
         body.addView(pickRow());
+        body.addView(systemPickerLink());
         body.addView(step1Panel(), panelLp(12));
         body.addView(dropBoxPanel(), panelLp(12));
 
@@ -457,8 +470,27 @@ public class BulkStageActivity extends Activity {
         arrow.addView(av);
         row.addView(arrow);
 
-        row.setOnClickListener(v -> launchPicker());
+        // Primary route (v127): app ki apni Gallery (drag-select wali)
+        row.setOnClickListener(v -> {
+            try {
+                startActivityForResult(new Intent(this, BulkGalleryActivity.class), REQ_GALLERY);
+            } catch (Exception e) {
+                launchPicker();
+            }
+        });
         return row;
+    }
+
+    /** Secondary chhota option: purana system picker (gallery na chale to bhi rasta). */
+    private View systemPickerLink() {
+        TextView link = new TextView(this);
+        link.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER) + "  ›");
+        link.setTextColor(BulkTheme.textMuted(this));
+        link.setTextSize(12);
+        link.setGravity(Gravity.RIGHT);
+        link.setPadding(0, BulkTheme.dp(this, 7), BulkTheme.dp(this, 2), 0);
+        link.setOnClickListener(v -> launchPicker());
+        return link;
     }
 
     private LinearLayout.LayoutParams panelLp(int topMarginDp) {

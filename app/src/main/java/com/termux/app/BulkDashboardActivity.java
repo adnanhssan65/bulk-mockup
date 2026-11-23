@@ -471,6 +471,11 @@ public class BulkDashboardActivity extends Activity {
             closeDrawer();
             openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.");
         }));
+        // v127 (Adnan 17:12): Export Project sidebar ki apni row hai
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.EXPORT_PROJECT), false, v -> {
+            closeDrawer();
+            startExportFlow();
+        }));
         drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.PREVIEW_READY), false, v -> {
             closeDrawer();
             openScreen(BulkReadyAssetsActivity.class, "Ready Assets screen nahi khul saki.");
@@ -855,6 +860,96 @@ public class BulkDashboardActivity extends Activity {
         } catch (Exception e) {
             Toast.makeText(this, errorToast, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    // ------------------------------------------------------------ Export Project (sidebar)
+
+    /** Sidebar row se: project chuno → FOLDER copy Download/TermuxMod me (ZIP nahi). */
+    private void startExportFlow() {
+        final java.util.List<BulkProjects.ProjectInfo> projects = new java.util.ArrayList<>();
+        java.util.List<BulkProjects.ProjectInfo> all;
+        try {
+            all = BulkProjects.mergeProjects(
+                ProjectsLauncher.readProjectsList(), BulkProjects.scanDiskProjects());
+        } catch (Exception e) {
+            all = new java.util.ArrayList<>();
+        }
+        for (BulkProjects.ProjectInfo p : all) {
+            if (p.number > 0) projects.add(p);
+        }
+        if (projects.isEmpty()) {
+            BulkTheme.showToast(this, BulkStrings.t(this, BulkStrings.NO_PROJECTS));
+            return;
+        }
+        String[] names = new String[projects.size()];
+        for (int i = 0; i < projects.size(); i++) names[i] = projects.get(i).name;
+        BulkTheme.showChoice(this, BulkStrings.t(this, BulkStrings.EXPORT_PROJECT), names,
+            idx -> exportProject(projects.get(idx)));
+    }
+
+    private void exportProject(final BulkProjects.ProjectInfo p) {
+        final java.io.File src = BulkProjects.projectDir(p.number);
+        final java.io.File dst = new java.io.File(BulkFileManager.EXPORT_ROOT, src.getName());
+
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.EXPORT_PROJECT), dialog);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.EXPORTING) + "  " + p.name);
+        label.setTextColor(BulkTheme.textSub(this));
+        label.setTextSize(12.5f);
+        panel.addView(label);
+        final LinearLayout track = BulkTheme.progressTrack(this);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 4));
+        tp.topMargin = BulkTheme.dp(this, 10);
+        track.setLayoutParams(tp);
+        panel.addView(track);
+        dialog.setCancelable(false);
+        BulkTheme.showPanelDialog(this, panel);
+
+        new Thread(() -> {
+            BulkFileManager.deleteRecursive(dst);
+            final boolean ok = BulkFileManager.copyFolder(src, dst,
+                pct -> runOnUiThread(() -> BulkTheme.setProgress(track, pct)));
+            runOnUiThread(() -> {
+                try { dialog.dismiss(); } catch (Exception ignored) {}
+                if (ok) showExportDone(dst);
+                else BulkTheme.showToast(BulkDashboardActivity.this, "Export fail ho gaya.");
+            });
+        }).start();
+    }
+
+    private void showExportDone(final java.io.File dst) {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.EXPORT_PROJECT), dialog);
+        TextView body = new TextView(this);
+        body.setText(BulkStrings.format(this, BulkStrings.EXPORT_DONE, dst.getAbsolutePath()));
+        body.setTextColor(BulkTheme.textSub(this));
+        body.setTextSize(12.5f);
+        panel.addView(body);
+
+        TextView open = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.OPEN_FILE_MANAGER), v -> {
+                dialog.dismiss();
+                BulkFileManager.openFolder(this, dst);
+            });
+        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        op.topMargin = BulkTheme.dp(this, 14);
+        open.setLayoutParams(op);
+        panel.addView(open);
+
+        TextView okBtn = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.OK),
+            v -> dialog.dismiss());
+        LinearLayout.LayoutParams kp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        kp.topMargin = BulkTheme.dp(this, 8);
+        okBtn.setLayoutParams(kp);
+        panel.addView(okBtn);
+
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     private void openTerminal() {

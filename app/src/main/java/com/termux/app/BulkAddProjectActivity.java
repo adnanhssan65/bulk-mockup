@@ -143,6 +143,7 @@ public class BulkAddProjectActivity extends Activity {
         btn.setLayoutParams(bp);
         btn.setOnClickListener(v -> launchPicker());
         mIdlePanel.addView(btn);
+
         return mIdlePanel;
     }
 

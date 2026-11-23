@@ -191,6 +191,16 @@ public final class BulkStrings {
     public static final String CROP_OPTION = "crop_option";
     public static final String DEFAULT_TAG = "default_tag";
     public static final String PROCESSING = "processing";
+    public static final String OPEN_FILE_MANAGER = "open_file_manager";
+    public static final String EXPORT_PROJECT = "export_project";
+    public static final String EXPORTING = "exporting";
+    public static final String EXPORT_DONE = "export_done";
+    public static final String COPY_PATH = "copy_path";
+    public static final String PATH_COPIED = "path_copied";
+    public static final String NO_FILE_MANAGER = "no_file_manager";
+    public static final String ALL_IMAGES = "all_images";
+    public static final String SYSTEM_PICKER = "system_picker";
+    public static final String GALLERY_EMPTY = "gallery_empty";
 
     // ------------------------------------------------------------ table
 
@@ -414,6 +424,16 @@ public final class BulkStrings {
         put(CROP_OPTION, "Crop 9:16", "Crop 9:16");
         put(DEFAULT_TAG, "(Default)", "(Default)");
         put(PROCESSING, "Processing…", "Process Ho Raha Hai…");
+        put(OPEN_FILE_MANAGER, "Open in File Manager", "File Manager Me Kholo");
+        put(EXPORT_PROJECT, "Export Project", "Project Export Karo");
+        put(EXPORTING, "Exporting…", "Export Ho Raha Hai…");
+        put(EXPORT_DONE, "Exported to:\n%s", "Export ho gaya:\n%s");
+        put(COPY_PATH, "Copy Path", "Path Copy Karo");
+        put(PATH_COPIED, "Path copied", "Path Copy Ho Gaya");
+        put(NO_FILE_MANAGER, "No file manager found", "Koi file manager nahi mila");
+        put(ALL_IMAGES, "All Images", "Tamam Images");
+        put(SYSTEM_PICKER, "System Picker", "System Picker");
+        put(GALLERY_EMPTY, "No images found on this device", "Is device par koi image nahi mili");
     }
 
     private BulkStrings() {}
