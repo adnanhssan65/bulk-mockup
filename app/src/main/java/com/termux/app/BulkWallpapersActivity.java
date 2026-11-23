@@ -298,7 +298,7 @@ public class BulkWallpapersActivity extends Activity {
             refreshDupCount();
             loadStagedThumbs();
             if (fDup > 0) {
-                BulkTheme.showToast(this, fDup + " duplicate(s) moved to Duplicates");
+                BulkTheme.showToast(this, BulkStrings.format(this, BulkStrings.DUP_MOVED_TOAST, fDup));
             }
         });
     }
@@ -364,7 +364,7 @@ public class BulkWallpapersActivity extends Activity {
         msg.setTextSize(16);
         panel.addView(msg);
 
-        TextView permBtn = BulkTheme.primaryButton(this, "Permissions", null);
+        TextView permBtn = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.PERMISSIONS), null);
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         pp.topMargin = BulkTheme.dp(this, 14);
@@ -375,7 +375,7 @@ public class BulkWallpapersActivity extends Activity {
         });
         panel.addView(permBtn);
 
-        TextView closeBtn = BulkTheme.secondaryButton(this, "Band Karo", null);
+        TextView closeBtn = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.CLOSE), null);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cp.topMargin = BulkTheme.dp(this, 10);
@@ -394,8 +394,8 @@ public class BulkWallpapersActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BulkTheme.appBg(this));
 
-        root.addView(BulkTheme.subHeader(this, "Add Wallpapers",
-            "Select project first, then pick images"));
+        root.addView(BulkTheme.subHeader(this, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
+            BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE)));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -479,7 +479,7 @@ public class BulkWallpapersActivity extends Activity {
         row.addView(divider);
 
         TextView label = new TextView(this);
-        label.setText("Duplicates");
+        label.setText(BulkStrings.t(this, BulkStrings.DUPLICATES));
         label.setTextColor(BulkTheme.textMain(this));
         label.setTextSize(14);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -530,7 +530,7 @@ public class BulkWallpapersActivity extends Activity {
 
         mStep1Status = new TextView(this);
         mStep1Status.setTextSize(11);
-        panel.addView(headerRow("Step 1 • Select Project", mStep1Status));
+        panel.addView(headerRow(BulkStrings.t(this, BulkStrings.STEP1_SELECT_PROJECT), mStep1Status));
 
         FrameLayout wrap = new FrameLayout(this);
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(
@@ -555,7 +555,7 @@ public class BulkWallpapersActivity extends Activity {
         panel.addView(wrap);
 
         List<String> labels = new ArrayList<>();
-        labels.add("-- Choose a Project --");
+        labels.add(BulkStrings.t(this, BulkStrings.CHOOSE_PROJECT));
         for (BulkProjects.ProjectInfo p : mProjects) {
             int ready = p.number > 0
                 ? BulkProjects.countFiles(BulkProjects.readyDir(p.number)) : 0;
@@ -619,7 +619,7 @@ public class BulkWallpapersActivity extends Activity {
         mStagedCount.setTextSize(11);
         mStagedCount.setTextColor(BulkTheme.textSub(this));
         mStagedCount.setTypeface(android.graphics.Typeface.MONOSPACE);
-        panel.addView(headerRow("Step 2 • Select Images", mStagedCount));
+        panel.addView(headerRow(BulkStrings.t(this, BulkStrings.STEP2_SELECT_IMAGES), mStagedCount));
 
         // Pick / add-more — hamesha khula (lock sirf commit par)
         LinearLayout pick = new LinearLayout(this);
@@ -634,7 +634,7 @@ public class BulkWallpapersActivity extends Activity {
         pick.setLayoutParams(pkp);
         pick.addView(BulkTheme.icon(this, R.drawable.ic_bulk_image, BulkTheme.accent(this), 15));
         TextView pickText = new TextView(this);
-        pickText.setText("Select Images");
+        pickText.setText(BulkStrings.t(this, BulkStrings.SELECT_IMAGES));
         pickText.setTextColor(BulkTheme.textMain(this));
         pickText.setTextSize(13.5f);
         pickText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -714,7 +714,7 @@ public class BulkWallpapersActivity extends Activity {
             BulkTheme.dp(this, 10), BulkTheme.dp(this, 7));
         del.addView(BulkTheme.icon(this, R.drawable.ic_bulk_trash, BulkTheme.danger(this), 13));
         TextView delText = new TextView(this);
-        delText.setText("Delete");
+        delText.setText(BulkStrings.t(this, BulkStrings.DELETE));
         delText.setTextColor(BulkTheme.danger(this));
         delText.setTextSize(12);
         delText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -761,9 +761,9 @@ public class BulkWallpapersActivity extends Activity {
 
     private void confirmClearAll() {
         if (mStaged.isEmpty()) return;
-        BulkTheme.showConfirm(this, "Clear Staging",
-            "Remove all " + mStaged.size() + " staged wallpapers?",
-            "Clear", true, () -> {
+        BulkTheme.showConfirm(this, BulkStrings.t(this, BulkStrings.CLEAR_STAGING_TITLE),
+            BulkStrings.format(this, BulkStrings.CLEAR_STAGING_MSG, mStaged.size()),
+            BulkStrings.t(this, BulkStrings.CLEAR), true, () -> {
                 mStaged.clear();
                 mChecked.clear();
                 mSelectMode = false;
@@ -800,10 +800,10 @@ public class BulkWallpapersActivity extends Activity {
 
     private void showSortDialog() {
         String[] options = {
-            "Name (A to Z)", "Name (Z to A)",
-            "Date Added (Oldest First)", "Date Added (Newest First)",
-            "Size (Small to Large)", "Size (Large to Small)"};
-        BulkTheme.showChoice(this, "Sort Wallpapers", options, which -> {
+            BulkStrings.t(this, BulkStrings.SORT_NAME_ASC), BulkStrings.t(this, BulkStrings.SORT_NAME_DESC),
+            BulkStrings.t(this, BulkStrings.SORT_DATE_ASC), BulkStrings.t(this, BulkStrings.SORT_DATE_DESC),
+            BulkStrings.t(this, BulkStrings.SORT_SIZE_ASC), BulkStrings.t(this, BulkStrings.SORT_SIZE_DESC)};
+        BulkTheme.showChoice(this, BulkStrings.t(this, BulkStrings.SORT_TITLE), options, which -> {
             mStaged = BulkStaging.sorted(mStaged, which);
             persistStage();
             refreshStagedViews();
@@ -819,7 +819,7 @@ public class BulkWallpapersActivity extends Activity {
         mToolbarSelect.setVisibility(has && mSelectMode ? View.VISIBLE : View.GONE);
         mStagedGrid.setVisibility(has ? View.VISIBLE : View.GONE);
         if (mSelectMode) {
-            mSelectCount.setText(mChecked.size() + " selected");
+            mSelectCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mChecked.size()));
         }
         mStagedGrid.setColumnCount(mCols);
         mStagedGrid.removeAllViews();
@@ -973,7 +973,7 @@ public class BulkWallpapersActivity extends Activity {
 
     private View previewPanel() {
         LinearLayout panel = stepPanel();
-        TextView label = BulkTheme.stepLabel(this, "Preview Added Images");
+        TextView label = BulkTheme.stepLabel(this, BulkStrings.t(this, BulkStrings.PREVIEW_ADDED));
         panel.addView(label);
         mPreviewList = new LinearLayout(this);
         mPreviewList.setOrientation(LinearLayout.VERTICAL);
@@ -997,7 +997,7 @@ public class BulkWallpapersActivity extends Activity {
         }
         if (!any) {
             TextView empty = new TextView(this);
-            empty.setText("No Projects Installed");
+            empty.setText(BulkStrings.t(this, BulkStrings.NO_PROJECTS));
             empty.setTextColor(BulkTheme.textMuted(this));
             empty.setTextSize(12);
             empty.setPadding(0, BulkTheme.dp(this, 6), 0, 0);
@@ -1054,7 +1054,7 @@ public class BulkWallpapersActivity extends Activity {
             List<File> files = imageFiles(wdir);
             if (files.isEmpty()) {
                 TextView none = new TextView(this);
-                none.setText("No wallpapers");
+                none.setText(BulkStrings.t(this, BulkStrings.NO_WALLPAPERS));
                 none.setTextColor(BulkTheme.textMuted(this));
                 none.setTextSize(11);
                 none.setPadding(0, BulkTheme.dp(this, 6), 0, BulkTheme.dp(this, 2));
@@ -1159,7 +1159,7 @@ public class BulkWallpapersActivity extends Activity {
         mStep3Count = new TextView(this);
         mStep3Count.setTextSize(11);
         mStep3Count.setTextColor(BulkTheme.textMuted(this));
-        panel.addView(headerRow("Step 3 • Actions", mStep3Count));
+        panel.addView(headerRow(BulkStrings.t(this, BulkStrings.STEP3_ACTIONS), mStep3Count));
 
         mStep3Buttons = new LinearLayout(this);
         mStep3Buttons.setOrientation(LinearLayout.HORIZONTAL);
@@ -1168,13 +1168,13 @@ public class BulkWallpapersActivity extends Activity {
         bp.topMargin = BulkTheme.dp(this, 10);
         mStep3Buttons.setLayoutParams(bp);
 
-        mAddBtn = BulkTheme.secondaryButton(this, "Add", null);
+        mAddBtn = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.ADD), null);
         mAddBtn.setLayoutParams(new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         mAddBtn.setOnClickListener(v -> startCommit(false));
         mStep3Buttons.addView(mAddBtn);
 
-        mRunBtn = BulkTheme.primaryButton(this, "Run Now", null);
+        mRunBtn = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.RUN_NOW), null);
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         rp.leftMargin = BulkTheme.dp(this, 10);
@@ -1209,7 +1209,7 @@ public class BulkWallpapersActivity extends Activity {
         BulkProjects.ProjectInfo sel = selectedProject();
         boolean hasProject = sel != null;
         if (mStep1Status != null) {
-            mStep1Status.setText(hasProject ? "Unlocked" : "Required");
+            mStep1Status.setText(BulkStrings.t(this, hasProject ? BulkStrings.UNLOCKED : BulkStrings.REQUIRED));
             mStep1Status.setTextColor(hasProject ? BulkTheme.accent(this) : BulkTheme.textMuted(this));
             mStep1Status.setTypeface(android.graphics.Typeface.DEFAULT,
                 hasProject ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
@@ -1218,10 +1218,10 @@ public class BulkWallpapersActivity extends Activity {
             mSpinner.setBackground(BulkTheme.spinnerBg(this, hasProject));
         }
         if (mStagedCount != null) {
-            mStagedCount.setText(mStaged.size() + " selected");
+            mStagedCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mStaged.size()));
         }
         if (mStep3Count != null) {
-            mStep3Count.setText(mStaged.size() + " wallpaper(s)");
+            mStep3Count.setText(BulkStrings.format(this, BulkStrings.WALLPAPERS_COUNT, mStaged.size()));
         }
         if (mAddBtn != null) {
             boolean canCommit = BulkStaging.canCommit(mSelectedNumber, mStaged.size()) && !mCopying;
@@ -1254,7 +1254,7 @@ public class BulkWallpapersActivity extends Activity {
         final File destDir = BulkProjects.wallpapersDir(sel.number);
         mCopying = true;
         refreshStates();
-        setProgressUi(true, runNow ? "Rendering phone mockups..." : "Adding wallpapers...", 0);
+        setProgressUi(true, BulkStrings.t(this, runNow ? BulkStrings.RENDERING : BulkStrings.ADDING), 0);
 
         new Thread(() -> {
             final CopyResult result = copyStaged(todo, destDir, pct ->
@@ -1281,8 +1281,10 @@ public class BulkWallpapersActivity extends Activity {
                     BulkTheme.showToast(BulkWallpapersActivity.this, "Copy fail ho gaya.");
                     return;
                 }
-                String msg = "Added " + result.copied + " wallpaper(s) to " + sel.name
-                    + (result.failed > 0 ? " (" + result.failed + " fail)" : "");
+                String msg = BulkStrings.format(BulkWallpapersActivity.this,
+                        BulkStrings.ADDED_TOAST, result.copied, sel.name)
+                    + (result.failed > 0 ? BulkStrings.format(BulkWallpapersActivity.this,
+                        BulkStrings.FAIL_SUFFIX, result.failed) : "");
                 BulkTheme.showToast(BulkWallpapersActivity.this, msg);
                 if (runNow) openTerminalWithCommand(sel.workCmd);
             });

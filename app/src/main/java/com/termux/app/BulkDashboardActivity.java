@@ -41,6 +41,7 @@ public class BulkDashboardActivity extends Activity {
     public static final String EXTRA_OPEN_DASHBOARD_AFTER_SETUP = "bulk_open_dashboard_after_setup";
 
     private boolean mRoutedToSetup = false;
+    private boolean mRoutedToPermissions = false;
     private View mScrim;
     private View mDrawer;
     private int mDrawerWidth;
@@ -63,6 +64,26 @@ public class BulkDashboardActivity extends Activity {
                 Toast.makeText(this, "Terminal nahi khul saka.", Toast.LENGTH_LONG).show();
             }
             finish();
+            return;
+        }
+
+        if (!BulkMockupSetup.isFirstRunPermissionsDone(this)) {
+            // v126: setup ho chuki lekin pehli-dafa wali permission chain
+            // abhi user ke samne nahi ayi — dashboard se PEHLE wahi screen.
+            // Chain mukammal (ya skip) hone par Permissions screen khud
+            // dashboard kholti hai; ye gate har start par yehi tartib
+            // pakki karta hai.
+            mRoutedToPermissions = true;
+            try {
+                Intent intent = new Intent(this, BulkPermissionsActivity.class);
+                intent.putExtra("first_run", true);
+                startActivity(intent);
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Permissions ke liye route nahi ho saka: " + e.getMessage());
+                mRoutedToPermissions = false; // dashboard hi dikha do
+                return;
+            }
+            finish();
         }
     }
 
@@ -70,6 +91,7 @@ public class BulkDashboardActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (mRoutedToSetup) return;
+        if (mRoutedToPermissions) return;
         if (!BulkMockupSetup.isSetupDone()) return; // setup abhi chal raha hoga
         // Duplicates expiry — dashboard khulne par TTL guzri copies saaf
         new Thread(() -> BulkDuplicatesStore.runExpiry(this)).start();
@@ -105,6 +127,12 @@ public class BulkDashboardActivity extends Activity {
         topBar.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 14), BulkTheme.dp(this, 20), BulkTheme.dp(this, 4));
         topBar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_menu, 34, v -> openDrawer()));
         topBar.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        // Language option (v126) — theme button ke sath; English default,
+        // Roman Urdu select karne par tamam labels badal jate hain.
+        topBar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_language, 34, v -> showLanguageChooser()));
+        View langGap = new View(this);
+        langGap.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 10), 1));
+        topBar.addView(langGap);
         int themeIcon = BulkTheme.isLight(this) ? R.drawable.ic_bulk_moon : R.drawable.ic_bulk_sun;
         topBar.addView(BulkTheme.circleButton(this, themeIcon, 34, v -> {
             BulkTheme.toggle(this);
@@ -137,7 +165,7 @@ public class BulkDashboardActivity extends Activity {
         heroLeft.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Powerful Terminal Experience");
+        subtitle.setText(BulkStrings.t(this, BulkStrings.SUBTITLE));
         subtitle.setTextSize(11.5f);
         subtitle.setTypeface(medium());
         subtitle.setTextColor(BulkTheme.textSub(this));
@@ -209,13 +237,13 @@ public class BulkDashboardActivity extends Activity {
         LinearLayout pills = new LinearLayout(this);
         pills.setOrientation(LinearLayout.VERTICAL);
         pills.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 6), BulkTheme.dp(this, 20), 0);
-        pills.addView(pill(R.drawable.ic_bulk_image, "Add Wallpapers",
+        pills.addView(pill(R.drawable.ic_bulk_image, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
             v -> openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki.")));
-        pills.addView(pill(R.drawable.ic_bulk_folder, "Projects",
+        pills.addView(pill(R.drawable.ic_bulk_folder, BulkStrings.t(this, BulkStrings.PROJECTS),
             v -> openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.")), gapLp(dp));
-        pills.addView(pill(R.drawable.ic_bulk_file, "New Project (ZIP)",
+        pills.addView(pill(R.drawable.ic_bulk_file, BulkStrings.t(this, BulkStrings.NEW_PROJECT_ZIP),
             v -> openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.")), gapLp(dp));
-        pills.addView(pill(R.drawable.ic_bulk_terminal, "Terminal",
+        pills.addView(pill(R.drawable.ic_bulk_terminal, BulkStrings.t(this, BulkStrings.TERMINAL),
             v -> openTerminal()), gapLp(dp));
         column.addView(pills);
 
@@ -424,32 +452,32 @@ public class BulkDashboardActivity extends Activity {
         drawer.addView(hLine);
 
         // Nav rows (design ki tartib)
-        drawer.addView(drawerRow("Home", true, v -> closeDrawer()));
-        drawer.addView(drawerRow("Add Wallpapers", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.HOME), true, v -> closeDrawer()));
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS), false, v -> {
             closeDrawer();
             openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki.");
         }));
-        drawer.addView(drawerRow("Projects", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.PROJECTS), false, v -> {
             closeDrawer();
             openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.");
         }));
-        drawer.addView(drawerRow("New Project (ZIP)", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.NEW_PROJECT_ZIP), false, v -> {
             closeDrawer();
             openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.");
         }));
-        drawer.addView(drawerRow("Terminal", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.TERMINAL), false, v -> {
             closeDrawer();
             openTerminal();
         }));
-        drawer.addView(drawerRow("Permissions", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.PERMISSIONS), false, v -> {
             closeDrawer();
             openScreen(BulkPermissionsActivity.class, "Permissions screen nahi khul saki.");
         }));
-        drawer.addView(drawerRow("Check for Updates", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.CHECK_FOR_UPDATES), false, v -> {
             closeDrawer();
             openScreen(BulkUpdateActivity.class, "Update screen nahi khul saki.");
         }));
-        drawer.addView(drawerRow("About", false, v -> {
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.ABOUT), false, v -> {
             closeDrawer();
             BulkTheme.showAboutDialog(this);
         }));
@@ -470,12 +498,12 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v125");
+        version.setText("Termux Mod v126");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         TextView switchTheme = new TextView(this);
-        switchTheme.setText("Switch Theme");
+        switchTheme.setText(BulkStrings.t(this, BulkStrings.SWITCH_THEME));
         switchTheme.setTextSize(11);
         switchTheme.setTypeface(Typeface.DEFAULT_BOLD);
         switchTheme.setTextColor(BulkTheme.accent(this));
@@ -562,6 +590,15 @@ public class BulkDashboardActivity extends Activity {
             return;
         }
         super.onBackPressed();
+    }
+
+    /** Language chooser — English (default) ya Roman Urdu; choice foran lagu. */
+    private void showLanguageChooser() {
+        BulkTheme.showChoice(this, BulkStrings.t(this, BulkStrings.LANGUAGE),
+            new String[]{"English", "Roman Urdu"}, idx -> {
+                BulkStrings.setUrdu(this, idx == 1);
+                buildUi();
+            });
     }
 
     // ------------------------------------------------------------ helpers

@@ -358,6 +358,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void openDashboardAfterSetupIfRequested() {
         if (!mBulkOpenDashboardAfterSetup) return;
         if (!BulkMockupSetup.isSetupDone()) return;
+        // v126: pehli-dafa wali permission chain abhi baqi ho to dashboard
+        // MAT kholo — popups sab se shuru me ane chahiye. Flag true rehne
+        // do; Permissions screen chain ke baad dashboard khud khol degi,
+        // or Dashboard ka apna gate bhi yehi check karta hai.
+        if (!BulkMockupSetup.isFirstRunPermissionsDone(this)) return;
         mBulkOpenDashboardAfterSetup = false;
         try {
             startActivity(new Intent(this, BulkDashboardActivity.class));

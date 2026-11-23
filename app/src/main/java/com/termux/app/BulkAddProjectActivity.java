@@ -80,8 +80,8 @@ public class BulkAddProjectActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BulkTheme.appBg(this));
-        root.addView(BulkTheme.subHeader(this, "New Project (ZIP)",
-            "Auto-install script & mockup template"));
+        root.addView(BulkTheme.subHeader(this, BulkStrings.t(this, BulkStrings.NEW_PROJECT_ZIP),
+            BulkStrings.t(this, BulkStrings.ADD_PROJECT_SUBTITLE)));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -119,14 +119,14 @@ public class BulkAddProjectActivity extends Activity {
     private View idlePanel() {
         mIdlePanel = designPanel();
         TextView title = new TextView(this);
-        title.setText("Install Project Package");
+        title.setText(BulkStrings.t(this, BulkStrings.INSTALL_PACKAGE));
         title.setTextColor(BulkTheme.textMain(this));
         title.setTextSize(15);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         mIdlePanel.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Select a .ZIP file containing script & template");
+        sub.setText(BulkStrings.t(this, BulkStrings.INSTALL_PACKAGE_SUB));
         sub.setTextColor(BulkTheme.textMuted(this));
         sub.setTextSize(12);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
@@ -135,7 +135,7 @@ public class BulkAddProjectActivity extends Activity {
         sub.setLayoutParams(sp);
         mIdlePanel.addView(sub);
 
-        TextView btn = BulkTheme.primaryButton(this, "Select ZIP File", null);
+        TextView btn = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.SELECT_ZIP), null);
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         bp.topMargin = BulkTheme.dp(this, 16);
@@ -148,7 +148,7 @@ public class BulkAddProjectActivity extends Activity {
     private View busyPanel() {
         mBusyPanel = designPanel();
         TextView label = new TextView(this);
-        label.setText("Installing Project Archive...");
+        label.setText(BulkStrings.t(this, BulkStrings.INSTALLING));
         label.setTextColor(BulkTheme.accent(this));
         label.setTextSize(13);
         label.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
@@ -190,7 +190,7 @@ public class BulkAddProjectActivity extends Activity {
         mDonePanel.addView(circle);
 
         TextView title = new TextView(this);
-        title.setText("Project Installed!");
+        title.setText(BulkStrings.t(this, BulkStrings.INSTALLED_TITLE));
         title.setTextColor(BulkTheme.textMain(this));
         title.setTextSize(16);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -226,12 +226,12 @@ public class BulkAddProjectActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rp.topMargin = BulkTheme.dp(this, 16);
         row.setLayoutParams(rp);
-        TextView another = BulkTheme.secondaryButton(this, "Add Another", null);
+        TextView another = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.ADD_ANOTHER), null);
         another.setLayoutParams(new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         another.setOnClickListener(v -> showState(0));
         row.addView(another);
-        TextView open = BulkTheme.primaryButton(this, "Open Projects", null);
+        TextView open = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.OPEN_PROJECTS), null);
         LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         op.leftMargin = BulkTheme.dp(this, 10);
@@ -289,7 +289,7 @@ public class BulkAddProjectActivity extends Activity {
         panel.addView(msg);
 
         if (showPermissionsButton) {
-            TextView perm = BulkTheme.primaryButton(this, "Permissions", null);
+            TextView perm = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.PERMISSIONS), null);
             LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             pp.topMargin = BulkTheme.dp(this, 14);
@@ -301,7 +301,7 @@ public class BulkAddProjectActivity extends Activity {
             panel.addView(perm);
         }
 
-        TextView close = BulkTheme.secondaryButton(this, "Band Karo", null);
+        TextView close = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.CLOSE), null);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cp.topMargin = BulkTheme.dp(this, 10);
@@ -425,8 +425,10 @@ public class BulkAddProjectActivity extends Activity {
             runOnUiThread(() -> {
                 mBusyAnim.set(false);
                 if (fError == null) {
-                    mDoneName.setText("Project " + fNumber);
-                    mDoneFrom.setText("Extracted from " + zipName);
+                    mDoneName.setText(BulkStrings.format(BulkAddProjectActivity.this,
+                        BulkStrings.PROJECT_N, fNumber));
+                    mDoneFrom.setText(BulkStrings.format(BulkAddProjectActivity.this,
+                        BulkStrings.EXTRACTED_FROM, zipName));
                     showState(2);
                 } else {
                     showError(fError != null ? fError : "Project add nahi ho saka.");

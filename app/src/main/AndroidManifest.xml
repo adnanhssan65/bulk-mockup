@@ -274,6 +274,12 @@
             android:exported="false"
             android:label="Duplicates" />
 
+        <!-- v126: Permissions Terminal (fallback — permission commands ek ek karke) -->
+        <activity
+            android:name=".app.BulkPermissionsTerminalActivity"
+            android:exported="false"
+            android:label="Permission Commands" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.bulkfiles"

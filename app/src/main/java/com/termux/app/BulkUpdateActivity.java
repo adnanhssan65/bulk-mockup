@@ -67,7 +67,7 @@ public class BulkUpdateActivity extends Activity {
         root.setPadding(pad, pad, pad, pad);
 
         TextView title = new TextView(this);
-        title.setText("CHECK FOR UPDATES");
+        title.setText(BulkStrings.t(this, BulkStrings.UPDATE_TITLE));
         title.setTextColor(0xFF00FF41);
         title.setTextSize(19);
         root.addView(title);
@@ -76,7 +76,7 @@ public class BulkUpdateActivity extends Activity {
         mStatus.setTextColor(Color.WHITE);
         mStatus.setTextSize(15);
         mStatus.setPadding(0, pad, 0, pad / 2);
-        mStatus.setText("Dekh raha hai... (Checking...)");
+        mStatus.setText(BulkStrings.t(this, BulkStrings.UPDATE_CHECKING));
         root.addView(mStatus);
 
         mProgress = new ProgressBar(this);
@@ -88,7 +88,7 @@ public class BulkUpdateActivity extends Activity {
         root.addView(mNotes);
 
         mInstallButton = new Button(this);
-        mInstallButton.setText("Download and install");
+        mInstallButton.setText(BulkStrings.t(this, BulkStrings.DOWNLOAD_INSTALL));
         mInstallButton.setVisibility(View.GONE);
         mInstallButton.setOnClickListener(v -> downloadAndInstall());
         root.addView(mInstallButton);
@@ -97,7 +97,7 @@ public class BulkUpdateActivity extends Activity {
         scroll.setBackgroundColor(Color.BLACK);
         scroll.addView(root);
         setContentView(scroll);
-        setTitle("Check for updates");
+        setTitle(BulkStrings.t(this, BulkStrings.CHECK_FOR_UPDATES));
 
         checkForUpdate();
     }
@@ -158,14 +158,16 @@ public class BulkUpdateActivity extends Activity {
                     if (remoteCode > installed && fname != null) {
                         mApkUrl = fname;
                         mNewVersion = ftag;
-                        mStatus.setText("Nayi update hai ✔  (" + ftag + ")\n"
-                            + "Tumhara version: " + installedVersionName());
+                        mStatus.setText(BulkStrings.format(BulkUpdateActivity.this,
+                            BulkStrings.UPDATE_AVAILABLE, ftag, installedVersionName()));
                         mNotes.setText(notes);
                         mInstallButton.setVisibility(View.VISIBLE);
                     } else if (remoteCode > installed) {
-                        mStatus.setText("Nayi update hai (" + ftag + ") lekin release me BulkMockup.apk nahi mili.");
+                        mStatus.setText(BulkStrings.format(BulkUpdateActivity.this,
+                            BulkStrings.UPDATE_NO_APK, ftag));
                     } else {
-                        mStatus.setText("App up to date hai ✔\nVersion: " + installedVersionName());
+                        mStatus.setText(BulkStrings.format(BulkUpdateActivity.this,
+                            BulkStrings.UPDATE_LATEST, installedVersionName()));
                         mNotes.setText("");
                     }
                 });
@@ -173,8 +175,7 @@ public class BulkUpdateActivity extends Activity {
                 Logger.logError(LOG_TAG, "update check failed: " + e.getMessage());
                 runOnUiThread(() -> {
                     mProgress.setVisibility(View.GONE);
-                    mStatus.setText("Check nahi ho saka.\nInternet hai to dobara koshish karo. "
-                        + "(No internet, or the server did not answer.)");
+                    mStatus.setText(BulkStrings.t(BulkUpdateActivity.this, BulkStrings.UPDATE_FAIL));
                     mNotes.setText("");
                 });
             }
@@ -196,13 +197,13 @@ public class BulkUpdateActivity extends Activity {
     private void downloadAndInstall() {
         // Install ki ijazat na ho to pehle Permissions screen ki taraf bhejo
         if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-            mStatus.setText("Pehle 'Install updates' wali ijazat do — Permissions screen khul rahi hai.");
+            mStatus.setText(BulkStrings.t(this, BulkStrings.UPDATE_NEED_INSTALL_PERM));
             startActivity(new Intent(this, BulkPermissionsActivity.class));
             return;
         }
         mInstallButton.setEnabled(false);
         mProgress.setVisibility(View.VISIBLE);
-        mStatus.setText("Download ho raha hai... (Downloading " + mNewVersion + ")");
+        mStatus.setText(BulkStrings.format(this, BulkStrings.UPDATE_DOWNLOADING, mNewVersion));
         new Thread(() -> {
             try {
                 File out = new File(getExternalCacheDir() != null
@@ -227,8 +228,7 @@ public class BulkUpdateActivity extends Activity {
                 runOnUiThread(() -> {
                     mProgress.setVisibility(View.GONE);
                     mInstallButton.setEnabled(true);
-                    mStatus.setText("Download adhoora reh gaya. Internet check karke dobara dabao. "
-                        + "(Download failed — try again.)");
+                    mStatus.setText(BulkStrings.t(BulkUpdateActivity.this, BulkStrings.UPDATE_DOWNLOAD_FAIL));
                 });
             }
         }).start();
@@ -243,10 +243,9 @@ public class BulkUpdateActivity extends Activity {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
-            mStatus.setText("Install wali screen khul gayi hai — wahan Install dabao. "
-                + "Tumhara data, .bashrc aur projects list mehfooz rahegi.");
+            mStatus.setText(BulkStrings.t(this, BulkStrings.UPDATE_INSTALL_OPENED));
         } catch (Exception e) {
-            mStatus.setText("Install screen nahi khul saki: " + e.getMessage());
+            mStatus.setText(BulkStrings.format(this, BulkStrings.UPDATE_INSTALL_FAIL, e.getMessage()));
             mInstallButton.setEnabled(true);
         }
     }

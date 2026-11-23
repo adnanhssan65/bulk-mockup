@@ -493,7 +493,7 @@ public final class BulkTheme {
         rowLp.setMargins(0, dp(a, 16), 0, 0);
         row.setLayoutParams(rowLp);
 
-        TextView cancel = secondaryButton(a, "Cancel", v -> dialog.dismiss());
+        TextView cancel = secondaryButton(a, BulkStrings.t(a, BulkStrings.CANCEL), v -> dialog.dismiss());
         LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         cLp.setMargins(0, 0, dp(a, 5), 0);
         cancel.setLayoutParams(cLp);
@@ -571,7 +571,7 @@ public final class BulkTheme {
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = new TextView(a);
-        title.setText("About Termux Mod");
+        title.setText(BulkStrings.t(a, BulkStrings.ABOUT_TITLE));
         title.setTextSize(15);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(accent(a));
@@ -587,7 +587,7 @@ public final class BulkTheme {
         panel.addView(line);
 
         TextView body = new TextView(a);
-        body.setText("A streamlined Termux terminal & automated phone mockup generator built for effortless one-tap workflows.");
+        body.setText(BulkStrings.t(a, BulkStrings.ABOUT_BODY));
         body.setTextSize(12.5f);
         body.setTextColor(textSub(a));
         body.setLineSpacing(0, 1.35f);
@@ -614,7 +614,7 @@ public final class BulkTheme {
         devBox.addView(devContact);
         panel.addView(devBox);
 
-        TextView close = primaryButton(a, "Close", v -> dialog.dismiss());
+        TextView close = primaryButton(a, BulkStrings.t(a, BulkStrings.CLOSE), v -> dialog.dismiss());
         LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         closeLp.setMargins(0, dp(a, 16), 0, 0);
         close.setLayoutParams(closeLp);

@@ -59,7 +59,8 @@ public class BulkProjectsActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BulkTheme.appBg(this));
-        root.addView(BulkTheme.subHeader(this, "Projects", "Tap a project for Run, Batch & Delete"));
+        root.addView(BulkTheme.subHeader(this, BulkStrings.t(this, BulkStrings.PROJECTS),
+            BulkStrings.t(this, BulkStrings.PROJECTS_SUBTITLE)));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout body = new LinearLayout(this);
@@ -116,7 +117,7 @@ public class BulkProjectsActivity extends Activity {
         plus.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 16), BulkTheme.dp(this, 16)));
         btnWrap.addView(plus);
         TextView plusText = new TextView(this);
-        plusText.setText("Add New Project (ZIP)");
+        plusText.setText(BulkStrings.t(this, BulkStrings.ADD_NEW_PROJECT_ZIP));
         plusText.setTextSize(13.5f);
         plusText.setTypeface(Typeface.DEFAULT_BOLD);
         plusText.setTextColor(BulkTheme.onAccent(this));
@@ -140,14 +141,15 @@ public class BulkProjectsActivity extends Activity {
         panel.setBackground(BulkTheme.glassPanel(this));
         panel.setPadding(BulkTheme.dp(this, 24), BulkTheme.dp(this, 24), BulkTheme.dp(this, 24), BulkTheme.dp(this, 24));
         TextView title = new TextView(this);
-        title.setText("No Projects Installed");
+        title.setText(BulkStrings.t(this, BulkStrings.NO_PROJECTS));
         title.setTextSize(14);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setTextColor(BulkTheme.textMain(this));
         title.setGravity(Gravity.CENTER);
         panel.addView(title);
         TextView sub = new TextView(this);
-        sub.setText("Tap \"Add New Project (ZIP)\" below to install a template.");
+        sub.setText(BulkStrings.format(this, BulkStrings.NO_PROJECTS_SUB,
+            BulkStrings.t(this, BulkStrings.ADD_NEW_PROJECT_ZIP)));
         sub.setTextSize(12);
         sub.setTextColor(BulkTheme.textMuted(this));
         sub.setGravity(Gravity.CENTER);
@@ -223,18 +225,18 @@ public class BulkProjectsActivity extends Activity {
             LinearLayout actions = new LinearLayout(this);
             actions.setOrientation(LinearLayout.HORIZONTAL);
 
-            TextView run = BulkTheme.primaryButton(this, "Run", v -> runInTerminal(p.workCmd));
+            TextView run = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.RUN), v -> runInTerminal(p.workCmd));
             run.setTextSize(12);
             setEnabledStyle(run, p.workCmd != null);
             actions.addView(run, actionLp(0));
 
-            TextView batch = BulkTheme.secondaryButton(this, "Batch", v -> runInTerminal(p.batchCmd));
+            TextView batch = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.BATCH), v -> runInTerminal(p.batchCmd));
             batch.setTextSize(12);
             setEnabledStyle(batch, p.batchCmd != null);
             actions.addView(batch, actionLp(BulkTheme.dp(this, 8)));
 
             TextView delete = new TextView(this);
-            delete.setText("Delete");
+            delete.setText(BulkStrings.t(this, BulkStrings.DELETE));
             delete.setTextSize(12);
             delete.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             delete.setTextColor(BulkTheme.danger(this));

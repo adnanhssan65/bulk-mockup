@@ -50,6 +50,7 @@ public final class BulkMockupSetup {
     private static final String MARKER_NAME = ".bulk_mockup_setup_done";
     private static final String PREFS = "bulk_mockup";
     private static final String PREF_BATTERY_ASKED = "battery_asked";
+    private static final String PREF_FIRST_RUN_PERMS_DONE = "first_run_permissions_done";
 
     private BulkMockupSetup() {}
 
@@ -63,6 +64,28 @@ public final class BulkMockupSetup {
 
     public static boolean isSetupDone() {
         return markerFile().exists();
+    }
+
+    /**
+     * Pehli-dafa wali permission popup chain (Storage → Battery →
+     * Notifications) user ke samne aa chuki hai ya nahi (v126). Jab tak
+     * ye false hai, app start par Dashboard se pehle Permissions screen
+     * ati hai — popups hamesha sab se shuru me.
+     */
+    public static boolean isFirstRunPermissionsDone(Context context) {
+        try {
+            return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_FIRST_RUN_PERMS_DONE, false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static void markFirstRunPermissionsDone(Context context) {
+        try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(PREF_FIRST_RUN_PERMS_DONE, true).apply();
+        } catch (Exception ignored) {}
     }
 
     /** Bootstrap ke baad call karo. Setup pehle se ho chuka ho to foran whenDone chalta hai. */
@@ -104,8 +127,13 @@ public final class BulkMockupSetup {
 
                 activity.runOnUiThread(() -> {
                     dismiss(progress);
-                    whenDone.run();
-                    // Pehli dafa: wahi Permissions screen jo sidebar me hai (Override C)
+                    // Pehli dafa: Permissions screen SAB SE PEHLE (v126 fix).
+                    // v124/v125 me whenDone pehle chalta tha or wo Dashboard
+                    // khol deta tha — popups dashboard ke peeche reh jate thay,
+                    // user seedha dashboard par land karta tha. Ab pehle
+                    // Permissions, phir whenDone (session waghera); Dashboard
+                    // TermuxActivity me bhi is flag se gated hai or asal
+                    // dashboard Permissions chain ke baad khud khulta hai.
                     try {
                         Intent intent = new Intent(activity, BulkPermissionsActivity.class);
                         intent.putExtra("first_run", true);
@@ -113,6 +141,7 @@ public final class BulkMockupSetup {
                     } catch (Exception e) {
                         Logger.logError(LOG_TAG, "Permissions screen open failed: " + e.getMessage());
                     }
+                    whenDone.run();
                 });
             } catch (final Exception e) {
                 Logger.logStackTraceWithMessage(LOG_TAG, "Termux Mod setup failed", e);

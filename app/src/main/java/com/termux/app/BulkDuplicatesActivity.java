@@ -41,8 +41,13 @@ import java.util.Set;
 public class BulkDuplicatesActivity extends Activity {
 
     private static final int[] TTL_VALUES = {6, 12, 24, 48, 72, 168, 0};
-    private static final String[] TTL_LABELS = {
-        "6 hours", "12 hours", "24 hours", "48 hours", "72 hours", "1 week", "Never"};
+
+    /** TTL choices mojooda language me (TTL_VALUES ki tartib me). */
+    private String[] ttlLabels() {
+        String[] out = new String[TTL_VALUES.length];
+        for (int i = 0; i < TTL_VALUES.length; i++) out[i] = ttlLabel(TTL_VALUES[i]);
+        return out;
+    }
 
     private List<BulkDuplicates.Entry> mEntries = new ArrayList<>();
     private final Map<String, Bitmap> mThumbs = new HashMap<>();
@@ -99,7 +104,7 @@ public class BulkDuplicatesActivity extends Activity {
         tp.leftMargin = BulkTheme.dp(this, 12);
         titles.setLayoutParams(tp);
         TextView title = new TextView(this);
-        title.setText("Duplicates");
+        title.setText(BulkStrings.t(this, BulkStrings.DUPLICATES));
         title.setTextColor(BulkTheme.textMain(this));
         title.setTextSize(17);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -136,7 +141,7 @@ public class BulkDuplicatesActivity extends Activity {
         body.addView(toolbarSelect(), topLp(12));
 
         mEmptyText = new TextView(this);
-        mEmptyText.setText("No duplicates");
+        mEmptyText.setText(BulkStrings.t(this, BulkStrings.NO_DUPLICATES));
         mEmptyText.setTextColor(BulkTheme.textMuted(this));
         mEmptyText.setTextSize(12.5f);
         mEmptyText.setGravity(Gravity.CENTER);
@@ -168,7 +173,7 @@ public class BulkDuplicatesActivity extends Activity {
         row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
             BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
         TextView label = new TextView(this);
-        label.setText("Auto-delete after");
+        label.setText(BulkStrings.t(this, BulkStrings.AUTO_DELETE_AFTER));
         label.setTextColor(BulkTheme.textMain(this));
         label.setTextSize(13);
         row.addView(label);
@@ -191,7 +196,7 @@ public class BulkDuplicatesActivity extends Activity {
     }
 
     private void showTtlChoices() {
-        BulkTheme.showChoice(this, "Auto-delete after", TTL_LABELS, which -> {
+        BulkTheme.showChoice(this, BulkStrings.t(this, BulkStrings.AUTO_DELETE_AFTER), ttlLabels(), which -> {
             BulkDuplicatesStore.setTtlHours(this, TTL_VALUES[which]);
             // Nayi TTL foran lagu — jo ab expire ho gayi hon wo saaf
             new Thread(() -> {
@@ -202,11 +207,10 @@ public class BulkDuplicatesActivity extends Activity {
         });
     }
 
-    private static String ttlLabel(int hours) {
-        for (int i = 0; i < TTL_VALUES.length; i++) {
-            if (TTL_VALUES[i] == hours) return TTL_LABELS[i];
-        }
-        return hours + " hours";
+    private String ttlLabel(int hours) {
+        if (hours == 0) return BulkStrings.t(this, BulkStrings.TTL_NEVER);
+        if (hours == 168) return BulkStrings.t(this, BulkStrings.TTL_WEEK);
+        return BulkStrings.format(this, BulkStrings.TTL_HOURS, hours);
     }
 
     // ------------------------------------------------------------ toolbars
@@ -247,7 +251,7 @@ public class BulkDuplicatesActivity extends Activity {
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView all = new TextView(this);
-        all.setText("Select All");
+        all.setText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
         all.setTextColor(BulkTheme.textMain(this));
         all.setTextSize(12);
         all.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -273,7 +277,7 @@ public class BulkDuplicatesActivity extends Activity {
         del.setLayoutParams(dlp);
         del.addView(BulkTheme.icon(this, R.drawable.ic_bulk_trash, BulkTheme.danger(this), 13));
         TextView delText = new TextView(this);
-        delText.setText("Delete");
+        delText.setText(BulkStrings.t(this, BulkStrings.DELETE));
         delText.setTextColor(BulkTheme.danger(this));
         delText.setTextSize(12);
         delText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -321,11 +325,12 @@ public class BulkDuplicatesActivity extends Activity {
         int ttl = BulkDuplicatesStore.getTtlHours(this);
         if (mSubtitle != null) {
             mSubtitle.setText(ttl <= 0
-                ? "Auto-delete off" : "Auto-delete after " + ttlLabel(ttl));
+                ? BulkStrings.t(this, BulkStrings.AUTO_DELETE_OFF)
+                : BulkStrings.t(this, BulkStrings.AUTO_DELETE_AFTER) + " " + ttlLabel(ttl));
         }
         if (mTtlValue != null) mTtlValue.setText(ttlLabel(ttl));
         if (mHeaderCount != null) {
-            mHeaderCount.setText(mEntries.size() + " duplicate(s)");
+            mHeaderCount.setText(BulkStrings.format(this, BulkStrings.DUP_COUNT, mEntries.size()));
         }
     }
 
@@ -338,7 +343,7 @@ public class BulkDuplicatesActivity extends Activity {
             mToolbarSelect.setVisibility(has && mSelectMode ? View.VISIBLE : View.GONE);
         }
         if (mSelectCount != null) {
-            mSelectCount.setText(mChecked.size() + " selected");
+            mSelectCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mChecked.size()));
         }
         if (mEmptyText != null) {
             mEmptyText.setVisibility(has ? View.GONE : View.VISIBLE);
