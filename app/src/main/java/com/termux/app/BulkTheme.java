@@ -46,7 +46,9 @@ public final class BulkTheme {
 
     public static boolean isLight(Context c) {
         try {
-            return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LIGHT, false);
+            // v128: factory default LIGHT — sirf tab jab user ne kabhi
+            // theme choose na kiya ho (saved choice hamesha respected).
+            return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LIGHT, true);
         } catch (Exception e) {
             return false;
         }

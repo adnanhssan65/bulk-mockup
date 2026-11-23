@@ -30,6 +30,8 @@ public final class BulkFonts {
     private static final String PREFS = "bulk_mockup";
     private static final String KEY_FONT = "ui_font";
     public static final String DEFAULT_ID = "default";
+    /** v128: factory default font — sirf tab jab saved choice na ho. */
+    public static final String FACTORY_ID = "poppins";
     public static final String ASSET_DIR = "bulk/fonts/";
 
     /** Ek font ki maloomat: stable id, dikhai dene wala naam, asset file. */
@@ -99,11 +101,13 @@ public final class BulkFonts {
 
     public static String currentId(Context c) {
         try {
+            // Saved choice na ho to factory default (Poppins); saved
+            // choice — chahe "Default" hi kyun na ho — hamesha respected.
             String id = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(KEY_FONT, DEFAULT_ID);
+                .getString(KEY_FONT, FACTORY_ID);
             return isValidId(id) ? id : DEFAULT_ID;
         } catch (Exception e) {
-            return DEFAULT_ID;
+            return FACTORY_ID;
         }
     }
 

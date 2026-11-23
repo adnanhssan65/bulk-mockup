@@ -54,4 +54,12 @@ public class BulkFontsTest {
         assertEquals(BulkFonts.DEFAULT_ID, BulkFonts.byId("nope").id);
         assertEquals(BulkFonts.DEFAULT_ID, BulkFonts.byId(null).id);
     }
+
+    @Test
+    public void factoryDefaultIsPoppins() {
+        // v128: saved choice na ho to factory font Poppins hai
+        assertEquals("poppins", BulkFonts.FACTORY_ID);
+        assertTrue(BulkFonts.isValidId(BulkFonts.FACTORY_ID));
+        assertEquals("Poppins", BulkFonts.byId(BulkFonts.FACTORY_ID).name);
+    }
 }
