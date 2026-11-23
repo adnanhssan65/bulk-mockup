@@ -1395,7 +1395,7 @@ public class BulkWallpapersActivity extends Activity {
 
     private void openTerminalWithCommand(String command) {
         Intent intent = new Intent(this, TermuxActivity.class);
-        intent.putExtra(TermuxActivity.EXTRA_RUN_COMMAND, command);
+        intent.putExtra(BulkDashboardActivity.EXTRA_RUN_COMMAND, command);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(intent);
         finish();
