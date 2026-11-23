@@ -38,7 +38,14 @@ import java.util.Set;
  * FOLDER list, folder tap karne par us ki images grid me ("All Images"
  * view bhi hai).
  *
- * v130 TOOLBAR (owner ke apne HTML design — All Images Gallery
+ * v131 (Defect 2 fix): loading v129 wale proven raste par wapas —
+ * MediaStore query SIRF {_ID} (DATE_ADDED DESC); v130 ka barhaya
+ * hua projection (DISPLAY_NAME/DATE_ADDED wali Entry list) owner ke
+ * phone par gallery khaali kar gaya tha. Naam ab Name-sort ke liye
+ * alag lazy query se ate hain. Toolbar EK block me header ke neeche,
+ * har row ki height pakki (46/42/30dp).
+ *
+ * TOOLBAR (owner ke apne HTML design — All Images Gallery
  * Manager — ke mutabiq, 2 rows + hint bar):
  *   Row 1: "N selected" | Select All / Unselect All | Add/Move CTA
  *          (0 select par disabled; Copy mode me "Add (n)", Move mode
@@ -82,10 +89,15 @@ public class BulkGalleryActivity extends Activity {
     private final List<Bucket> mBuckets = new ArrayList<>();
     private int mTotalCount = 0;
 
-    // Grid state — entries DISPLAY order me; selection image ID par
+    // Grid state — v131 (Defect 2 fix): ids LOAD order me (Newest
+    // pehle) + DISPLAY order ki alag list; selection image ID par.
+    // Naam sirf Name-sort ke liye alag se (lazy) ate hain.
     private boolean mInGrid = false;
     private String mGridTitle = "";
-    private List<BulkGalleryState.Entry> mEntries = new ArrayList<>();
+    private String mBucketId = null;
+    private List<Long> mLoadOrder = new ArrayList<>();
+    private List<Long> mIds = new ArrayList<>();
+    private java.util.Map<Long, String> mNames = null;
     private final Set<Long> mSelectedIds = new HashSet<>();
     private GridView mGrid;
     private GalleryAdapter mAdapter;
@@ -187,9 +199,17 @@ public class BulkGalleryActivity extends Activity {
         }
     }
 
-    /** Ek bucket (ya tamam) ki entries — mojooda sort ke mutabiq display order me. */
-    private List<BulkGalleryState.Entry> loadEntries(String bucketId) {
-        List<BulkGalleryState.Entry> out = new ArrayList<>();
+    /**
+     * v131 (Defect 2 fix): v129 wala PROVEN query bilkul waisa hi —
+     * projection SIRF {_ID}, order DATE_ADDED DESC (load order =
+     * Newest pehle). v130 ne projection me DISPLAY_NAME/DATE_ADDED
+     * jor kar Entry list bana di thi; owner ke phone par usi tabdeeli
+     * ke baad gallery khaali ho gayi (v129 me yahi screen bhari hui
+     * chalti thi). Display order BulkGalleryState.orderIds se banta
+     * hai; naam Name-sort ke waqt alag query se ate hain (fetchNames).
+     */
+    private List<Long> loadIds(String bucketId) {
+        List<Long> out = new ArrayList<>();
         Cursor c = null;
         try {
             String sel = null;
@@ -200,15 +220,11 @@ public class BulkGalleryActivity extends Activity {
             }
             c = getContentResolver().query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                new String[]{MediaStore.Images.Media._ID,
-                    MediaStore.Images.Media.DISPLAY_NAME,
-                    MediaStore.Images.Media.DATE_ADDED},
+                new String[]{MediaStore.Images.Media._ID},
                 sel, args, MediaStore.Images.Media.DATE_ADDED + " DESC");
             if (c != null) {
                 while (c.moveToNext()) {
-                    String name = c.getString(1);
-                    out.add(new BulkGalleryState.Entry(
-                        c.getLong(0), name != null ? name : "", c.getLong(2)));
+                    out.add(c.getLong(0));
                 }
             }
         } catch (Exception e) {
@@ -216,7 +232,52 @@ public class BulkGalleryActivity extends Activity {
         } finally {
             if (c != null) c.close();
         }
-        return BulkGalleryState.sorted(out, mSortMode);
+        return out;
+    }
+
+    /**
+     * Name-sort ke liye display names — alag, lazy query. Fail ho to
+     * mNames null rehta hai aur Name-sort load order par gir jata hai
+     * (gallery ka main rasta is par munhasir NAHI hai).
+     */
+    private void fetchNamesAsync() {
+        final String bucketId = mBucketId;
+        new Thread(() -> {
+            java.util.Map<Long, String> names = new java.util.HashMap<>();
+            Cursor c = null;
+            try {
+                String sel = null;
+                String[] args = null;
+                if (bucketId != null) {
+                    sel = MediaStore.Images.Media.BUCKET_ID + "=?";
+                    args = new String[]{bucketId};
+                }
+                c = getContentResolver().query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    new String[]{MediaStore.Images.Media._ID,
+                        MediaStore.Images.Media.DISPLAY_NAME},
+                    sel, args, null);
+                if (c != null) {
+                    while (c.moveToNext()) {
+                        String n = c.getString(1);
+                        names.put(c.getLong(0), n != null ? n : "");
+                    }
+                }
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Naam nahi mile (Name-sort fallback): " + e);
+                return;
+            } finally {
+                if (c != null) c.close();
+            }
+            final java.util.Map<Long, String> ready = names;
+            runOnUiThread(() -> {
+                mNames = ready;
+                if (mInGrid && mSortMode == BulkGalleryState.SORT_NAME) {
+                    mIds = BulkGalleryState.orderIds(mLoadOrder, mSortMode, mNames);
+                    refreshGridState();
+                }
+            });
+        }).start();
     }
 
     private static Uri uriFor(long id) {
@@ -296,11 +357,14 @@ public class BulkGalleryActivity extends Activity {
     private void openGrid(final String bucketId, final String title) {
         mInGrid = true;
         mGridTitle = title;
+        mBucketId = bucketId;
+        mNames = null;
         mSelectedIds.clear();
         new Thread(() -> {
-            final List<BulkGalleryState.Entry> entries = loadEntries(bucketId);
+            final List<Long> ids = loadIds(bucketId);
             runOnUiThread(() -> {
-                mEntries = entries;
+                mLoadOrder = ids;
+                mIds = BulkGalleryState.orderIds(mLoadOrder, mSortMode, mNames);
                 buildGridUi();
             });
         }).start();
@@ -313,8 +377,14 @@ public class BulkGalleryActivity extends Activity {
         root.addView(BulkTheme.subHeader(this, mGridTitle,
             BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE)));
 
-        root.addView(buildToolbar());
-        root.addView(buildHintBar());
+        // v131 (Defect 2 fix): toolbar EK hi block ki surat me header
+        // ke foran neeche — kisi scrollable/weighted container ke
+        // ANDAR nahi; har row ki height pakki (fixed dp), hub (v129)
+        // wala hi usool jo owner ke phone par proven hai. Block ki
+        // kul height bhi explicit hai: padding 6 + row1 46 + 4 +
+        // row2 42 + 6 + hint 30 + padding 6 = 140dp.
+        root.addView(buildToolbarBlock(), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 140)));
 
         mGrid = new GridView(this);
         mGrid.setNumColumns(mCols);
@@ -402,17 +472,23 @@ public class BulkGalleryActivity extends Activity {
 
     // ------------------------------------------------------------ v130 toolbar
 
-    /** HTML design ki 2-row toolbar: (count | Select All | CTA) / (Sort | Grid | Copy/Move). */
-    private View buildToolbar() {
+    /**
+     * HTML design ki toolbar EK block me: (count | Select All | CTA) /
+     * (Sort | Grid | Copy/Move) / hint bar. v131: har row ki height
+     * pakki hai (46/42/30dp) — wrap-measure par kuch nahi chhora gaya.
+     */
+    private View buildToolbarBlock() {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.VERTICAL);
-        bar.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 10),
-            BulkTheme.dp(this, 14), BulkTheme.dp(this, 10));
+        bar.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 6),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 6));
 
-        // Row 1
+        // Row 1 — pakki height 46dp
         LinearLayout row1 = new LinearLayout(this);
         row1.setOrientation(LinearLayout.HORIZONTAL);
         row1.setGravity(Gravity.CENTER_VERTICAL);
+        row1.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 46)));
         mCountLabel = new TextView(this);
         mCountLabel.setTextColor(BulkTheme.accent(this));
         mCountLabel.setTextSize(14);
@@ -423,10 +499,10 @@ public class BulkGalleryActivity extends Activity {
 
         mSelectAllBtn = toolPillText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
         mSelectAllBtn.setOnClickListener(v -> {
-            if (BulkGalleryState.isAllSelected(mSelectedIds.size(), mEntries.size())) {
+            if (BulkGalleryState.isAllSelected(mSelectedIds.size(), mIds.size())) {
                 mSelectedIds.clear();
             } else {
-                for (BulkGalleryState.Entry e : mEntries) mSelectedIds.add(e.id);
+                mSelectedIds.addAll(mIds);
             }
             refreshGridState();
         });
@@ -449,20 +525,23 @@ public class BulkGalleryActivity extends Activity {
         row1.addView(mConfirmBtn);
         bar.addView(row1);
 
-        // Row 2
+        // Row 2 — pakki height 42dp
         LinearLayout row2 = new LinearLayout(this);
         row2.setOrientation(LinearLayout.HORIZONTAL);
         row2.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams r2p = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        r2p.topMargin = BulkTheme.dp(this, 10);
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 42));
+        r2p.topMargin = BulkTheme.dp(this, 4);
         row2.setLayoutParams(r2p);
 
         LinearLayout sortPill = toolPill(R.drawable.ic_bulk_sort);
         mSortLabel = (TextView) sortPill.getChildAt(1);
         sortPill.setOnClickListener(v -> {
             mSortMode = BulkGalleryState.nextSort(mSortMode);
-            mEntries = BulkGalleryState.sorted(mEntries, mSortMode);
+            if (mSortMode == BulkGalleryState.SORT_NAME && mNames == null) {
+                fetchNamesAsync(); // naam ate hi order khud taaza hoga
+            }
+            mIds = BulkGalleryState.orderIds(mLoadOrder, mSortMode, mNames);
             refreshGridState();
         });
         row2.addView(sortPill);
@@ -507,17 +586,21 @@ public class BulkGalleryActivity extends Activity {
         mMovePill.setLayoutParams(mp);
         row2.addView(mMovePill);
         bar.addView(row2);
+        bar.addView(buildHintBar());
         return bar;
     }
 
-    /** Hint bar (HTML): swipe tip bayein, kul items dayein — accent-soft patti. */
+    /** Hint bar (HTML): swipe tip bayein, kul items dayein — accent-soft patti, pakki height 30dp. */
     private View buildHintBar() {
         LinearLayout hint = new LinearLayout(this);
         hint.setOrientation(LinearLayout.HORIZONTAL);
         hint.setGravity(Gravity.CENTER_VERTICAL);
         hint.setBackgroundColor(BulkTheme.iconBoxColor(this));
-        hint.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 6),
-            BulkTheme.dp(this, 14), BulkTheme.dp(this, 6));
+        hint.setPadding(BulkTheme.dp(this, 10), 0, BulkTheme.dp(this, 10), 0);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 30));
+        hp.topMargin = BulkTheme.dp(this, 6);
+        hint.setLayoutParams(hp);
         TextView tip = new TextView(this);
         tip.setText(BulkStrings.t(this, BulkStrings.SWIPE_TIP));
         tip.setTextColor(BulkTheme.accent(this));
@@ -593,8 +676,8 @@ public class BulkGalleryActivity extends Activity {
     /** Mojooda selection ki positions (display order par) — drag ke base ke liye. */
     private Set<Integer> selectedPositions() {
         Set<Integer> out = new HashSet<>();
-        for (int i = 0; i < mEntries.size(); i++) {
-            if (mSelectedIds.contains(mEntries.get(i).id)) out.add(i);
+        for (int i = 0; i < mIds.size(); i++) {
+            if (mSelectedIds.contains(mIds.get(i))) out.add(i);
         }
         return out;
     }
@@ -603,14 +686,14 @@ public class BulkGalleryActivity extends Activity {
         Set<Integer> pos = BulkGallerySelect.dragSelection(mDragBase, mDragAnchor, mDragCurrent);
         mSelectedIds.clear();
         for (int p : pos) {
-            if (p >= 0 && p < mEntries.size()) mSelectedIds.add(mEntries.get(p).id);
+            if (p >= 0 && p < mIds.size()) mSelectedIds.add(mIds.get(p));
         }
         refreshGridState();
     }
 
     private void toggle(int position) {
-        if (position < 0 || position >= mEntries.size()) return;
-        long id = mEntries.get(position).id;
+        if (position < 0 || position >= mIds.size()) return;
+        long id = mIds.get(position);
         if (mSelectedIds.contains(id)) mSelectedIds.remove(id);
         else mSelectedIds.add(id);
         refreshGridState();
@@ -623,7 +706,7 @@ public class BulkGalleryActivity extends Activity {
         }
         if (mSelectAllBtn != null) {
             mSelectAllBtn.setText(BulkStrings.t(this,
-                BulkGalleryState.isAllSelected(n, mEntries.size())
+                BulkGalleryState.isAllSelected(n, mIds.size())
                     ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL));
         }
         if (mConfirmBtn != null) {
@@ -650,7 +733,7 @@ public class BulkGalleryActivity extends Activity {
         styleModePill(mCopyPill, mCopyIcon, mCopyLabel, mMode == BulkGalleryState.MODE_COPY);
         styleModePill(mMovePill, mMoveIcon, mMoveLabel, mMode == BulkGalleryState.MODE_MOVE);
         if (mTotalLabel != null) {
-            mTotalLabel.setText(BulkStrings.format(this, BulkStrings.ITEMS_COUNT, mEntries.size()));
+            mTotalLabel.setText(BulkStrings.format(this, BulkStrings.ITEMS_COUNT, mIds.size()));
         }
         if (mAdapter != null) mAdapter.notifyDataSetChanged();
         BulkFonts.applyToTree(this, mGrid);
@@ -662,8 +745,8 @@ public class BulkGalleryActivity extends Activity {
             return;
         }
         ArrayList<Uri> uris = new ArrayList<>();
-        for (BulkGalleryState.Entry e : mEntries) {
-            if (mSelectedIds.contains(e.id)) uris.add(uriFor(e.id));
+        for (Long id : mIds) {
+            if (mSelectedIds.contains(id)) uris.add(uriFor(id));
         }
         Intent data = new Intent();
         data.putParcelableArrayListExtra(EXTRA_URIS, uris);
@@ -675,9 +758,9 @@ public class BulkGalleryActivity extends Activity {
     // ------------------------------------------------------------ adapter + thumbs
 
     private final class GalleryAdapter extends BaseAdapter {
-        @Override public int getCount() { return mEntries.size(); }
-        @Override public Object getItem(int position) { return mEntries.get(position); }
-        @Override public long getItemId(int position) { return mEntries.get(position).id; }
+        @Override public int getCount() { return mIds.size(); }
+        @Override public Object getItem(int position) { return mIds.get(position); }
+        @Override public long getItemId(int position) { return mIds.get(position); }
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
@@ -711,7 +794,7 @@ public class BulkGalleryActivity extends Activity {
             }
             int cellSize = gridCellSize();
             cell.setLayoutParams(new GridView.LayoutParams(cellSize, cellSize));
-            long id = mEntries.get(position).id;
+            long id = mIds.get(position);
             boolean sel = mSelectedIds.contains(id);
             check.setVisibility(sel ? View.VISIBLE : View.GONE);
             cell.setAlpha(sel ? 0.82f : 1f);

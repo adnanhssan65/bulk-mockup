@@ -95,6 +95,38 @@ public final class BulkGalleryState {
         return out;
     }
 
+    /**
+     * v131 (Defect 2 fix): gallery ab MediaStore se SIRF ids load karti
+     * hai (v129 wala proven query — {_ID}, DATE_ADDED DESC, yani load
+     * order = Newest pehle). Display order yahan banta hai:
+     *   Newest = load order jesa hai; Oldest = usi ka ulta;
+     *   Name = names map se (naam na mile to khaali naam — pehle ata
+     *   hai; tie par bara id pehle, yani nayi image pehle).
+     * Asal list NAHI badalti; nayi list wapas hoti hai.
+     */
+    public static List<Long> orderIds(List<Long> loadOrder, int mode,
+                                      java.util.Map<Long, String> names) {
+        List<Long> out = new ArrayList<>();
+        if (loadOrder != null) out.addAll(loadOrder);
+        switch (mode) {
+            case SORT_OLDEST:
+                Collections.reverse(out);
+                break;
+            case SORT_NAME:
+                Collections.sort(out, (a, b) -> {
+                    String na = names != null && names.get(a) != null ? names.get(a) : "";
+                    String nb = names != null && names.get(b) != null ? names.get(b) : "";
+                    int d = na.toLowerCase().compareTo(nb.toLowerCase());
+                    return d != 0 ? d : Long.compare(b, a);
+                });
+                break;
+            case SORT_NEWEST:
+            default:
+                break; // load order hi Newest hai
+        }
+        return out;
+    }
+
     /** "Select All" kab "Unselect All" banta hai: list khaali na ho or sab select hon. */
     public static boolean isAllSelected(int selectedCount, int totalCount) {
         return totalCount > 0 && selectedCount == totalCount;

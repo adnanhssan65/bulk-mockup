@@ -55,6 +55,27 @@ public class BulkLogTest {
     }
 
     @Test
+    public void statusLineShowsAsNewestLine() {
+        // v131 (Item 4 bonus): live status line buffer ki line NAHI —
+        // tail ke aakhir me ati hai, buffer size nahi barhta
+        BulkLog.add("run start");
+        BulkLog.setStatus("Project 1 — 37/100 • 02:15");
+        String tail = BulkLog.tailText(6, "IDLE");
+        assertTrue(tail.endsWith("Project 1 — 37/100 • 02:15"));
+        assertEquals(1, BulkLog.size());
+        BulkLog.setStatus(null);
+        assertFalse(BulkLog.tailText(6, "IDLE").contains("37/100"));
+    }
+
+    @Test
+    public void statusAloneShowsWithoutBufferLines() {
+        BulkLog.setStatus("Project 2 — 3/9 • 00:41");
+        assertEquals("Project 2 — 3/9 • 00:41", BulkLog.tailText(6, "IDLE"));
+        BulkLog.clear();
+        assertEquals("IDLE", BulkLog.tailText(6, "IDLE"));
+    }
+
+    @Test
     public void longLinesAreTrimmed() {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 300; i++) sb.append('x');

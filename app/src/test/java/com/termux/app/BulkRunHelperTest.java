@@ -40,6 +40,30 @@ public class BulkRunHelperTest {
     }
 
     @Test
+    public void runEnvironmentSetsPythonUnbuffered() {
+        // v131 (Item 3): pipe par Python block-buffer na ho
+        Map<String, String> env = BulkRunHelper.runEnvironment(new HashMap<>());
+        assertEquals("1", env.get("PYTHONUNBUFFERED"));
+    }
+
+    @Test
+    public void trimTailOnlyTrimsPastThreshold() {
+        // v131 (Item 3): katai amortized hai — 12000 tak koi katai nahi
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 11_999; i++) sb.append('a');
+        BulkRunHelper.trimTail(sb);
+        assertEquals(11_999, sb.length());
+        sb.append('b');
+        BulkRunHelper.trimTail(sb);
+        assertEquals(12_000, sb.length());
+        sb.append('c');
+        BulkRunHelper.trimTail(sb);
+        // Hadd se barhte hi aakhri 6000 reh jate hain
+        assertEquals(6_000, sb.length());
+        assertTrue(sb.toString().endsWith("c"));
+    }
+
+    @Test
     public void keepTailKeepsEndOnly() {
         assertEquals("abc", BulkRunHelper.keepTail("abc", 10));
         assertEquals("def", BulkRunHelper.keepTail("abcdef", 3));

@@ -75,7 +75,10 @@ public class BulkAddProjectActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        scroll.setFillViewport(true);
+        // v131 (Item 5 audit): fillViewport KHATAM — Stage/Duplicates
+        // wali hi khaandani bimari (ek hi visible glass panel poori
+        // height par phail sakta tha). Body ab content height par.
+        scroll.setFillViewport(false);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),

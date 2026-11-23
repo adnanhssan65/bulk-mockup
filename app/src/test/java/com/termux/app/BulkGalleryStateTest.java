@@ -131,4 +131,37 @@ public class BulkGalleryStateTest {
             dir.delete();
         }
     }
+
+    // ------------------------------------------------ v131: orderIds
+
+    @Test
+    public void orderIdsNewestIsLoadOrder() {
+        List<Long> load = Arrays.asList(50L, 40L, 30L, 20L);
+        assertEquals(load, BulkGalleryState.orderIds(load, BulkGalleryState.SORT_NEWEST, null));
+        // Asal list nahi badli aur nayi list mili
+        assertEquals(Arrays.asList(50L, 40L, 30L, 20L), load);
+    }
+
+    @Test
+    public void orderIdsOldestReverses() {
+        List<Long> load = Arrays.asList(50L, 40L, 30L, 20L);
+        assertEquals(Arrays.asList(20L, 30L, 40L, 50L),
+            BulkGalleryState.orderIds(load, BulkGalleryState.SORT_OLDEST, null));
+        assertEquals(Arrays.asList(50L, 40L, 30L, 20L), load); // asal mehfooz
+    }
+
+    @Test
+    public void orderIdsByNameWithFallback() {
+        List<Long> load = Arrays.asList(3L, 1L, 2L);
+        java.util.Map<Long, String> names = new java.util.HashMap<>();
+        names.put(1L, "apple.jpg");
+        names.put(2L, "Banana.jpg");
+        names.put(3L, "cherry.jpg");
+        assertEquals(Arrays.asList(1L, 2L, 3L),
+            BulkGalleryState.orderIds(load, BulkGalleryState.SORT_NAME, names));
+        // Naam na hon to sab khaali-naam: tie par bara id (nayi) pehle
+        assertEquals(Arrays.asList(3L, 2L, 1L),
+            BulkGalleryState.orderIds(load, BulkGalleryState.SORT_NAME, null));
+        assertTrue(BulkGalleryState.orderIds(null, BulkGalleryState.SORT_NAME, names).isEmpty());
+    }
 }

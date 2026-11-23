@@ -129,7 +129,11 @@ public class BulkDuplicatesActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        scroll.setFillViewport(true);
+        // v131 (Item 5): fillViewport KHATAM — Stage wali hi "bari
+        // screen" bimari (body viewport bhar phail jati thi, akeli
+        // glass row devaar-dar box ban jati thi). Ab body content ki
+        // asal height par rehti hai; rows ki height bhi pakki hai.
+        scroll.setFillViewport(false);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),
@@ -138,8 +142,16 @@ public class BulkDuplicatesActivity extends Activity {
         root.addView(scroll);
 
         body.addView(settingRow());
-        body.addView(toolbarNormal(), topLp(12));
-        body.addView(toolbarSelect(), topLp(12));
+        // v131 (Item 5): toolbars pakki 44dp height ke sath (topLp
+        // wrap deta tha — yahan seedha fixed-height params)
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 44));
+        tlp.topMargin = BulkTheme.dp(this, 12);
+        body.addView(toolbarNormal(), tlp);
+        LinearLayout.LayoutParams tlp2 = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 44));
+        tlp2.topMargin = BulkTheme.dp(this, 12);
+        body.addView(toolbarSelect(), tlp2);
 
         mEmptyText = new TextView(this);
         mEmptyText.setText(BulkStrings.t(this, BulkStrings.NO_DUPLICATES));
@@ -165,11 +177,13 @@ public class BulkDuplicatesActivity extends Activity {
         return lp;
     }
 
-    /** Auto-delete setting — chhoti row: label + value (tap par choices). */
+    /** Auto-delete setting — chhoti row: label + value (tap par choices). v131: height pakki 56dp (hub wali dawa). */
     private View settingRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 56)));
         row.setBackground(BulkTheme.glassPanel(this));
         row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
             BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
@@ -220,6 +234,9 @@ public class BulkDuplicatesActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        // v131 (Item 5): toolbar ki height bhi pakki (44dp)
+        row.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 44)));
         return row;
     }
 

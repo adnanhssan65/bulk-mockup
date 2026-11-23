@@ -133,6 +133,11 @@ public class BulkDashboardActivity extends Activity {
     /** Hero card ki log lines taaza karo (BulkLog ki aakhri ~6 lines). */
     private void refreshLogCard() {
         if (mLogView == null) return;
+        // v131 (Item 3): run chal rahi ho to Home ticker UI kaam NA
+        // kare — run ka apna console poster hi live display sambhalta
+        // hai. Run khatam hote hi (flag saaf) ticker khud taaza kar
+        // dega, final line (progress + kul waqt) samet.
+        if (BulkRunHelper.isRunActive()) return;
         String text = BulkLog.tailText(6, BulkStrings.t(this, BulkStrings.LOG_IDLE));
         if (!text.equals(mLogView.getText().toString())) {
             mLogView.setText(text);
@@ -627,7 +632,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v130");
+        version.setText("Termux Mod v131");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));

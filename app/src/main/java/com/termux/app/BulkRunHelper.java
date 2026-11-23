@@ -11,6 +11,7 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
 
 import java.io.BufferedReader;
@@ -240,56 +241,35 @@ public final class BulkRunHelper {
      * v128 (DEFECT A fix): run TERMINAL ko samne NAHI lata — script isi
      * live popup ke andar chalti hai. Command asal Termux bash se ek
      * background process me chalti hai (jawab pehle se pipe shuda);
-     * output line-by-line popup me live ata hai; khatam hone par saaf
-     * Finished/Fail halat. Popup band karne se process NAHI rukta —
-     * wo background me chalta rehta hai.
+     * khatam hone par saaf Finished/Fail halat. Popup band karne se
+     * process NAHI rukta — wo background me chalta rehta hai.
      * onLaunched popup band hone par chalta hai (Stage apni screen
      * finish karti hai; popup usi activity ka hai, is liye pehle popup
      * band, phir finish — ulta karne se popup activity ke sath mar
      * jata).
+     *
+     * v131 (Item 4 + extension): popup ab PC-console jesa hai — window
+     * chrome (3 dots, Home hero card wali) + project naam, bara
+     * progress counter (done/total + %) tqdm stream se parse ho kar,
+     * us ke neeche asal progress BAR, live elapsed timer (mm:ss) aur
+     * monospace log. Progress na mile to counter/bar GONE rehte hain —
+     * sirf timer + log (nakli number kabhi nahi).
+     *
+     * v131 (Item 3 — SPEED): output drain ka usool sakht hai —
+     *  - reader thread bara buffer (64KB) ke sath MUSALSAL parhta hai;
+     *    kisi line par UI ya mehenga kaam NAHI hota;
+     *  - lines batch hoti hain: har ~250ms par ek flush — BulkLog me
+     *    sirf asal print lines (tqdm bar lines nahi), tail me amortized
+     *    katai (har line par poori string copy NAHI);
+     *  - UI updates ek hi throttled poster (500ms) se: counter, bar,
+     *    timer, log tail — sab setText, koi per-line layout nahi;
+     *  - BulkLog.add ab shared formatter istemal karta hai (BulkLog).
      */
     private static void runLiveInPopup(final Activity a, final BulkProjects.ProjectInfo p,
                                        final String pipedCommand, final Runnable onLaunched) {
         final Dialog dialog = new Dialog(a);
-        LinearLayout panel = BulkTheme.modalPanel(a, p.name, dialog);
-
-        LinearLayout statusRow = new LinearLayout(a);
-        statusRow.setOrientation(LinearLayout.HORIZONTAL);
-        statusRow.setGravity(Gravity.CENTER_VERTICAL);
-        final ProgressBar spinner = new ProgressBar(a);
-        spinner.setIndeterminate(true);
-        statusRow.addView(spinner, new LinearLayout.LayoutParams(
-            BulkTheme.dp(a, 26), BulkTheme.dp(a, 26)));
-        final TextView status = new TextView(a);
-        status.setText(BulkStrings.t(a, BulkStrings.PROCESSING));
-        status.setTextColor(BulkTheme.textSub(a));
-        status.setTextSize(13);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        slp.leftMargin = BulkTheme.dp(a, 10);
-        status.setLayoutParams(slp);
-        statusRow.addView(status);
-        panel.addView(statusRow);
-
-        final ScrollView scroll = new ScrollView(a);
-        LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(a, 240));
-        scp.topMargin = BulkTheme.dp(a, 12);
-        scroll.setLayoutParams(scp);
-        final TextView out = new TextView(a);
-        out.setTypeface(android.graphics.Typeface.MONOSPACE);
-        out.setTextSize(11);
-        out.setTextColor(BulkTheme.textSub(a));
-        scroll.addView(out);
-        panel.addView(scroll);
-
-        TextView close = BulkTheme.secondaryButton(a, BulkStrings.t(a, BulkStrings.CLOSE),
-            v -> dialog.dismiss());
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clp.topMargin = BulkTheme.dp(a, 14);
-        close.setLayoutParams(clp);
-        panel.addView(close);
+        final ConsoleViews cv = buildConsolePanel(a, p.name, dialog);
+        final LinearLayout panel = cv.panel;
 
         final Dialog shown = BulkTheme.showPanelDialog(a, panel);
         final boolean[] launchedOnce = {false};
@@ -303,9 +283,48 @@ public final class BulkRunHelper {
         // v129: Home ke live-log card ke liye — run ki shuruaat darj karo
         BulkLog.add(BulkStrings.format(a, BulkStrings.LOG_RUN_START, p.name));
 
+        final BulkRunProgress progress = new BulkRunProgress();
+        final StringBuilder tail = new StringBuilder();
+        final long startMs = android.os.SystemClock.elapsedRealtime();
+        final boolean[] finished = {false};
+        final int[] exitCode = {-1};
+        sRunActive = true;
+
+        // UI poster — har 500ms: timer/counter/bar/log sirf tab badlo
+        // jab asal me badla ho. Run khatam hone par ek aakhri update.
+        final android.os.Handler uiHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable[] poster = new Runnable[1];
+        poster[0] = () -> {
+            if (!shown.isShowing()) return;
+            long elapsed = android.os.SystemClock.elapsedRealtime() - startMs;
+            String t = BulkRunProgress.formatElapsed(elapsed);
+            if (!t.equals(cv.timer.getText().toString())) cv.timer.setText(t);
+            if (progress.hasProgress()) {
+                if (cv.counterBlock.getVisibility() != View.VISIBLE) {
+                    cv.counterBlock.setVisibility(View.VISIBLE);
+                }
+                String c = progress.done() + " / " + progress.total();
+                if (!c.equals(cv.counter.getText().toString())) cv.counter.setText(c);
+                String pc = progress.percent() + "%";
+                if (!pc.equals(cv.percent.getText().toString())) cv.percent.setText(pc);
+                BulkTheme.setProgress(cv.bar, progress.percent());
+            }
+            final String snap;
+            synchronized (tail) { snap = tail.toString(); }
+            if (!snap.equals(cv.out.getText().toString())) {
+                cv.out.setText(snap);
+                cv.scroll.fullScroll(View.FOCUS_DOWN);
+            }
+            if (!finished[0]) uiHandler.postDelayed(poster[0], 500);
+        };
+        uiHandler.post(poster[0]);
+
         new Thread(() -> {
             int exit = -1;
-            final StringBuilder tail = new StringBuilder();
+            // Flush ke darmiyan jama honay wali print lines (tqdm bar
+            // lines is me NAHI jatin — wo sirf progress banati hain)
+            final java.util.List<String> pendingLog = new java.util.ArrayList<>();
             try {
                 ProcessBuilder pb = new ProcessBuilder(
                     TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/bash", "-c", pipedCommand);
@@ -315,53 +334,286 @@ public final class BulkRunHelper {
                 Process proc = pb.start();
                 // Jawab printf pipe se ja rahe hain — apna stdin band rakho
                 try { proc.getOutputStream().close(); } catch (Exception ignored) {}
+                // v131 (Item 3): bara reader buffer — drain kabhi
+                // chhoti chunks ki wajah se na ruke
                 BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(proc.getInputStream(), "UTF-8"));
+                    new InputStreamReader(proc.getInputStream(), "UTF-8"), 65536);
                 String line;
-                long lastPost = 0;
+                long lastFlush = System.currentTimeMillis();
                 while ((line = reader.readLine()) != null) {
-                    // v129: run output ki lines Home ke live-log buffer
-                    // me bhi jati hain (card par aakhri lines "TV" ki
-                    // tarah chalti rehti hain)
-                    BulkLog.add(line);
-                    synchronized (tail) {
-                        tail.append(line).append('\n');
-                        String t = keepTail(tail.toString(), 6000);
-                        tail.setLength(0);
-                        tail.append(t);
+                    // Per-line kaam SIRF: ANSI saaf + progress parse
+                    // (halka regex) — koi UI, koi bara string copy nahi
+                    boolean wasProgress = progress.offer(line);
+                    String clean = BulkRunProgress.stripAnsi(line).trim();
+                    if (!wasProgress && !clean.isEmpty()) {
+                        synchronized (tail) {
+                            tail.append(clean).append('\n');
+                            trimTail(tail);
+                        }
+                        synchronized (pendingLog) { pendingLog.add(clean); }
                     }
                     long now = System.currentTimeMillis();
-                    if (now - lastPost >= 250) {
-                        lastPost = now;
-                        final String snap;
-                        synchronized (tail) { snap = tail.toString(); }
-                        a.runOnUiThread(() -> {
-                            if (!shown.isShowing()) return;
-                            out.setText(snap);
-                            scroll.fullScroll(View.FOCUS_DOWN);
-                        });
+                    if (now - lastFlush >= 250) {
+                        lastFlush = now;
+                        flushPendingLog(pendingLog);
+                        updateStatusLine(a, p, progress, startMs);
                     }
                 }
                 exit = proc.waitFor();
             } catch (Exception e) {
                 synchronized (tail) {
                     tail.append("\n[").append(String.valueOf(e.getMessage())).append("]\n");
+                    trimTail(tail);
+                }
+                synchronized (pendingLog) {
+                    pendingLog.add("[" + String.valueOf(e.getMessage()) + "]");
                 }
             }
+            flushPendingLog(pendingLog);
+            exitCode[0] = exit;
+            finished[0] = true;
+            sRunActive = false;
+            final long totalMs = android.os.SystemClock.elapsedRealtime() - startMs;
+            final String totalText = BulkRunProgress.formatElapsed(totalMs);
+            // Home bonus (Item 4): final line me progress + kul waqt
+            String doneMsg = BulkStrings.format(a, exit == 0
+                ? BulkStrings.LOG_RUN_DONE : BulkStrings.LOG_RUN_FAIL, p.name);
+            if (progress.hasProgress()) {
+                doneMsg += " — " + progress.done() + "/" + progress.total()
+                    + " • " + totalText;
+            } else {
+                doneMsg += " • " + totalText;
+            }
+            BulkLog.setStatus(null);
+            BulkLog.add(doneMsg);
             final int fExit = exit;
-            final String snap;
-            synchronized (tail) { snap = tail.toString(); }
-            BulkLog.add(BulkStrings.format(a, fExit == 0
-                ? BulkStrings.LOG_RUN_DONE : BulkStrings.LOG_RUN_FAIL, p.name));
             a.runOnUiThread(() -> {
                 if (!shown.isShowing()) return;
-                spinner.setVisibility(View.GONE);
-                status.setText(BulkStrings.t(a, fExit == 0
+                cv.spinner.setVisibility(View.GONE);
+                cv.status.setText(BulkStrings.t(a, fExit == 0
                     ? BulkStrings.RUN_DONE : BulkStrings.RUN_FAILED));
-                out.setText(snap);
-                scroll.fullScroll(View.FOCUS_DOWN);
+                cv.timer.setText(totalText);
+                if (progress.hasProgress()) {
+                    if (cv.counterBlock.getVisibility() != View.VISIBLE) {
+                        cv.counterBlock.setVisibility(View.VISIBLE);
+                    }
+                    cv.counter.setText(progress.done() + " / " + progress.total());
+                    cv.percent.setText(progress.percent() + "%");
+                    BulkTheme.setProgress(cv.bar, progress.percent());
+                }
+                final String snap;
+                synchronized (tail) { snap = tail.toString(); }
+                cv.out.setText(snap);
+                cv.scroll.fullScroll(View.FOCUS_DOWN);
             });
         }).start();
+    }
+
+    /** Drain ki jama print lines BulkLog ko do (batch — har line alag add, lekin flush throttled hai). */
+    private static void flushPendingLog(java.util.List<String> pendingLog) {
+        synchronized (pendingLog) {
+            for (String s : pendingLog) BulkLog.add(s);
+            pendingLog.clear();
+        }
+    }
+
+    /** Item 4 bonus: Home live-log ki status line — "Project N — 37/100 • 02:15". */
+    private static void updateStatusLine(Activity a, BulkProjects.ProjectInfo p,
+                                         BulkRunProgress progress, long startMs) {
+        if (!progress.hasProgress()) return;
+        long elapsed = android.os.SystemClock.elapsedRealtime() - startMs;
+        BulkLog.setStatus(p.name + " — " + progress.done() + "/" + progress.total()
+            + " • " + BulkRunProgress.formatElapsed(elapsed));
+    }
+
+    /**
+     * Tail ko ~6000 chars ke andar rakho — lekin katai SIRF tab jab
+     * 12000 se barh jaye (amortized): v130 har line par poori string
+     * copy karta tha, ab zyada tar lines sirf ek append hain.
+     */
+    static void trimTail(StringBuilder tail) {
+        if (tail.length() > 12000) {
+            tail.delete(0, tail.length() - 6000);
+        }
+    }
+
+    /** v131 (Item 3): koi app-run chal rahi hai? (Home ticker is ka ehtiram karta hai.) */
+    private static volatile boolean sRunActive = false;
+
+    public static boolean isRunActive() {
+        return sRunActive;
+    }
+
+    // ------------------------------------------------------------ console popup (Item 4 ext)
+
+    /** Console popup ke views — poster inhe taaza karta hai. */
+    private static final class ConsoleViews {
+        LinearLayout panel;
+        TextView timer;
+        TextView status;
+        ProgressBar spinner;
+        LinearLayout counterBlock;
+        TextView counter;
+        TextView percent;
+        LinearLayout bar;
+        ScrollView scroll;
+        TextView out;
+    }
+
+    /**
+     * PC-console jesi processing screen: dark mode me gehra terminal
+     * panel (Home hero card wala gradient + neon border), light mode
+     * me saaf safed usi shakal ka panel. Upar window chrome — 3 dots
+     * (hero card jese) + project naam + band karne ka X; dayein timer.
+     * Neeche: status row, bara counter + % (progress milne par hi),
+     * progress bar, monospace log (gehre inset par), Close button.
+     */
+    private static ConsoleViews buildConsolePanel(final Activity a, String title,
+                                                  final Dialog dialog) {
+        ConsoleViews cv = new ConsoleViews();
+        boolean light = BulkTheme.isLight(a);
+
+        LinearLayout panel = new LinearLayout(a);
+        panel.setTag(dialog);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(light ? BulkTheme.glassPanelStrong(a) : BulkTheme.heroCardBg(a));
+        panel.setPadding(BulkTheme.dp(a, 16), BulkTheme.dp(a, 14),
+            BulkTheme.dp(a, 16), BulkTheme.dp(a, 16));
+        cv.panel = panel;
+
+        // Window chrome: 3 dots + title + timer + X
+        LinearLayout chrome = new LinearLayout(a);
+        chrome.setOrientation(LinearLayout.HORIZONTAL);
+        chrome.setGravity(Gravity.CENTER_VERTICAL);
+        for (int i = 0; i < 3; i++) {
+            View dot = new View(a);
+            android.graphics.drawable.GradientDrawable dotBg =
+                new android.graphics.drawable.GradientDrawable();
+            dotBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            dotBg.setColor(BulkTheme.textMuted(a));
+            dot.setBackground(dotBg);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                BulkTheme.dp(a, 7), BulkTheme.dp(a, 7));
+            if (i > 0) dlp.leftMargin = BulkTheme.dp(a, 5);
+            dot.setLayoutParams(dlp);
+            chrome.addView(dot);
+        }
+        TextView t = new TextView(a);
+        t.setText(title);
+        t.setTextSize(13.5f);
+        t.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        t.setTextColor(BulkTheme.accent(a));
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tp.leftMargin = BulkTheme.dp(a, 10);
+        t.setLayoutParams(tp);
+        chrome.addView(t);
+        cv.timer = new TextView(a);
+        cv.timer.setText("00:00");
+        cv.timer.setTextSize(13);
+        cv.timer.setTypeface(android.graphics.Typeface.MONOSPACE,
+            android.graphics.Typeface.BOLD);
+        cv.timer.setTextColor(BulkTheme.textSub(a));
+        chrome.addView(cv.timer);
+        LinearLayout closeX = BulkTheme.circleButton(a, R.drawable.ic_bulk_close, 28,
+            v -> dialog.dismiss());
+        LinearLayout.LayoutParams xp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(a, 28), BulkTheme.dp(a, 28));
+        xp.leftMargin = BulkTheme.dp(a, 8);
+        closeX.setLayoutParams(xp);
+        chrome.addView(closeX);
+        panel.addView(chrome);
+
+        View line = new View(a);
+        line.setBackground(BulkTheme.hLine(a));
+        LinearLayout.LayoutParams lineLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(a, 0.6f)));
+        lineLp.setMargins(0, BulkTheme.dp(a, 10), 0, BulkTheme.dp(a, 12));
+        line.setLayoutParams(lineLp);
+        panel.addView(line);
+
+        // Status row: spinner + Processing…
+        LinearLayout statusRow = new LinearLayout(a);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        cv.spinner = new ProgressBar(a);
+        cv.spinner.setIndeterminate(true);
+        statusRow.addView(cv.spinner, new LinearLayout.LayoutParams(
+            BulkTheme.dp(a, 22), BulkTheme.dp(a, 22)));
+        cv.status = new TextView(a);
+        cv.status.setText(BulkStrings.t(a, BulkStrings.PROCESSING));
+        cv.status.setTextColor(BulkTheme.textSub(a));
+        cv.status.setTextSize(12.5f);
+        cv.status.setTypeface(android.graphics.Typeface.MONOSPACE);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.leftMargin = BulkTheme.dp(a, 9);
+        cv.status.setLayoutParams(slp);
+        statusRow.addView(cv.status);
+        panel.addView(statusRow);
+
+        // Bara counter block — SIRF jab asal progress parse ho
+        cv.counterBlock = new LinearLayout(a);
+        cv.counterBlock.setOrientation(LinearLayout.VERTICAL);
+        cv.counterBlock.setVisibility(View.GONE);
+        LinearLayout counterRow = new LinearLayout(a);
+        counterRow.setOrientation(LinearLayout.HORIZONTAL);
+        counterRow.setGravity(Gravity.BOTTOM);
+        cv.counter = new TextView(a);
+        cv.counter.setTextSize(34);
+        cv.counter.setTypeface(android.graphics.Typeface.MONOSPACE,
+            android.graphics.Typeface.BOLD);
+        cv.counter.setTextColor(BulkTheme.textMain(a));
+        counterRow.addView(cv.counter);
+        cv.percent = new TextView(a);
+        cv.percent.setTextSize(17);
+        cv.percent.setTypeface(android.graphics.Typeface.MONOSPACE,
+            android.graphics.Typeface.BOLD);
+        cv.percent.setTextColor(BulkTheme.accent(a));
+        LinearLayout.LayoutParams pcp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pcp.leftMargin = BulkTheme.dp(a, 10);
+        pcp.bottomMargin = BulkTheme.dp(a, 4);
+        cv.percent.setLayoutParams(pcp);
+        counterRow.addView(cv.percent);
+        cv.counterBlock.addView(counterRow);
+        cv.bar = BulkTheme.progressTrack(a);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(a, 8));
+        bp.topMargin = BulkTheme.dp(a, 8);
+        cv.bar.setLayoutParams(bp);
+        cv.counterBlock.addView(cv.bar);
+        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cbp.topMargin = BulkTheme.dp(a, 12);
+        cv.counterBlock.setLayoutParams(cbp);
+        panel.addView(cv.counterBlock);
+
+        // Log — gehra inset, monospace (asal terminal wali feeling)
+        cv.scroll = new ScrollView(a);
+        cv.scroll.setBackground(BulkTheme.roundedBg(a, BulkTheme.appBg(a), 10,
+            BulkTheme.accentBorder(a), 1));
+        LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(a, 230));
+        scp.topMargin = BulkTheme.dp(a, 12);
+        cv.scroll.setLayoutParams(scp);
+        cv.out = new TextView(a);
+        cv.out.setTypeface(android.graphics.Typeface.MONOSPACE);
+        cv.out.setTextSize(11);
+        cv.out.setTextColor(BulkTheme.textSub(a));
+        cv.out.setPadding(BulkTheme.dp(a, 10), BulkTheme.dp(a, 8),
+            BulkTheme.dp(a, 10), BulkTheme.dp(a, 8));
+        cv.scroll.addView(cv.out);
+        panel.addView(cv.scroll);
+
+        TextView close = BulkTheme.secondaryButton(a, BulkStrings.t(a, BulkStrings.CLOSE),
+            v -> dialog.dismiss());
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = BulkTheme.dp(a, 14);
+        close.setLayoutParams(clp);
+        panel.addView(close);
+        return cv;
     }
 
     /** Background run ke liye Termux environment — pure, test ho sakta hai. */
@@ -378,6 +630,9 @@ public final class BulkRunHelper {
         env.put("TMPDIR", prefix + "/tmp");
         env.put("TERM", "xterm-256color");
         env.put("LANG", "en_US.UTF-8");
+        // v131 (Item 3): Python ka stdout pipe par block-buffer na ho —
+        // prints foran niklen, koi stdio buffer rukawat na bane
+        env.put("PYTHONUNBUFFERED", "1");
         return env;
     }
 

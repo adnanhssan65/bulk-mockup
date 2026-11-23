@@ -526,7 +526,12 @@ public class BulkStageActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        scroll.setFillViewport(true);
+        // v131 (Defect 1): fillViewport KHATAM — ye body ko viewport ki
+        // poori height par phaila deta tha; khaali halat me akeli bachi
+        // hui pick row usi phaili hui jagah me devaar-dar "giant box"
+        // ban kar dikhti thi (owner ka screenshot). Ab body apni asal
+        // (content) height par rehti hai.
+        scroll.setFillViewport(false);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),
@@ -535,7 +540,12 @@ public class BulkStageActivity extends Activity {
         root.addView(scroll);
 
         // Naya design: pick pill row pehle, phir project, phir Drop Box
-        body.addView(pickRow());
+        // v131 (Defect 1): pick row ki height PAKKI 56dp — hub (v129)
+        // wali hi dawa jo owner ke phone par proven hai (wrap-measure
+        // wali row hi khaali screen par phail kar dikhti thi). Shakal
+        // hub ki rows jesi hi rehti hai.
+        body.addView(pickRow(), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 56)));
         mLinkView = systemPickerLink();
         body.addView(mLinkView);
         mStep1View = step1Panel();
