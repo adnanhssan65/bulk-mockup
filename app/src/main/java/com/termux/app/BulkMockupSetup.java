@@ -1,8 +1,7 @@
 package com.termux.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
@@ -107,22 +106,59 @@ public final class BulkMockupSetup {
         // VIP loading: asal percentage wali progress bar (0–100). Extraction ka
         // kaam peeche background thread me chalta hai; screen par sirf asal
         // progress nazar ati hai — phone hang nahi hota.
-        final ProgressDialog progress = new ProgressDialog(activity);
-        progress.setTitle("Termux Mod — Pehli Setup");
-        progress.setMessage("Packages lag rahe hain... 0%\nYe sirf pehli dafa hota hai — 1–3 minute lagenge.\nInternet ki zaroorat nahi, sab kuch app ke andar hai.");
-        progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-        progress.setMax(100);
-        progress.setIndeterminate(false);
-        progress.setProgress(0);
+        // v128: design-style setup popup — stock ProgressDialog ki jagah
+        // BulkTheme wala dark glass panel, neon title + progress bar.
+        // Text, asal 0–100 progress aur flow bilkul wohi hai.
+        android.widget.LinearLayout panel = new android.widget.LinearLayout(activity);
+        panel.setOrientation(android.widget.LinearLayout.VERTICAL);
+        panel.setBackground(BulkTheme.modalBg(activity));
+        panel.setPadding(BulkTheme.dp(activity, 16), BulkTheme.dp(activity, 16),
+            BulkTheme.dp(activity, 16), BulkTheme.dp(activity, 16));
+
+        android.widget.TextView title = new android.widget.TextView(activity);
+        title.setText("Termux Mod — Pehli Setup");
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setTextColor(BulkTheme.accent(activity));
+        panel.addView(title);
+
+        final android.widget.TextView message = new android.widget.TextView(activity);
+        message.setText(setupMessage(0));
+        message.setTextSize(12.5f);
+        message.setTextColor(BulkTheme.textSub(activity));
+        message.setLineSpacing(0, 1.35f);
+        android.widget.LinearLayout.LayoutParams mlp = new android.widget.LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        mlp.topMargin = BulkTheme.dp(activity, 10);
+        message.setLayoutParams(mlp);
+        panel.addView(message);
+
+        final android.widget.ProgressBar bar = new android.widget.ProgressBar(
+            activity, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(100);
+        bar.setProgress(0);
+        bar.setIndeterminate(false);
+        try {
+            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(
+                BulkTheme.accent(activity)));
+        } catch (Exception ignored) {}
+        android.widget.LinearLayout.LayoutParams blp = new android.widget.LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = BulkTheme.dp(activity, 14);
+        bar.setLayoutParams(blp);
+        panel.addView(bar);
+
+        final Dialog progress = BulkTheme.showPanelDialog(activity, panel);
         progress.setCancelable(false);
-        progress.show();
 
         new Thread(() -> {
             try {
                 extractUsrArchive(activity, percent -> activity.runOnUiThread(() -> {
                     try {
-                        progress.setProgress(percent);
-                        progress.setMessage("Packages lag rahe hain... " + percent + "%\nYe sirf pehli dafa hota hai — 1–3 minute lagenge.\nInternet ki zaroorat nahi, sab kuch app ke andar hai.");
+                        bar.setProgress(percent);
+                        message.setText(setupMessage(percent));
                     } catch (Exception ignored) {}
                 }));
                 seedHomeFiles(activity);
@@ -155,21 +191,58 @@ public final class BulkMockupSetup {
                 Logger.logStackTraceWithMessage(LOG_TAG, "Termux Mod setup failed", e);
                 activity.runOnUiThread(() -> {
                     dismiss(progress);
-                    new AlertDialog.Builder(activity)
-                        .setTitle("Setup problem")
-                        .setMessage("Termux Mod ki pehli setup mukammal nahi ho saki.\n\n" +
-                            "Error: " + e.getMessage() + "\n\n" +
-                            "Phone ko restart karke app dobara kholo, ya neeche Try Again dabao. Tumhari koi file delete nahi hui.")
-                        .setPositiveButton("Try Again", (d, w) -> runIfNeeded(activity, whenDone))
-                        .setNegativeButton("Close App", (d, w) -> activity.finish())
-                        .setCancelable(false)
-                        .show();
+                    showSetupError(activity, e, whenDone);
                 });
             }
         }).start();
     }
 
-    private static void dismiss(ProgressDialog p) {
+    /** Setup popup ka message — text pehle wala hi hai, sirf % badalta hai. */
+    private static String setupMessage(int percent) {
+        return "Packages lag rahe hain... " + percent + "%\n"
+            + "Ye sirf pehli dafa hota hai — 1–3 minute lagenge.\n"
+            + "Internet ki zaroorat nahi, sab kuch app ke andar hai.";
+    }
+
+    /** Setup fail hone par design-style error popup (stock AlertDialog nahi). */
+    private static void showSetupError(final Activity activity, final Exception e,
+                                       final Runnable whenDone) {
+        final Dialog dialog = new Dialog(activity);
+        android.widget.LinearLayout panel = BulkTheme.modalPanel(activity, "Setup problem", dialog);
+        android.widget.TextView body = new android.widget.TextView(activity);
+        body.setText("Termux Mod ki pehli setup mukammal nahi ho saki.\n\n"
+            + "Error: " + e.getMessage() + "\n\n"
+            + "Phone ko restart karke app dobara kholo, ya neeche Try Again dabao. Tumhari koi file delete nahi hui.");
+        body.setTextSize(12.5f);
+        body.setTextColor(BulkTheme.textSub(activity));
+        body.setLineSpacing(0, 1.35f);
+        panel.addView(body);
+
+        android.widget.TextView again = BulkTheme.primaryButton(activity, "Try Again", v -> {
+            dialog.dismiss();
+            runIfNeeded(activity, whenDone);
+        });
+        android.widget.LinearLayout.LayoutParams alp = new android.widget.LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp.topMargin = BulkTheme.dp(activity, 14);
+        again.setLayoutParams(alp);
+        panel.addView(again);
+
+        android.widget.TextView closeApp = BulkTheme.secondaryButton(activity, "Close App",
+            v -> activity.finish());
+        android.widget.LinearLayout.LayoutParams clp = new android.widget.LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = BulkTheme.dp(activity, 10);
+        closeApp.setLayoutParams(clp);
+        panel.addView(closeApp);
+
+        Dialog shown = BulkTheme.showPanelDialog(activity, panel);
+        shown.setCancelable(false);
+    }
+
+    private static void dismiss(Dialog p) {
         try { p.dismiss(); } catch (Exception ignored) {}
     }
 

@@ -109,7 +109,7 @@ public class BulkStageActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
-        if (!hasStorageAccess()) {
+        if (!BulkStorageAccess.hasAccess(this)) {
             setContentView(buildPermissionUi());
             return;
         }
@@ -135,18 +135,6 @@ public class BulkStageActivity extends Activity {
             Logger.logError(LOG_TAG, "Projects list nahi mili: " + e);
             return new ArrayList<>();
         }
-    }
-
-    /** v124 wali storage check: Android 11+ par all-files access. */
-    private boolean hasStorageAccess() {
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            try {
-                return android.os.Environment.isExternalStorageManager();
-            } catch (Exception e) {
-                return true;
-            }
-        }
-        return true;
     }
 
     private BulkProjects.ProjectInfo selectedProject() {
@@ -224,16 +212,34 @@ public class BulkStageActivity extends Activity {
     /** Dono routes (App Gallery / System Picker) ka mushtarka staging rasta. */
     private void handlePicked(List<Uri> picked) {
         // Persistable permission + naam/size yahin (halka kaam); hash or
-        // duplicates ka faisla background thread par hota hai
+        // duplicates ka faisla background thread par hota hai.
+        // v128: video kisi bhi route se aye to khamoshi se skip — video
+        // wallpaper nahi hai, staging me jayegi hi nahi.
+        final List<Uri> kept = new ArrayList<>();
         final List<String[]> infos = new ArrayList<>();
         for (Uri uri : picked) {
+            String[] info = queryNameSize(uri);
+            if (isVideoPick(uri, info[0])) continue;
             try {
                 getContentResolver().takePersistableUriPermission(uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } catch (Exception ignored) {}
-            infos.add(queryNameSize(uri));
+            kept.add(uri);
+            infos.add(info);
         }
-        new Thread(() -> processPicked(picked, infos)).start();
+        if (kept.isEmpty()) return;
+        new Thread(() -> processPicked(kept, infos)).start();
+    }
+
+    /** Pick video hai? Naam ki extension ya resolver ka video/* MIME. */
+    private boolean isVideoPick(Uri uri, String name) {
+        if (BulkProjects.isVideoFile(name)) return true;
+        try {
+            String type = getContentResolver().getType(uri);
+            return type != null && type.startsWith("video/");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

@@ -3,26 +3,35 @@ package com.termux.app;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Intent;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.termux.shared.termux.TermuxConstants;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Termux Mod (v127) — Run ka app-managed flow (Adnan 2026-11-23):
  *
  *  - AUTO mode (default): koi menu nahi — saved jawab pipe ho jate hain
- *    aur ek LIVE PROCESSING popup dikh kar run terminal me chala jata
- *    hai. Factory jawab: HD = script default, Size = Crop 9:16.
+ *    aur run LIVE popup ke andar hi chalta hai (v128: terminal samne
+ *    NAHI ata; script background process me chalti hai, output popup
+ *    me live ata hai, aakhir me Finished/Fail + Close).
+ *    Factory jawab: HD = script default, Size = Crop 9:16.
  *  - MANUAL mode: Run par design-style popup khulta hai jis me script ke
  *    verified sawal (Mode + Size) tappable options me ate hain; defaults
- *    pehle se select hote hain (script ke Enter-defaults).
+ *    pehle se select hote hain (script ke Enter-defaults). Jawab ke baad
+ *    wahi live popup wala run — terminal samne nahi ata.
  *  - Jin projects ke prompts verified nahi (number 1..14 se bahar),
  *    wo hamesha plain terminal run karte hain — koi pipe nahi.
  *
@@ -51,7 +60,7 @@ public final class BulkRunHelper {
         if (BulkRunSettings.isAuto(a)) {
             List<String> answers = BulkRunSettings.answersFor(
                 p.number, BulkRunSettings.hdAnswer(a), BulkRunSettings.sizeAnswer(a));
-            showProcessingThenLaunch(a, p,
+            runLiveInPopup(a, p,
                 BulkRunSettings.buildPipedCommand(p.workCmd, answers), onLaunched);
         } else {
             showManualPopup(a, p, onLaunched);
@@ -101,7 +110,7 @@ public final class BulkRunHelper {
             List<String> answers = BulkRunSettings.answersFor(p.number,
                 hdNormal[0] ? BulkRunSettings.ANSWER_NORMAL : BulkRunSettings.ANSWER_HD,
                 sizeCrop[0] ? BulkRunSettings.ANSWER_CROP : BulkRunSettings.ANSWER_ORIGINAL);
-            showProcessingThenLaunch(a, p,
+            runLiveInPopup(a, p,
                 BulkRunSettings.buildPipedCommand(p.workCmd, answers), onLaunched);
         });
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
@@ -226,37 +235,147 @@ public final class BulkRunHelper {
 
     // ------------------------------------------------------------ processing + launch
 
-    /** Design-style LIVE PROCESSING popup — thori der dikh kar terminal khulta hai. */
-    private static void showProcessingThenLaunch(final Activity a, final BulkProjects.ProjectInfo p,
-                                                 final String command, final Runnable onLaunched) {
+    /**
+     * v128 (DEFECT A fix): run TERMINAL ko samne NAHI lata — script isi
+     * live popup ke andar chalti hai. Command asal Termux bash se ek
+     * background process me chalti hai (jawab pehle se pipe shuda);
+     * output line-by-line popup me live ata hai; khatam hone par saaf
+     * Finished/Fail halat. Popup band karne se process NAHI rukta —
+     * wo background me chalta rehta hai.
+     * onLaunched popup band hone par chalta hai (Stage apni screen
+     * finish karti hai; popup usi activity ka hai, is liye pehle popup
+     * band, phir finish — ulta karne se popup activity ke sath mar
+     * jata).
+     */
+    private static void runLiveInPopup(final Activity a, final BulkProjects.ProjectInfo p,
+                                       final String pipedCommand, final Runnable onLaunched) {
         final Dialog dialog = new Dialog(a);
-        dialog.setCancelable(false);
         LinearLayout panel = BulkTheme.modalPanel(a, p.name, dialog);
 
-        LinearLayout center = new LinearLayout(a);
-        center.setOrientation(LinearLayout.VERTICAL);
-        center.setGravity(Gravity.CENTER);
-        center.setPadding(0, BulkTheme.dp(a, 6), 0, BulkTheme.dp(a, 6));
-        ProgressBar bar = new ProgressBar(a);
-        bar.setIndeterminate(true);
-        center.addView(bar, new LinearLayout.LayoutParams(
-            BulkTheme.dp(a, 40), BulkTheme.dp(a, 40)));
-        TextView label = new TextView(a);
-        label.setText(BulkStrings.t(a, BulkStrings.PROCESSING));
-        label.setTextColor(BulkTheme.textSub(a));
-        label.setTextSize(13);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+        LinearLayout statusRow = new LinearLayout(a);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        final ProgressBar spinner = new ProgressBar(a);
+        spinner.setIndeterminate(true);
+        statusRow.addView(spinner, new LinearLayout.LayoutParams(
+            BulkTheme.dp(a, 26), BulkTheme.dp(a, 26)));
+        final TextView status = new TextView(a);
+        status.setText(BulkStrings.t(a, BulkStrings.PROCESSING));
+        status.setTextColor(BulkTheme.textSub(a));
+        status.setTextSize(13);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = BulkTheme.dp(a, 10);
-        label.setLayoutParams(lp);
-        center.addView(label);
-        panel.addView(center);
+        slp.leftMargin = BulkTheme.dp(a, 10);
+        status.setLayoutParams(slp);
+        statusRow.addView(status);
+        panel.addView(statusRow);
 
-        BulkTheme.showPanelDialog(a, panel);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            try { dialog.dismiss(); } catch (Exception ignored) {}
-            launch(a, command, onLaunched);
-        }, 900);
+        final ScrollView scroll = new ScrollView(a);
+        LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(a, 240));
+        scp.topMargin = BulkTheme.dp(a, 12);
+        scroll.setLayoutParams(scp);
+        final TextView out = new TextView(a);
+        out.setTypeface(android.graphics.Typeface.MONOSPACE);
+        out.setTextSize(11);
+        out.setTextColor(BulkTheme.textSub(a));
+        scroll.addView(out);
+        panel.addView(scroll);
+
+        TextView close = BulkTheme.secondaryButton(a, BulkStrings.t(a, BulkStrings.CLOSE),
+            v -> dialog.dismiss());
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = BulkTheme.dp(a, 14);
+        close.setLayoutParams(clp);
+        panel.addView(close);
+
+        final Dialog shown = BulkTheme.showPanelDialog(a, panel);
+        final boolean[] launchedOnce = {false};
+        shown.setOnDismissListener(d -> {
+            if (onLaunched != null && !launchedOnce[0]) {
+                launchedOnce[0] = true;
+                onLaunched.run();
+            }
+        });
+
+        new Thread(() -> {
+            int exit = -1;
+            final StringBuilder tail = new StringBuilder();
+            try {
+                ProcessBuilder pb = new ProcessBuilder(
+                    TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/bash", "-c", pipedCommand);
+                pb.environment().putAll(runEnvironment(pb.environment()));
+                pb.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                // Jawab printf pipe se ja rahe hain — apna stdin band rakho
+                try { proc.getOutputStream().close(); } catch (Exception ignored) {}
+                BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(proc.getInputStream(), "UTF-8"));
+                String line;
+                long lastPost = 0;
+                while ((line = reader.readLine()) != null) {
+                    synchronized (tail) {
+                        tail.append(line).append('\n');
+                        String t = keepTail(tail.toString(), 6000);
+                        tail.setLength(0);
+                        tail.append(t);
+                    }
+                    long now = System.currentTimeMillis();
+                    if (now - lastPost >= 250) {
+                        lastPost = now;
+                        final String snap;
+                        synchronized (tail) { snap = tail.toString(); }
+                        a.runOnUiThread(() -> {
+                            if (!shown.isShowing()) return;
+                            out.setText(snap);
+                            scroll.fullScroll(View.FOCUS_DOWN);
+                        });
+                    }
+                }
+                exit = proc.waitFor();
+            } catch (Exception e) {
+                synchronized (tail) {
+                    tail.append("\n[").append(String.valueOf(e.getMessage())).append("]\n");
+                }
+            }
+            final int fExit = exit;
+            final String snap;
+            synchronized (tail) { snap = tail.toString(); }
+            a.runOnUiThread(() -> {
+                if (!shown.isShowing()) return;
+                spinner.setVisibility(View.GONE);
+                status.setText(BulkStrings.t(a, fExit == 0
+                    ? BulkStrings.RUN_DONE : BulkStrings.RUN_FAILED));
+                out.setText(snap);
+                scroll.fullScroll(View.FOCUS_DOWN);
+            });
+        }).start();
+    }
+
+    /** Background run ke liye Termux environment — pure, test ho sakta hai. */
+    static Map<String, String> runEnvironment(Map<String, String> base) {
+        Map<String, String> env = new HashMap<>();
+        if (base != null) env.putAll(base);
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        env.put("PREFIX", prefix);
+        env.put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
+        String oldPath = env.get("PATH");
+        env.put("PATH", prefix + "/bin"
+            + (oldPath != null && !oldPath.isEmpty() ? ":" + oldPath : ""));
+        env.put("LD_LIBRARY_PATH", prefix + "/lib");
+        env.put("TMPDIR", prefix + "/tmp");
+        env.put("TERM", "xterm-256color");
+        env.put("LANG", "en_US.UTF-8");
+        return env;
+    }
+
+    /** Output ka sirf aakhri hissa rakho — popup halka rahe. */
+    static String keepTail(String text, int maxChars) {
+        if (text == null) return "";
+        if (maxChars < 0) maxChars = 0;
+        return text.length() <= maxChars ? text : text.substring(text.length() - maxChars);
     }
 
     private static void launch(Activity a, String command, Runnable onLaunched) {

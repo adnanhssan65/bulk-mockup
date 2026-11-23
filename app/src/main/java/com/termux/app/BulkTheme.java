@@ -433,6 +433,12 @@ public final class BulkTheme {
 
     public static LinearLayout modalPanel(final Activity a, String title, final Dialog dialog) {
         LinearLayout panel = new LinearLayout(a);
+        // v128 fix: panel par caller ka dialog tag kar do — showPanelDialog
+        // isi ko dikhayegi. Pehle showPanelDialog apna ALAG dialog bana kar
+        // dikhati thi, is liye tamam close/dismiss us phantom (kabhi na
+        // dikhne wale) dialog par jate thay aur asal popup screen par
+        // ruka rehta tha (Quick Run / Manual / Processing teeno par).
+        panel.setTag(dialog);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setBackground(modalBg(a));
         panel.setPadding(dp(a, 16), dp(a, 16), dp(a, 16), dp(a, 16));
@@ -460,7 +466,11 @@ public final class BulkTheme {
     }
 
     public static Dialog showPanelDialog(Activity a, LinearLayout panel) {
-        Dialog dialog = new Dialog(a);
+        // v128 fix: modalPanel ne caller ka dialog tag kiya ho to WAHI
+        // dikhao (us ke close/dismiss handlers usi par lage hain);
+        // warna pehle ki tarah naya dialog banao.
+        Dialog dialog = (panel.getTag() instanceof Dialog)
+            ? (Dialog) panel.getTag() : new Dialog(a);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         // v127: muntakhab font har popup par bhi lage
         BulkFonts.applyToTree(a, panel);

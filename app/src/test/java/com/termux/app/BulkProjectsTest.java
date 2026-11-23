@@ -331,7 +331,41 @@ public class BulkProjectsTest {
         assertTrue(BulkProjects.isImageFile("b.webp"));
         assertFalse(BulkProjects.isImageFile("script.py"));
         assertFalse(BulkProjects.isImageFile("notes.txt"));
+        assertFalse(BulkProjects.isImageFile("clip.mp4"));
         assertFalse(BulkProjects.isImageFile(null));
+    }
+
+    // ------------------------------------------------------------ v128: video rule
+
+    @Test
+    public void isVideoFileCheck() {
+        assertTrue(BulkProjects.isVideoFile("clip.mp4"));
+        assertTrue(BulkProjects.isVideoFile("MOVIE.MKV"));
+        assertTrue(BulkProjects.isVideoFile("a.mov"));
+        assertTrue(BulkProjects.isVideoFile("b.avi"));
+        assertTrue(BulkProjects.isVideoFile("c.3gp"));
+        assertTrue(BulkProjects.isVideoFile("d.webm"));
+        assertFalse(BulkProjects.isVideoFile("photo.jpg"));
+        assertFalse(BulkProjects.isVideoFile("notes.txt"));
+        assertFalse(BulkProjects.isVideoFile(null));
+    }
+
+    @Test
+    public void countFilesIgnoresVideosAndNonImages() throws Exception {
+        File dir = Files.createTempDirectory("bulkprojects_vid").toFile();
+        try {
+            assertTrue(new File(dir, "a.jpg").createNewFile());
+            assertTrue(new File(dir, "b.png").createNewFile());
+            assertTrue(new File(dir, "clip.mp4").createNewFile());
+            assertTrue(new File(dir, "movie.mkv").createNewFile());
+            assertTrue(new File(dir, "notes.txt").createNewFile());
+            // Sirf 2 images — video wallpaper count nahi hoti
+            assertEquals(2, BulkProjects.countFiles(dir));
+        } finally {
+            File[] kids = dir.listFiles();
+            if (kids != null) for (File k : kids) k.delete();
+            dir.delete();
+        }
     }
 
     // ------------------------------------------------------------ v127 run filter

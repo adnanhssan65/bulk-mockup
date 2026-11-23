@@ -5,28 +5,22 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 
 /**
  * Termux Mod — Permissions screen (sidebar se khulti hai, pehli dafa setup
@@ -41,7 +35,6 @@ import java.io.FileOutputStream;
 public class BulkPermissionsActivity extends Activity {
 
     private static final String LOG_TAG = "BulkPermissions";
-    private static final int GREEN = 0xFF00FF41;
     private static final int RED = 0xFFFF5252;
     private static final int REQ_NOTIFICATIONS = 1002;
     private static final String PREFS = "bulk_permissions";
@@ -60,10 +53,10 @@ public class BulkPermissionsActivity extends Activity {
         super.onCreate(savedInstanceState);
         mRoot = new LinearLayout(this);
         mRoot.setOrientation(LinearLayout.VERTICAL);
-        mRoot.setBackgroundColor(Color.BLACK);
+        mRoot.setBackgroundColor(BulkTheme.appBg(this));
         mRoot.setPadding(dp(16), dp(16), dp(16), dp(16));
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.BLACK);
+        scroll.setBackgroundColor(BulkTheme.appBg(this));
         scroll.addView(mRoot);
         setContentView(scroll);
         BulkFonts.apply(this);
@@ -84,24 +77,9 @@ public class BulkPermissionsActivity extends Activity {
 
     // ------------------------------------------------------------- status checks
 
-    /** Storage ka ASAL test: /storage/emulated/0 me file likho, parho, delete karo. */
+    /** Storage ka ASAL test — shared probe (BulkStorageAccess), taake tamam screens ka mayaar ek hi ho. */
     private boolean testStorage() {
-        try {
-            File dir = Environment.getExternalStorageDirectory();
-            File test = new File(dir, ".bulk_mockup_perm_test");
-            try (FileOutputStream out = new FileOutputStream(test)) {
-                out.write(42);
-            }
-            boolean ok;
-            try (FileInputStream in = new FileInputStream(test)) {
-                ok = in.read() == 42;
-            }
-            //noinspection ResultOfMethodCallIgnored
-            test.delete();
-            return ok;
-        } catch (Exception e) {
-            return false;
-        }
+        return BulkStorageAccess.probeStorage();
     }
 
     private boolean hasStorageLinks() {
@@ -295,7 +273,7 @@ public class BulkPermissionsActivity extends Activity {
                 step = 2; fix = this::fixNotifications;
             } else {
                 mAutoFirstRun = false;
-                Toast.makeText(this, BulkStrings.t(this, BulkStrings.PERM_DONE_TOAST), Toast.LENGTH_LONG).show();
+                BulkTheme.showToast(this, BulkStrings.t(this, BulkStrings.PERM_DONE_TOAST));
                 completeFirstRun();
                 return;
             }
@@ -320,7 +298,7 @@ public class BulkPermissionsActivity extends Activity {
         if (!isInstallOk()) { fixInstall(); return; }
         if (!isAutostartDone()) { fixAutostart(); return; }
         mAllowAll = false;
-        Toast.makeText(this, BulkStrings.t(this, BulkStrings.PERM_ALL_DONE_TOAST), Toast.LENGTH_LONG).show();
+        BulkTheme.showToast(this, BulkStrings.t(this, BulkStrings.PERM_ALL_DONE_TOAST));
         completeFirstRun();
     }
 
@@ -346,27 +324,27 @@ public class BulkPermissionsActivity extends Activity {
 
         TextView title = new TextView(this);
         title.setText("PERMISSIONS");
-        title.setTextColor(GREEN);
+        title.setTextColor(BulkTheme.accent(this));
         title.setTextSize(20);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
         mRoot.addView(title);
 
         TextView sub = new TextView(this);
         sub.setText(BulkStrings.t(this, BulkStrings.PERM_SUB));
-        sub.setTextColor(Color.LTGRAY);
+        sub.setTextColor(BulkTheme.textMuted(this));
         sub.setTextSize(13);
         sub.setGravity(Gravity.CENTER);
         sub.setPadding(0, dp(6), 0, dp(12));
         mRoot.addView(sub);
 
-        Button allowAll = new Button(this);
-        allowAll.setText(BulkStrings.t(this, BulkStrings.ALLOW_ALL));
-        allowAll.setTextSize(16);
-        allowAll.setOnClickListener(v -> {
-            mAllowAll = true;
-            advanceAllowAll();
-            rebuild();
-        });
+        TextView allowAll = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.ALLOW_ALL), v -> {
+                mAllowAll = true;
+                advanceAllowAll();
+                rebuild();
+            });
+        allowAll.setTextSize(15);
         mRoot.addView(allowAll);
 
         addRow("Storage (files)",
@@ -426,25 +404,30 @@ public class BulkPermissionsActivity extends Activity {
             // yahan se dashboard ja sakta hai (flag lag jata hai — popups
             // agli start par dobara nahi ayenge; Permissions sidebar se
             // hamesha khul sakti hai).
-            Button goDash = new Button(this);
-            goDash.setText(BulkStrings.t(this, BulkStrings.GO_DASHBOARD) + "  →");
+            TextView goDash = BulkTheme.primaryButton(this,
+                BulkStrings.t(this, BulkStrings.GO_DASHBOARD) + "  →",
+                v -> completeFirstRun());
             goDash.setTextSize(15);
-            goDash.setOnClickListener(v -> completeFirstRun());
+            LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            glp.topMargin = dp(4);
+            goDash.setLayoutParams(glp);
             mRoot.addView(goDash);
         }
 
         TextView footer = new TextView(this);
         footer.setText("\nApp: Termux Mod  •  Package: " + getPackageName()
             + "\nHome: " + TermuxConstants.TERMUX_HOME_DIR_PATH);
-        footer.setTextColor(Color.GRAY);
+        footer.setTextColor(BulkTheme.textMuted(this));
         footer.setTextSize(11);
         mRoot.addView(footer);
+
+        // v128 restyle: muntakhab font har rebuild ke baad dobara lagao
+        BulkFonts.applyToTree(this, mRoot);
     }
 
     private void addRow(String name, String hint, boolean ok, String buttonText, Runnable fix) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(dp(10), dp(12), dp(10), dp(12));
+        LinearLayout row = permCard();
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
@@ -452,46 +435,50 @@ public class BulkPermissionsActivity extends Activity {
 
         TextView status = new TextView(this);
         status.setText(ok ? "✔ " : "✖ ");
-        status.setTextColor(ok ? GREEN : RED);
-        status.setTextSize(18);
+        status.setTextColor(ok ? BulkTheme.accent(this) : RED);
+        status.setTextSize(17);
         top.addView(status);
 
         TextView label = new TextView(this);
         label.setText(name);
-        label.setTextColor(Color.WHITE);
-        label.setTextSize(16);
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(15);
         label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         top.addView(label);
 
         if (!ok) {
-            Button btn = new Button(this);
-            btn.setText(buttonText);
-            btn.setOnClickListener(v -> fix.run());
+            TextView btn = BulkTheme.primaryButton(this, buttonText, v -> fix.run());
+            btn.setTextSize(12.5f);
             top.addView(btn);
         }
         row.addView(top);
 
         TextView hintView = new TextView(this);
         hintView.setText(hint);
-        hintView.setTextColor(Color.LTGRAY);
+        hintView.setTextColor(BulkTheme.textMuted(this));
         hintView.setTextSize(12);
         hintView.setPadding(dp(26), dp(2), 0, 0);
         row.addView(hintView);
 
         mRoot.addView(row);
+    }
 
-        View line = new View(this);
-        line.setBackgroundColor(0xFF1B5E20);
-        line.setLayoutParams(new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
-        mRoot.addView(line);
+    /** v128 restyle: design wala glass card — har permission row isi par banti hai. */
+    private LinearLayout permCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(BulkTheme.glassPanelStrong(this));
+        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(10);
+        card.setLayoutParams(lp);
+        return card;
     }
 
     /** addRow jesi hi row, lekin status ki jagah "›" or button hamesha — dusri screen kholne ke liye. */
     private void addNavRow(String name, String hint, String buttonText, Runnable action) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(dp(10), dp(12), dp(10), dp(12));
+        LinearLayout row = permCard();
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
@@ -499,36 +486,29 @@ public class BulkPermissionsActivity extends Activity {
 
         TextView status = new TextView(this);
         status.setText("› ");
-        status.setTextColor(GREEN);
-        status.setTextSize(18);
+        status.setTextColor(BulkTheme.accent(this));
+        status.setTextSize(17);
         top.addView(status);
 
         TextView label = new TextView(this);
         label.setText(name);
-        label.setTextColor(Color.WHITE);
-        label.setTextSize(16);
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(15);
         label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         top.addView(label);
 
-        Button btn = new Button(this);
-        btn.setText(buttonText);
-        btn.setOnClickListener(v -> action.run());
+        TextView btn = BulkTheme.secondaryButton(this, buttonText, v -> action.run());
+        btn.setTextSize(12.5f);
         top.addView(btn);
         row.addView(top);
 
         TextView hintView = new TextView(this);
         hintView.setText(hint);
-        hintView.setTextColor(Color.LTGRAY);
+        hintView.setTextColor(BulkTheme.textMuted(this));
         hintView.setTextSize(12);
         hintView.setPadding(dp(26), dp(2), 0, 0);
         row.addView(hintView);
 
         mRoot.addView(row);
-
-        View line = new View(this);
-        line.setBackgroundColor(0xFF1B5E20);
-        line.setLayoutParams(new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
-        mRoot.addView(line);
     }
 }

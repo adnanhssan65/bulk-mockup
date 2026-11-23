@@ -191,6 +191,8 @@ public final class BulkStrings {
     public static final String CROP_OPTION = "crop_option";
     public static final String DEFAULT_TAG = "default_tag";
     public static final String PROCESSING = "processing";
+    public static final String RUN_DONE = "run_done";
+    public static final String RUN_FAILED = "run_failed";
     public static final String OPEN_FILE_MANAGER = "open_file_manager";
     public static final String EXPORT_PROJECT = "export_project";
     public static final String EXPORTING = "exporting";
@@ -424,6 +426,8 @@ public final class BulkStrings {
         put(CROP_OPTION, "Crop 9:16", "Crop 9:16");
         put(DEFAULT_TAG, "(Default)", "(Default)");
         put(PROCESSING, "Processing…", "Process Ho Raha Hai…");
+        put(RUN_DONE, "Finished ✔", "Ho Gaya ✔");
+        put(RUN_FAILED, "Failed ✖", "Fail Ho Gaya ✖");
         put(OPEN_FILE_MANAGER, "Open in File Manager", "File Manager Me Kholo");
         put(EXPORT_PROJECT, "Export Project", "Project Export Karo");
         put(EXPORTING, "Exporting…", "Export Ho Raha Hai…");

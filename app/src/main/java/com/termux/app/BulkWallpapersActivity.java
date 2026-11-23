@@ -31,7 +31,7 @@ public class BulkWallpapersActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
-        if (!hasStorageAccess()) {
+        if (!BulkStorageAccess.hasAccess(this)) {
             setContentView(buildPermissionUi());
             BulkFonts.apply(this);
             return;
@@ -48,18 +48,6 @@ public class BulkWallpapersActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshDupBadge();
-    }
-
-    /** v124 wali storage check: Android 11+ par all-files access. */
-    private boolean hasStorageAccess() {
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            try {
-                return android.os.Environment.isExternalStorageManager();
-            } catch (Exception e) {
-                return true;
-            }
-        }
-        return true;
     }
 
     private View buildPermissionUi() {

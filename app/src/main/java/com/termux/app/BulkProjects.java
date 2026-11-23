@@ -87,6 +87,20 @@ public final class BulkProjects {
             || n.endsWith(".webp") || n.endsWith(".gif") || n.endsWith(".bmp");
     }
 
+    /**
+     * v128: video kabhi wallpaper nahi. Folder scans, counts aur staging
+     * intake — har jagah video khamoshi se bahar. (MIME wala check
+     * staging intake me is ke sath mil kar lagta hai.)
+     */
+    public static boolean isVideoFile(String name) {
+        if (name == null) return false;
+        String n = name.toLowerCase();
+        return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov")
+            || n.endsWith(".avi") || n.endsWith(".3gp") || n.endsWith(".webm")
+            || n.endsWith(".wmv") || n.endsWith(".flv") || n.endsWith(".m4v")
+            || n.endsWith(".ts") || n.endsWith(".mpg") || n.endsWith(".mpeg");
+    }
+
     /** Project install par banne wale subfolders (installer inhi ko banata hai). */
     public static List<String> subfolderNames(int n) {
         List<String> subs = new ArrayList<>();
@@ -346,14 +360,18 @@ public final class BulkProjects {
         return names;
     }
 
-    /** Ek folder me kitni files hain (dashboard ki counts line ke liye). */
+    /**
+     * Ek folder me kitni IMAGE files hain (dashboard ki counts line,
+     * run filter waghera ke liye). v128: video (aur har non-image file)
+     * count nahi hoti — video wallpaper nahi hai.
+     */
     public static int countFiles(File dir) {
         if (dir == null) return 0;
         File[] kids = dir.listFiles();
         if (kids == null) return 0;
         int count = 0;
         for (File k : kids) {
-            if (k.isFile()) count++;
+            if (k.isFile() && isImageFile(k.getName())) count++;
         }
         return count;
     }
