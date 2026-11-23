@@ -30,8 +30,14 @@ import java.util.Set;
  * Termux Mod (v127) — Preview Added Wallpapers (hub se khulti hai).
  * Tamam projects + un ke <N>_wallpapers folder ka count; row tap karne
  * par us project ke asal thumbnails khulte hain. Design: accordion —
- * sab rows default band. Sirf dekhna hai (delete/edit nahi) — ye
- * Adnan ka v125 wala usool hai.
+ * sab rows default band.
+ *
+ * v130 (owner ki hidayat — purana "sirf dekhna hai" usool dropped
+ * wallpapers ke liye khatam): khule hue project ke dropped wallpapers
+ * SELECT (tap toggle) karke DELETE ho sakte hain — gallery wala hi
+ * toolbar (Sort Newest/Oldest/Name cycle, Grid 2–6 cycle, Select All,
+ * Delete + design-style confirm). Delete asal files ko <N>_wallpapers
+ * se hatata hai; counts har refresh par fresh hain.
  */
 public class BulkPreviewActivity extends Activity {
 
@@ -42,6 +48,10 @@ public class BulkPreviewActivity extends Activity {
     private final Map<String, Bitmap> mThumbs = new HashMap<>();
     private int mThumbGen = 0;
     private LinearLayout mList;
+    // v130: dropped wallpapers ki selection (absolute paths) + toolbar halat
+    private final Set<String> mSelectedPaths = new HashSet<>();
+    private int mSortMode = BulkGalleryState.SORT_NAME;
+    private int mCols = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -159,7 +169,7 @@ public class BulkPreviewActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 1)));
 
         if (expanded) {
-            List<File> files = imageFiles(wdir);
+            List<File> files = BulkGalleryState.sortFiles(imageFiles(wdir), mSortMode);
             if (files.isEmpty()) {
                 TextView none = new TextView(this);
                 none.setText(BulkStrings.t(this, BulkStrings.NO_WALLPAPERS));
@@ -168,8 +178,9 @@ public class BulkPreviewActivity extends Activity {
                 none.setPadding(0, BulkTheme.dp(this, 6), 0, BulkTheme.dp(this, 2));
                 row.addView(none);
             } else {
+                row.addView(dropToolbar(wdir, files));
                 GridLayout grid = new GridLayout(this);
-                grid.setColumnCount(3);
+                grid.setColumnCount(mCols);
                 LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 gp.topMargin = BulkTheme.dp(this, 6);
@@ -182,17 +193,164 @@ public class BulkPreviewActivity extends Activity {
         return row;
     }
 
-    private View previewThumb(File f) {
-        FrameLayout box = new FrameLayout(this);
-        box.setBackground(BulkTheme.tileBg(this, false));
+    // ------------------------------------------------------------ v130 dropped toolbar
+
+    /** Gallery wala toolbar (compact): (N selected | Select All) / (Sort | Grid | Delete). */
+    private View dropToolbar(final File dir, final List<File> files) {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = BulkTheme.dp(this, 8);
+        bar.setLayoutParams(blp);
+
+        int selCount = 0;
+        for (File f : files) if (mSelectedPaths.contains(f.getAbsolutePath())) selCount++;
+
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        row1.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView count = new TextView(this);
+        count.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, selCount));
+        count.setTextColor(BulkTheme.accent(this));
+        count.setTextSize(12.5f);
+        count.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        row1.addView(count);
+        row1.addView(new View(this), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        final int fSelCount = selCount;
+        TextView selectAll = pillText(BulkStrings.t(this,
+            BulkGalleryState.isAllSelected(selCount, files.size())
+                ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL), false);
+        selectAll.setOnClickListener(v -> {
+            if (BulkGalleryState.isAllSelected(fSelCount, files.size())) {
+                for (File f : files) mSelectedPaths.remove(f.getAbsolutePath());
+            } else {
+                for (File f : files) mSelectedPaths.add(f.getAbsolutePath());
+            }
+            refreshList();
+        });
+        row1.addView(selectAll);
+        bar.addView(row1);
+
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams r2p = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        r2p.topMargin = BulkTheme.dp(this, 8);
+        row2.setLayoutParams(r2p);
+        LinearLayout sortPill = pillIcon(R.drawable.ic_bulk_sort, BulkStrings.t(this,
+            mSortMode == BulkGalleryState.SORT_OLDEST ? BulkStrings.SORT_OLDEST
+                : mSortMode == BulkGalleryState.SORT_NAME ? BulkStrings.SORT_BY_NAME
+                : BulkStrings.SORT_NEWEST));
+        sortPill.setOnClickListener(v -> {
+            mSortMode = BulkGalleryState.nextSort(mSortMode);
+            refreshList();
+        });
+        row2.addView(sortPill);
+        LinearLayout gridPill = pillIcon(R.drawable.ic_bulk_grid, mCols + "x");
+        gridPill.setOnClickListener(v -> {
+            mCols = BulkGalleryState.nextColumns(mCols);
+            refreshList();
+        });
+        LinearLayout.LayoutParams gp2 = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gp2.leftMargin = BulkTheme.dp(this, 6);
+        gridPill.setLayoutParams(gp2);
+        row2.addView(gridPill);
+        row2.addView(new View(this), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView del = pillText(BulkStrings.t(this, BulkStrings.DELETE)
+            + (selCount > 0 ? " (" + selCount + ")" : ""), true);
+        del.setEnabled(selCount > 0);
+        del.setAlpha(selCount > 0 ? 1f : 0.45f);
+        del.setOnClickListener(v -> confirmDeleteDropped(files));
+        row2.addView(del);
+        bar.addView(row2);
+        return bar;
+    }
+
+    private TextView pillText(String text, boolean danger) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextSize(12);
+        b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        b.setTextColor(danger ? BulkTheme.danger(this) : BulkTheme.textMain(this));
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setBackground(danger ? BulkTheme.dangerBg(this)
+            : BulkTheme.roundedBg(this, BulkTheme.glassBg(this), 20,
+                BulkTheme.accentBorder(this), 1));
+        b.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 11), BulkTheme.dp(this, 7));
+        b.setClickable(true);
+        return b;
+    }
+
+    private LinearLayout pillIcon(int iconRes, String label) {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(android.view.Gravity.CENTER);
+        pill.setBackground(BulkTheme.roundedBg(this, BulkTheme.glassBg(this), 20,
+            BulkTheme.accentBorder(this), 1));
+        pill.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 11), BulkTheme.dp(this, 7));
+        pill.setClickable(true);
+        pill.addView(BulkTheme.icon(this, iconRes, BulkTheme.textSub(this), 13));
+        TextView tv = new TextView(this);
+        tv.setText(label);
+        tv.setTextSize(12);
+        tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tv.setTextColor(BulkTheme.textMain(this));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = BulkTheme.dp(this, 5);
+        tv.setLayoutParams(lp);
+        pill.addView(tv);
+        return pill;
+    }
+
+    private void confirmDeleteDropped(final List<File> files) {
+        final List<File> sel = new ArrayList<>();
+        for (File f : files) {
+            if (mSelectedPaths.contains(f.getAbsolutePath())) sel.add(f);
+        }
+        if (sel.isEmpty()) return;
+        BulkTheme.showConfirm(this, BulkStrings.t(this, BulkStrings.DELETE_DROPPED_TITLE),
+            BulkStrings.format(this, BulkStrings.DELETE_DROPPED_MSG, sel.size()),
+            BulkStrings.t(this, BulkStrings.DELETE), true, () -> deleteDroppedFiles(sel));
+    }
+
+    private void deleteDroppedFiles(List<File> sel) {
+        int deleted = 0;
+        for (File f : sel) {
+            if (f.delete()) {
+                deleted++;
+                mThumbs.remove(f.getAbsolutePath());
+            }
+            mSelectedPaths.remove(f.getAbsolutePath());
+        }
+        if (deleted > 0) {
+            String msg = BulkStrings.format(this, BulkStrings.DELETED_TOAST, deleted);
+            BulkTheme.showToast(this, msg);
+            BulkLog.add(msg);
+        }
+        refreshList();
+    }
+
+    private View previewThumb(final File f) {
+        final FrameLayout box = new FrameLayout(this);
+        final String path = f.getAbsolutePath();
+        final boolean[] checked = {mSelectedPaths.contains(path)};
+        box.setBackground(BulkTheme.tileBg(this, checked[0]));
         int gap = BulkTheme.dp(this, 8);
         GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
         glp.width = 0;
-        glp.height = BulkTheme.dp(this, 84);
+        glp.height = BulkTheme.dp(this, Math.max(52, Math.min(126, 252 / mCols)));
         glp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
         glp.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
         box.setLayoutParams(glp);
-        Bitmap bmp = mThumbs.get(f.getAbsolutePath());
+        Bitmap bmp = mThumbs.get(path);
         if (bmp != null) {
             ImageView iv = new ImageView(this);
             iv.setImageBitmap(bmp);
@@ -209,6 +367,27 @@ public class BulkPreviewActivity extends Activity {
             iv.setLayoutParams(ip);
             box.addView(iv);
         }
+        // v130: selection badge (gallery jesa) — tap = toggle, phir
+        // list refresh (toolbar ke counts bhi taza ho jate hain)
+        final TextView badge = new TextView(this);
+        badge.setText("✓");
+        badge.setTextColor(BulkTheme.onAccent(this));
+        badge.setTextSize(11);
+        badge.setGravity(android.view.Gravity.CENTER);
+        badge.setBackground(BulkTheme.accentCircleBg(this));
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 20), BulkTheme.dp(this, 20));
+        bp.gravity = android.view.Gravity.TOP | android.view.Gravity.RIGHT;
+        bp.topMargin = BulkTheme.dp(this, 4);
+        bp.rightMargin = BulkTheme.dp(this, 4);
+        badge.setLayoutParams(bp);
+        badge.setVisibility(checked[0] ? View.VISIBLE : View.GONE);
+        box.addView(badge);
+        box.setOnClickListener(v -> {
+            if (checked[0]) mSelectedPaths.remove(path);
+            else mSelectedPaths.add(path);
+            refreshList();
+        });
         return box;
     }
 

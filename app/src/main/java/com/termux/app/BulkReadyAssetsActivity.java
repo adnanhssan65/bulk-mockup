@@ -23,8 +23,10 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Termux Mod (v127) — Preview Ready Assets (drawer se khulti hai).
@@ -36,8 +38,14 @@ import java.util.Map;
  *
  * v129: upar "Drop Wallpapers" ka alag option — projects ki list,
  * project kholne par us ke <N>_wallpapers (drop kiye hue) wallpapers
- * grid me. Ye bhi read-only hai. Counts har resume par FRESH ginne
- * jate hain (koi cache nahi).
+ * grid me. Counts har resume par FRESH ginne jate hain (koi cache
+ * nahi).
+ *
+ * v130 (owner ki hidayat): Drop Wallpapers ki grid me dropped images
+ * SELECT (tap toggle) karke DELETE ho sakte hain — gallery wala
+ * toolbar (Sort Newest/Oldest/Name cycle, Grid 2–6 cycle, Select All,
+ * Delete + design-style confirm). Mockups / Ready Wallpapers tabs
+ * read-only hi rehte hain.
  */
 public class BulkReadyAssetsActivity extends Activity {
 
@@ -53,6 +61,10 @@ public class BulkReadyAssetsActivity extends Activity {
     // v129: Drop Wallpapers wale hissay ki halat
     private boolean mDropList = false;
     private BulkProjects.ProjectInfo mDropProject;
+    // v130: Drop Wallpapers selection (absolute paths) + toolbar halat
+    private final Set<String> mDropSelected = new HashSet<>();
+    private int mDropSort = BulkGalleryState.SORT_NAME;
+    private int mDropCols = 2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -315,7 +327,11 @@ public class BulkReadyAssetsActivity extends Activity {
         return row;
     }
 
-    /** Ek project ke drop wallpapers (us ke <N>_wallpapers folder ki images) — read-only grid. */
+    /**
+     * Ek project ke drop wallpapers (us ke <N>_wallpapers folder ki
+     * images). v130: select + delete toolbar ke sath (upar dekho);
+     * Mockups/Ready tabs wali read-only grid is se alag hai.
+     */
     private void showDropFolder() {
         final BulkProjects.ProjectInfo p = mDropProject;
         if (p == null) { showDropList(); return; }
@@ -338,7 +354,11 @@ public class BulkReadyAssetsActivity extends Activity {
         path.setTypeface(android.graphics.Typeface.MONOSPACE);
         mBody.addView(path);
 
-        List<File> files = imageFiles(dir);
+        List<File> files = BulkGalleryState.sortFiles(imageFiles(dir), mDropSort);
+        // Selection me sirf maujood files rakho (delete ke baad purani entries saaf)
+        Set<String> existing = new HashSet<>();
+        for (File f : files) existing.add(f.getAbsolutePath());
+        mDropSelected.retainAll(existing);
         if (files.isEmpty()) {
             TextView none = new TextView(this);
             none.setText(BulkStrings.t(this, BulkStrings.NO_WALLPAPERS));
@@ -347,17 +367,213 @@ public class BulkReadyAssetsActivity extends Activity {
             none.setPadding(0, BulkTheme.dp(this, 12), 0, 0);
             mBody.addView(none);
         } else {
+            mBody.addView(dropToolbar(files));
             GridLayout grid = new GridLayout(this);
-            grid.setColumnCount(2);
+            grid.setColumnCount(mDropCols);
             LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            gp.topMargin = BulkTheme.dp(this, 10);
+            gp.topMargin = BulkTheme.dp(this, 8);
             grid.setLayoutParams(gp);
-            for (File f : files) grid.addView(assetThumb(f));
+            for (File f : files) grid.addView(dropThumb(f));
             mBody.addView(grid);
             loadThumbs(files);
         }
         BulkFonts.applyToTree(this, mBody);
+    }
+
+    // ------------------------------------------------------------ v130 drop toolbar
+
+    /** Gallery wala toolbar (compact): (N selected | Select All) / (Sort | Grid | Delete). */
+    private View dropToolbar(final List<File> files) {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = BulkTheme.dp(this, 10);
+        bar.setLayoutParams(blp);
+
+        int selCount = 0;
+        for (File f : files) if (mDropSelected.contains(f.getAbsolutePath())) selCount++;
+
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        row1.setGravity(Gravity.CENTER_VERTICAL);
+        TextView count = new TextView(this);
+        count.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, selCount));
+        count.setTextColor(BulkTheme.accent(this));
+        count.setTextSize(12.5f);
+        count.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        row1.addView(count);
+        row1.addView(new View(this), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        final int fSelCount = selCount;
+        TextView selectAll = pillText(BulkStrings.t(this,
+            BulkGalleryState.isAllSelected(selCount, files.size())
+                ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL), false);
+        selectAll.setOnClickListener(v -> {
+            if (BulkGalleryState.isAllSelected(fSelCount, files.size())) {
+                for (File f : files) mDropSelected.remove(f.getAbsolutePath());
+            } else {
+                for (File f : files) mDropSelected.add(f.getAbsolutePath());
+            }
+            showDropFolder();
+        });
+        row1.addView(selectAll);
+        bar.addView(row1);
+
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams r2p = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        r2p.topMargin = BulkTheme.dp(this, 8);
+        row2.setLayoutParams(r2p);
+        LinearLayout sortPill = pillIcon(R.drawable.ic_bulk_sort, BulkStrings.t(this,
+            mDropSort == BulkGalleryState.SORT_OLDEST ? BulkStrings.SORT_OLDEST
+                : mDropSort == BulkGalleryState.SORT_NAME ? BulkStrings.SORT_BY_NAME
+                : BulkStrings.SORT_NEWEST));
+        sortPill.setOnClickListener(v -> {
+            mDropSort = BulkGalleryState.nextSort(mDropSort);
+            showDropFolder();
+        });
+        row2.addView(sortPill);
+        LinearLayout gridPill = pillIcon(R.drawable.ic_bulk_grid, mDropCols + "x");
+        gridPill.setOnClickListener(v -> {
+            mDropCols = BulkGalleryState.nextColumns(mDropCols);
+            showDropFolder();
+        });
+        LinearLayout.LayoutParams gp2 = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gp2.leftMargin = BulkTheme.dp(this, 6);
+        gridPill.setLayoutParams(gp2);
+        row2.addView(gridPill);
+        row2.addView(new View(this), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView del = pillText(BulkStrings.t(this, BulkStrings.DELETE)
+            + (selCount > 0 ? " (" + selCount + ")" : ""), true);
+        del.setEnabled(selCount > 0);
+        del.setAlpha(selCount > 0 ? 1f : 0.45f);
+        del.setOnClickListener(v -> confirmDeleteDropped(files));
+        row2.addView(del);
+        bar.addView(row2);
+        return bar;
+    }
+
+    private TextView pillText(String text, boolean danger) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextSize(12);
+        b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        b.setTextColor(danger ? BulkTheme.danger(this) : BulkTheme.textMain(this));
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(danger ? BulkTheme.dangerBg(this)
+            : BulkTheme.roundedBg(this, BulkTheme.glassBg(this), 20,
+                BulkTheme.accentBorder(this), 1));
+        b.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 11), BulkTheme.dp(this, 7));
+        b.setClickable(true);
+        return b;
+    }
+
+    private LinearLayout pillIcon(int iconRes, String label) {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(Gravity.CENTER);
+        pill.setBackground(BulkTheme.roundedBg(this, BulkTheme.glassBg(this), 20,
+            BulkTheme.accentBorder(this), 1));
+        pill.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 11), BulkTheme.dp(this, 7));
+        pill.setClickable(true);
+        pill.addView(BulkTheme.icon(this, iconRes, BulkTheme.textSub(this), 13));
+        TextView tv = new TextView(this);
+        tv.setText(label);
+        tv.setTextSize(12);
+        tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tv.setTextColor(BulkTheme.textMain(this));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = BulkTheme.dp(this, 5);
+        tv.setLayoutParams(lp);
+        pill.addView(tv);
+        return pill;
+    }
+
+    private void confirmDeleteDropped(final List<File> files) {
+        final List<File> sel = new ArrayList<>();
+        for (File f : files) {
+            if (mDropSelected.contains(f.getAbsolutePath())) sel.add(f);
+        }
+        if (sel.isEmpty()) return;
+        BulkTheme.showConfirm(this, BulkStrings.t(this, BulkStrings.DELETE_DROPPED_TITLE),
+            BulkStrings.format(this, BulkStrings.DELETE_DROPPED_MSG, sel.size()),
+            BulkStrings.t(this, BulkStrings.DELETE), true, () -> {
+                int deleted = 0;
+                for (File f : sel) {
+                    if (f.delete()) {
+                        deleted++;
+                        mThumbs.remove(f.getAbsolutePath());
+                    }
+                    mDropSelected.remove(f.getAbsolutePath());
+                }
+                if (deleted > 0) {
+                    String msg = BulkStrings.format(this, BulkStrings.DELETED_TOAST, deleted);
+                    BulkTheme.showToast(this, msg);
+                    BulkLog.add(msg);
+                }
+                showDropFolder();
+            });
+    }
+
+    /** Drop grid ka tile: tap = select toggle (inspector NAHI — ye sirf dropped view hai). */
+    private View dropThumb(final File f) {
+        final FrameLayout box = new FrameLayout(this);
+        final String path = f.getAbsolutePath();
+        final boolean checked = mDropSelected.contains(path);
+        box.setBackground(BulkTheme.tileBg(this, checked));
+        int gap = BulkTheme.dp(this, 8);
+        GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
+        glp.width = 0;
+        glp.height = BulkTheme.dp(this, Math.max(56, Math.min(150, 300 / mDropCols)));
+        glp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+        glp.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
+        box.setLayoutParams(glp);
+        Bitmap bmp = mThumbs.get(path);
+        if (bmp != null) {
+            ImageView iv = new ImageView(this);
+            iv.setImageBitmap(bmp);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            iv.setPadding(BulkTheme.dp(this, 3), BulkTheme.dp(this, 3),
+                BulkTheme.dp(this, 3), BulkTheme.dp(this, 3));
+            box.addView(iv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_image, BulkTheme.textMuted(this), 20);
+            FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
+                BulkTheme.dp(this, 20), BulkTheme.dp(this, 20));
+            ip.gravity = Gravity.CENTER;
+            iv.setLayoutParams(ip);
+            box.addView(iv);
+        }
+        TextView badge = new TextView(this);
+        badge.setText("✓");
+        badge.setTextColor(BulkTheme.onAccent(this));
+        badge.setTextSize(11);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(BulkTheme.accentCircleBg(this));
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 20), BulkTheme.dp(this, 20));
+        bp.gravity = Gravity.TOP | Gravity.RIGHT;
+        bp.topMargin = BulkTheme.dp(this, 4);
+        bp.rightMargin = BulkTheme.dp(this, 4);
+        badge.setLayoutParams(bp);
+        badge.setVisibility(checked ? View.VISIBLE : View.GONE);
+        box.addView(badge);
+        box.setOnClickListener(v -> {
+            if (mDropSelected.contains(path)) mDropSelected.remove(path);
+            else mDropSelected.add(path);
+            showDropFolder();
+        });
+        return box;
     }
 
     private View projectRow(final BulkProjects.ProjectInfo p, int mockups, int ready) {

@@ -33,20 +33,32 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Termux Mod (v127, Adnan 2026-11-23) — App ki apni Gallery (picking ka
- * primary route). MediaStore se device ki images, pehle FOLDER list,
- * folder tap karne par us ki images grid me ("All Images" view bhi hai).
+ * Termux Mod (v127, v130 me toolbar dobara) — App ki apni Gallery
+ * (picking ka primary route). MediaStore se device ki images, pehle
+ * FOLDER list, folder tap karne par us ki images grid me ("All Images"
+ * view bhi hai).
+ *
+ * v130 TOOLBAR (owner ke apne HTML design — All Images Gallery
+ * Manager — ke mutabiq, 2 rows + hint bar):
+ *   Row 1: "N selected" | Select All / Unselect All | Add/Move CTA
+ *          (0 select par disabled; Copy mode me "Add (n)", Move mode
+ *          me "Move (n)")
+ *   Row 2: Sort (Newest -> Oldest -> Name cycle) | Grid (ek line me
+ *          2 -> 3 -> 4 -> 5 -> 6 images cycle) | Copy / Move toggle
+ *   Hint bar: swipe tip + kul items count.
+ * Selection IMAGE ID par hoti hai (sort badalne se selection nahi
+ * tutti). Move mode confirm par EXTRA_MOVE=true jata hai — asal
+ * original-delete BulkStageActivity commit (copy verify) ke baad
+ * karti hai.
  *
  * Selection FAST hai: tap = ek toggle; SWIPE (paint-style, v129) ya
  * LONG-PRESS + DRAG = poora swept range select (BulkGallerySelect);
- * drag ke doran kinare par grid auto-scroll bhi hota hai; Select All
- * current view ke liye; upar live selected count. Confirm par tamam
- * selected URIs BulkStageActivity ko wapas — wahan se wohi purana
- * staging + Duplicates SHA-256 flow chalta hai.
+ * drag ke doran kinare par grid auto-scroll bhi hota hai. Confirm par
+ * tamam selected URIs BulkStageActivity ko wapas — wahan se wohi
+ * purana staging + Duplicates SHA-256 flow chalta hai.
  *
  * Performance: grid me sirf chhote sampled thumbnails (LruCache +
- * background decode, full-size kabhi nahi). Grid ki density staging
- * wali Rows setting (bulk_wallpapers_stage/cols) se ati hai.
+ * background decode, full-size kabhi nahi).
  *
  * Permission: app ke paas first-run chain se storage/media access hota
  * hai; MediaStore parhna na ho sake to screen band ho jati hai or
@@ -56,6 +68,8 @@ public class BulkGalleryActivity extends Activity {
 
     private static final String LOG_TAG = "BulkGallery";
     public static final String EXTRA_URIS = "gallery_uris";
+    /** v130: confirm ke waqt mode Move tha — Stage in URIs par move-intent lagati hai. */
+    public static final String EXTRA_MOVE = "gallery_move";
 
     private static final class Bucket {
         final String id;
@@ -68,17 +82,32 @@ public class BulkGalleryActivity extends Activity {
     private final List<Bucket> mBuckets = new ArrayList<>();
     private int mTotalCount = 0;
 
-    // Grid state
+    // Grid state — entries DISPLAY order me; selection image ID par
     private boolean mInGrid = false;
     private String mGridTitle = "";
-    private final List<Long> mImageIds = new ArrayList<>();
-    private final Set<Integer> mSelected = new HashSet<>();
+    private List<BulkGalleryState.Entry> mEntries = new ArrayList<>();
+    private final Set<Long> mSelectedIds = new HashSet<>();
     private GridView mGrid;
     private GalleryAdapter mAdapter;
-    private TextView mCountLabel;
-    private int mCols = 3;
+    private int mCols = BulkGalleryState.MIN_COLUMNS;
+    private int mSortMode = BulkGalleryState.SORT_NEWEST;
+    private int mMode = BulkGalleryState.MODE_COPY;
 
-    // Drag-select state
+    // Toolbar refs (refresh ke liye)
+    private TextView mCountLabel;
+    private TextView mSelectAllBtn;
+    private TextView mConfirmBtn;
+    private TextView mSortLabel;
+    private TextView mGridLabel;
+    private LinearLayout mCopyPill;
+    private LinearLayout mMovePill;
+    private ImageView mCopyIcon;
+    private ImageView mMoveIcon;
+    private TextView mCopyLabel;
+    private TextView mMoveLabel;
+    private TextView mTotalLabel;
+
+    // Drag-select state (positions — display order par hisaab)
     private boolean mDragging = false;
     private int mDragAnchor = -1;
     private int mDragCurrent = -1;
@@ -94,8 +123,6 @@ public class BulkGalleryActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
-        mCols = BulkStaging.clampColumns(
-            getSharedPreferences("bulk_wallpapers_stage", MODE_PRIVATE).getInt("cols", 3));
         new Thread(() -> {
             boolean ok = loadBuckets();
             runOnUiThread(() -> {
@@ -113,7 +140,7 @@ public class BulkGalleryActivity extends Activity {
     public void onBackPressed() {
         if (mInGrid) {
             mInGrid = false;
-            mSelected.clear();
+            mSelectedIds.clear();
             showFolders();
             return;
         }
@@ -160,8 +187,9 @@ public class BulkGalleryActivity extends Activity {
         }
     }
 
-    private List<Long> loadImageIds(String bucketId) {
-        List<Long> out = new ArrayList<>();
+    /** Ek bucket (ya tamam) ki entries — mojooda sort ke mutabiq display order me. */
+    private List<BulkGalleryState.Entry> loadEntries(String bucketId) {
+        List<BulkGalleryState.Entry> out = new ArrayList<>();
         Cursor c = null;
         try {
             String sel = null;
@@ -172,17 +200,23 @@ public class BulkGalleryActivity extends Activity {
             }
             c = getContentResolver().query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                new String[]{MediaStore.Images.Media._ID}, sel, args,
-                MediaStore.Images.Media.DATE_ADDED + " DESC");
+                new String[]{MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    MediaStore.Images.Media.DATE_ADDED},
+                sel, args, MediaStore.Images.Media.DATE_ADDED + " DESC");
             if (c != null) {
-                while (c.moveToNext()) out.add(c.getLong(0));
+                while (c.moveToNext()) {
+                    String name = c.getString(1);
+                    out.add(new BulkGalleryState.Entry(
+                        c.getLong(0), name != null ? name : "", c.getLong(2)));
+                }
             }
         } catch (Exception e) {
             Logger.logError(LOG_TAG, "MediaStore images nahi mili: " + e);
         } finally {
             if (c != null) c.close();
         }
-        return out;
+        return BulkGalleryState.sorted(out, mSortMode);
     }
 
     private static Uri uriFor(long id) {
@@ -262,12 +296,11 @@ public class BulkGalleryActivity extends Activity {
     private void openGrid(final String bucketId, final String title) {
         mInGrid = true;
         mGridTitle = title;
-        mSelected.clear();
+        mSelectedIds.clear();
         new Thread(() -> {
-            final List<Long> ids = loadImageIds(bucketId);
+            final List<BulkGalleryState.Entry> entries = loadEntries(bucketId);
             runOnUiThread(() -> {
-                mImageIds.clear();
-                mImageIds.addAll(ids);
+                mEntries = entries;
                 buildGridUi();
             });
         }).start();
@@ -280,42 +313,8 @@ public class BulkGalleryActivity extends Activity {
         root.addView(BulkTheme.subHeader(this, mGridTitle,
             BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE)));
 
-        // Action row: selected count + Select All + Add (confirm)
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),
-            BulkTheme.dp(this, 18), BulkTheme.dp(this, 8));
-        mCountLabel = new TextView(this);
-        mCountLabel.setTextColor(BulkTheme.accent(this));
-        mCountLabel.setTextSize(12.5f);
-        mCountLabel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        bar.addView(mCountLabel, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-
-        TextView selectAll = new TextView(this);
-        selectAll.setText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
-        selectAll.setTextColor(BulkTheme.textMain(this));
-        selectAll.setTextSize(12.5f);
-        selectAll.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        selectAll.setBackground(BulkTheme.secondaryBg(this));
-        selectAll.setPadding(BulkTheme.dp(this, 10), BulkTheme.dp(this, 7),
-            BulkTheme.dp(this, 10), BulkTheme.dp(this, 7));
-        selectAll.setOnClickListener(v -> {
-            if (mSelected.size() == mImageIds.size()) mSelected.clear();
-            else for (int i = 0; i < mImageIds.size(); i++) mSelected.add(i);
-            refreshGridState();
-        });
-        bar.addView(selectAll);
-
-        TextView confirm = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.ADD), null);
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cp.leftMargin = BulkTheme.dp(this, 8);
-        confirm.setLayoutParams(cp);
-        confirm.setOnClickListener(v -> confirmSelection());
-        bar.addView(confirm);
-        root.addView(bar);
+        root.addView(buildToolbar());
+        root.addView(buildHintBar());
 
         mGrid = new GridView(this);
         mGrid.setNumColumns(mCols);
@@ -335,7 +334,7 @@ public class BulkGalleryActivity extends Activity {
             mDragging = true;
             mDragAnchor = position;
             mDragCurrent = position;
-            mDragBase = new HashSet<>(mSelected);
+            mDragBase = selectedPositions();
             applyDrag();
             return true;
         });
@@ -351,26 +350,22 @@ public class BulkGalleryActivity extends Activity {
             }
             if (action == MotionEvent.ACTION_MOVE) {
                 if (!mDragging) {
-                    // v129 PAINT SELECT: baghair long-press ke, ungli
-                    // ghaseette hi selection shuru — jis image par se
-                    // ungli guzre wo select hoti jati hai (owner ki
-                    // demand: "hath sy swipe krty jae, image select ho
-                    // jae"). Slop se chhoti harkat = scroll/tap, drag nahi.
+                    // PAINT SELECT (v129, barqarar): baghair long-press
+                    // ke, ungli ghaseette hi selection shuru — jis image
+                    // par se ungli guzre wo select hoti jati hai.
+                    // Seedha neeche scroll selection NAHI banata (owner
+                    // ke HTML wala usool: horizontal swipe = select,
+                    // vertical = scroll).
                     if (mDownPos < 0) return false;
                     float dx = Math.abs(e.getX() - mDownX);
                     float dy = Math.abs(e.getY() - mDownY);
                     int slop = BulkTheme.dp(this, 10);
                     if (dx * dx + dy * dy < slop * slop) return false;
-                    // Seedha neeche scroll karna selection NA ban jaye:
-                    // paint-select tab hi shuru jab swipe kam az kam
-                    // utna hi side par ho jitna neeche (diagonal sweep
-                    // bhi chal jata hai). Ek dafa shuru ho jaye to phir
-                    // har direction me range banta hai.
                     if (dx < dy * 0.9f) return false;
                     mDragging = true;
                     mDragAnchor = mDownPos;
                     mDragCurrent = mDownPos;
-                    mDragBase = new HashSet<>(mSelected);
+                    mDragBase = selectedPositions();
                     applyDrag();
                     return true;
                 }
@@ -405,37 +400,274 @@ public class BulkGalleryActivity extends Activity {
         refreshGridState();
     }
 
+    // ------------------------------------------------------------ v130 toolbar
+
+    /** HTML design ki 2-row toolbar: (count | Select All | CTA) / (Sort | Grid | Copy/Move). */
+    private View buildToolbar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.VERTICAL);
+        bar.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 10));
+
+        // Row 1
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        row1.setGravity(Gravity.CENTER_VERTICAL);
+        mCountLabel = new TextView(this);
+        mCountLabel.setTextColor(BulkTheme.accent(this));
+        mCountLabel.setTextSize(14);
+        mCountLabel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        row1.addView(mCountLabel);
+        row1.addView(new View(this), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        mSelectAllBtn = toolPillText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
+        mSelectAllBtn.setOnClickListener(v -> {
+            if (BulkGalleryState.isAllSelected(mSelectedIds.size(), mEntries.size())) {
+                mSelectedIds.clear();
+            } else {
+                for (BulkGalleryState.Entry e : mEntries) mSelectedIds.add(e.id);
+            }
+            refreshGridState();
+        });
+        row1.addView(mSelectAllBtn);
+
+        mConfirmBtn = new TextView(this);
+        mConfirmBtn.setTextColor(BulkTheme.onAccent(this));
+        mConfirmBtn.setTextSize(13);
+        mConfirmBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        mConfirmBtn.setGravity(Gravity.CENTER);
+        mConfirmBtn.setBackground(BulkTheme.primaryBg(this));
+        mConfirmBtn.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 9),
+            BulkTheme.dp(this, 18), BulkTheme.dp(this, 9));
+        mConfirmBtn.setClickable(true);
+        mConfirmBtn.setOnClickListener(v -> confirmSelection());
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cp.leftMargin = BulkTheme.dp(this, 8);
+        mConfirmBtn.setLayoutParams(cp);
+        row1.addView(mConfirmBtn);
+        bar.addView(row1);
+
+        // Row 2
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams r2p = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        r2p.topMargin = BulkTheme.dp(this, 10);
+        row2.setLayoutParams(r2p);
+
+        LinearLayout sortPill = toolPill(R.drawable.ic_bulk_sort);
+        mSortLabel = (TextView) sortPill.getChildAt(1);
+        sortPill.setOnClickListener(v -> {
+            mSortMode = BulkGalleryState.nextSort(mSortMode);
+            mEntries = BulkGalleryState.sorted(mEntries, mSortMode);
+            refreshGridState();
+        });
+        row2.addView(sortPill);
+
+        LinearLayout gridPill = toolPill(R.drawable.ic_bulk_grid);
+        mGridLabel = (TextView) gridPill.getChildAt(1);
+        gridPill.setOnClickListener(v -> {
+            mCols = BulkGalleryState.nextColumns(mCols);
+            if (mGrid != null) mGrid.setNumColumns(mCols);
+            refreshGridState();
+        });
+        LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        gp.leftMargin = BulkTheme.dp(this, 6);
+        gridPill.setLayoutParams(gp);
+        row2.addView(gridPill);
+
+        row2.addView(new View(this), new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        mCopyPill = toolPill(R.drawable.ic_bulk_copy);
+        mCopyIcon = (ImageView) mCopyPill.getChildAt(0);
+        mCopyLabel = (TextView) mCopyPill.getChildAt(1);
+        mCopyLabel.setText(BulkStrings.t(this, BulkStrings.COPY_MODE));
+        mCopyPill.setOnClickListener(v -> {
+            mMode = BulkGalleryState.MODE_COPY;
+            refreshGridState();
+        });
+        row2.addView(mCopyPill);
+
+        mMovePill = toolPill(R.drawable.ic_bulk_chevron);
+        mMoveIcon = (ImageView) mMovePill.getChildAt(0);
+        mMoveLabel = (TextView) mMovePill.getChildAt(1);
+        mMoveLabel.setText(BulkStrings.t(this, BulkStrings.MOVE_MODE));
+        mMovePill.setOnClickListener(v -> {
+            mMode = BulkGalleryState.MODE_MOVE;
+            refreshGridState();
+        });
+        LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mp.leftMargin = BulkTheme.dp(this, 6);
+        mMovePill.setLayoutParams(mp);
+        row2.addView(mMovePill);
+        bar.addView(row2);
+        return bar;
+    }
+
+    /** Hint bar (HTML): swipe tip bayein, kul items dayein — accent-soft patti. */
+    private View buildHintBar() {
+        LinearLayout hint = new LinearLayout(this);
+        hint.setOrientation(LinearLayout.HORIZONTAL);
+        hint.setGravity(Gravity.CENTER_VERTICAL);
+        hint.setBackgroundColor(BulkTheme.iconBoxColor(this));
+        hint.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 6),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 6));
+        TextView tip = new TextView(this);
+        tip.setText(BulkStrings.t(this, BulkStrings.SWIPE_TIP));
+        tip.setTextColor(BulkTheme.accent(this));
+        tip.setTextSize(11);
+        hint.addView(tip, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        mTotalLabel = new TextView(this);
+        mTotalLabel.setTextColor(BulkTheme.accent(this));
+        mTotalLabel.setTextSize(11);
+        mTotalLabel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        hint.addView(mTotalLabel);
+        return hint;
+    }
+
+    /** Chhota pill button sirf text ke sath (Select All jesa). */
+    private TextView toolPillText(String text) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextSize(12);
+        b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        b.setTextColor(BulkTheme.textMain(this));
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(toolPillBg(false));
+        b.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 11), BulkTheme.dp(this, 7));
+        b.setClickable(true);
+        return b;
+    }
+
+    /** Chhota pill button icon + label ke sath (Sort / Grid / Copy / Move). Label = child 1. */
+    private LinearLayout toolPill(int iconRes) {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(Gravity.CENTER);
+        pill.setBackground(toolPillBg(false));
+        pill.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 11), BulkTheme.dp(this, 7));
+        pill.setClickable(true);
+        ImageView iv = BulkTheme.icon(this, iconRes, BulkTheme.textSub(this), 13);
+        pill.addView(iv);
+        TextView tv = new TextView(this);
+        tv.setTextSize(12);
+        tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tv.setTextColor(BulkTheme.textMain(this));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = BulkTheme.dp(this, 5);
+        tv.setLayoutParams(lp);
+        pill.addView(tv);
+        return pill;
+    }
+
+    /** Tool pill ka background: aam = glass + halki border; active (mode) = accent-soft + accent border. */
+    private android.graphics.drawable.Drawable toolPillBg(boolean active) {
+        return active
+            ? BulkTheme.roundedBg(this, BulkTheme.iconBoxColor(this), 20,
+                BulkTheme.accent(this), 1)
+            : BulkTheme.roundedBg(this, BulkTheme.glassBg(this), 20,
+                BulkTheme.accentBorder(this), 1);
+    }
+
+    private void styleModePill(LinearLayout pill, ImageView icon, TextView label, boolean active) {
+        if (pill == null) return;
+        pill.setBackground(toolPillBg(active));
+        int fg = active ? BulkTheme.accent(this) : BulkTheme.textMain(this);
+        label.setTextColor(fg);
+        icon.setColorFilter(active ? BulkTheme.accent(this) : BulkTheme.textSub(this),
+            android.graphics.PorterDuff.Mode.SRC_IN);
+    }
+
+    // ------------------------------------------------------------ selection state
+
+    /** Mojooda selection ki positions (display order par) — drag ke base ke liye. */
+    private Set<Integer> selectedPositions() {
+        Set<Integer> out = new HashSet<>();
+        for (int i = 0; i < mEntries.size(); i++) {
+            if (mSelectedIds.contains(mEntries.get(i).id)) out.add(i);
+        }
+        return out;
+    }
+
     private void applyDrag() {
-        mSelected.clear();
-        mSelected.addAll(BulkGallerySelect.dragSelection(mDragBase, mDragAnchor, mDragCurrent));
+        Set<Integer> pos = BulkGallerySelect.dragSelection(mDragBase, mDragAnchor, mDragCurrent);
+        mSelectedIds.clear();
+        for (int p : pos) {
+            if (p >= 0 && p < mEntries.size()) mSelectedIds.add(mEntries.get(p).id);
+        }
         refreshGridState();
     }
 
     private void toggle(int position) {
-        if (mSelected.contains(position)) mSelected.remove(position);
-        else mSelected.add(position);
+        if (position < 0 || position >= mEntries.size()) return;
+        long id = mEntries.get(position).id;
+        if (mSelectedIds.contains(id)) mSelectedIds.remove(id);
+        else mSelectedIds.add(id);
         refreshGridState();
     }
 
     private void refreshGridState() {
+        int n = mSelectedIds.size();
         if (mCountLabel != null) {
-            mCountLabel.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mSelected.size()));
+            mCountLabel.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, n));
+        }
+        if (mSelectAllBtn != null) {
+            mSelectAllBtn.setText(BulkStrings.t(this,
+                BulkGalleryState.isAllSelected(n, mEntries.size())
+                    ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL));
+        }
+        if (mConfirmBtn != null) {
+            boolean move = mMode == BulkGalleryState.MODE_MOVE;
+            if (n > 0) {
+                mConfirmBtn.setText(BulkStrings.format(this,
+                    move ? BulkStrings.MOVE_COUNT : BulkStrings.ADD_COUNT, n));
+            } else {
+                mConfirmBtn.setText(BulkStrings.t(this,
+                    move ? BulkStrings.MOVE : BulkStrings.ADD));
+            }
+            mConfirmBtn.setEnabled(n > 0);
+            mConfirmBtn.setAlpha(n > 0 ? 1f : 0.45f);
+        }
+        if (mSortLabel != null) {
+            mSortLabel.setText(BulkStrings.t(this,
+                mSortMode == BulkGalleryState.SORT_OLDEST ? BulkStrings.SORT_OLDEST
+                    : mSortMode == BulkGalleryState.SORT_NAME ? BulkStrings.SORT_BY_NAME
+                    : BulkStrings.SORT_NEWEST));
+        }
+        if (mGridLabel != null) {
+            mGridLabel.setText(mCols + "x");
+        }
+        styleModePill(mCopyPill, mCopyIcon, mCopyLabel, mMode == BulkGalleryState.MODE_COPY);
+        styleModePill(mMovePill, mMoveIcon, mMoveLabel, mMode == BulkGalleryState.MODE_MOVE);
+        if (mTotalLabel != null) {
+            mTotalLabel.setText(BulkStrings.format(this, BulkStrings.ITEMS_COUNT, mEntries.size()));
         }
         if (mAdapter != null) mAdapter.notifyDataSetChanged();
         BulkFonts.applyToTree(this, mGrid);
     }
 
     private void confirmSelection() {
-        if (mSelected.isEmpty()) {
+        if (mSelectedIds.isEmpty()) {
             finish();
             return;
         }
         ArrayList<Uri> uris = new ArrayList<>();
-        for (int i = 0; i < mImageIds.size(); i++) {
-            if (mSelected.contains(i)) uris.add(uriFor(mImageIds.get(i)));
+        for (BulkGalleryState.Entry e : mEntries) {
+            if (mSelectedIds.contains(e.id)) uris.add(uriFor(e.id));
         }
         Intent data = new Intent();
         data.putParcelableArrayListExtra(EXTRA_URIS, uris);
+        data.putExtra(EXTRA_MOVE, mMode == BulkGalleryState.MODE_MOVE);
         setResult(RESULT_OK, data);
         finish();
     }
@@ -443,9 +675,9 @@ public class BulkGalleryActivity extends Activity {
     // ------------------------------------------------------------ adapter + thumbs
 
     private final class GalleryAdapter extends BaseAdapter {
-        @Override public int getCount() { return mImageIds.size(); }
-        @Override public Object getItem(int position) { return mImageIds.get(position); }
-        @Override public long getItemId(int position) { return mImageIds.get(position); }
+        @Override public int getCount() { return mEntries.size(); }
+        @Override public Object getItem(int position) { return mEntries.get(position); }
+        @Override public long getItemId(int position) { return mEntries.get(position).id; }
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
@@ -479,8 +711,8 @@ public class BulkGalleryActivity extends Activity {
             }
             int cellSize = gridCellSize();
             cell.setLayoutParams(new GridView.LayoutParams(cellSize, cellSize));
-            long id = mImageIds.get(position);
-            boolean sel = mSelected.contains(position);
+            long id = mEntries.get(position).id;
+            boolean sel = mSelectedIds.contains(id);
             check.setVisibility(sel ? View.VISIBLE : View.GONE);
             cell.setAlpha(sel ? 0.82f : 1f);
             loadThumb(id, iv);

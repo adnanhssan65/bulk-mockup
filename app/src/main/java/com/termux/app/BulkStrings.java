@@ -215,6 +215,23 @@ public final class BulkStrings {
     public static final String PERM_POPUP_MSG = "perm_popup_msg";
     public static final String PERM_MANUAL_TAG = "perm_manual_tag";
 
+    // v130 — gallery toolbar (owner ka HTML design: All Images Gallery Manager)
+    public static final String UNSELECT_ALL = "unselect_all";
+    public static final String COPY_MODE = "copy_mode";
+    public static final String MOVE_MODE = "move_mode";
+    public static final String MOVE = "move";
+    public static final String ADD_COUNT = "add_count";
+    public static final String MOVE_COUNT = "move_count";
+    public static final String SORT_NEWEST = "sort_newest";
+    public static final String SORT_OLDEST = "sort_oldest";
+    public static final String SORT_BY_NAME = "sort_by_name";
+    public static final String SWIPE_TIP = "swipe_tip";
+    public static final String ITEMS_COUNT = "items_count";
+    public static final String MOVED_ORIGINALS_TOAST = "moved_originals_toast";
+    public static final String DELETE_DROPPED_TITLE = "delete_dropped_title";
+    public static final String DELETE_DROPPED_MSG = "delete_dropped_msg";
+    public static final String DELETED_TOAST = "deleted_toast";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -463,6 +480,27 @@ public final class BulkStrings {
             "Storage permission ke baghair wallpapers add/run nahi ho sakte. Permissions screen se allow kar dein.",
             "Storage permission ke baghair wallpapers add/run nahi ho sakte. Permissions screen se allow kar dein.");
         put(PERM_MANUAL_TAG, "Manual", "Manual");
+
+        // v130 — gallery toolbar + Move
+        put(UNSELECT_ALL, "Unselect All", "Sab Unselect Karo");
+        put(COPY_MODE, "Copy", "Copy");
+        put(MOVE_MODE, "Move", "Move");
+        put(MOVE, "Move", "Move Karo");
+        put(ADD_COUNT, "Add (%d)", "Add Karo (%d)");
+        put(MOVE_COUNT, "Move (%d)", "Move Karo (%d)");
+        put(SORT_NEWEST, "Newest", "Naye Pehle");
+        put(SORT_OLDEST, "Oldest", "Purane Pehle");
+        put(SORT_BY_NAME, "Name", "Naam");
+        put(SWIPE_TIP, "Tip: Swipe/drag horizontally across images to select",
+            "Tip: Images select karne ke liye ungli side par ghaseetein");
+        put(ITEMS_COUNT, "%d items", "%d items");
+        put(MOVED_ORIGINALS_TOAST, "%d original(s) deleted from gallery (moved)",
+            "%d original gallery se delete ho gaye (move hue the)");
+        put(DELETE_DROPPED_TITLE, "Delete Wallpapers", "Wallpapers Delete Karo");
+        put(DELETE_DROPPED_MSG,
+            "Delete %d dropped wallpaper(s) from this project? The files will be removed from the project folder. This cannot be undone.",
+            "Is project se %d dropped wallpaper delete kar dun? Files project folder se hat jayengi. Ye wapas nahi hoga.");
+        put(DELETED_TOAST, "%d wallpaper(s) deleted", "%d wallpaper delete ho gaye");
     }
 
     private BulkStrings() {}

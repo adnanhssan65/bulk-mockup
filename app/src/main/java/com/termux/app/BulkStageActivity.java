@@ -1,16 +1,21 @@
 package com.termux.app;
 
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.app.RecoverableSecurityException;
 import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -36,6 +41,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,18 +64,33 @@ import java.util.Set;
  * staged images selected project ke <N>_wallpapers me copy (picker
  * order, +1 second mtime steps). "Run Now" = Add + BulkRunHelper se
  * run (sawal app poochti hai / saved jawab pipe hote hain).
+ *
+ * v130 (owner ki hidayat): staging KHAALI ho to screen par sirf ek
+ * chhoti "Add Wallpapers" pill row — koi bara khaali box nahi, koi
+ * locked bar nahi. Pehli image stage hote hi poora maujooda UI
+ * (project + Drop Box + bar) waisa hi wapas aa jata hai.
+ *
+ * v130 MOVE: Gallery se Move mode me pick hue items par move-intent
+ * persist hota hai. Commit par jis item ki copy VERIFY ho jaye
+ * (dest file mojood + khaali nahi), us ka gallery original baad me
+ * MediaStore delete flow se delete hota hai — API 30+ par ek hi
+ * system confirmation (createDeleteRequest), API 29 par har item ki
+ * apni consent. Copy fail hue item ka original KABHI delete nahi hota.
  */
 public class BulkStageActivity extends Activity {
 
     private static final String LOG_TAG = "BulkStage";
     private static final int REQ_PICK = 41;
     private static final int REQ_GALLERY = 43;
+    private static final int REQ_DELETE = 44;
 
     // Staging persistence (screen band hone par bhi mehfooz)
     private static final String PREFS_STAGE = "bulk_wallpapers_stage";
     private static final String KEY_ITEMS = "items";
     private static final String KEY_PROJECT = "project";
     private static final String KEY_COLS = "cols";
+    private static final String KEY_MOVE_URIS = "move_uris";
+    private static final String KEY_PENDING_DELETES = "pending_move_deletes";
 
     private List<BulkProjects.ProjectInfo> mProjects = new ArrayList<>();
     private int mSelectedNumber = -1;
@@ -84,6 +105,25 @@ public class BulkStageActivity extends Activity {
 
     private boolean mCopying = false;
     private final Object mStageLock = new Object();
+
+    // v130 MOVE: jin staged URIs par move-intent hai (Gallery Move mode
+    // se aye) — commit par copy verify hone ke baad in ke originals
+    // delete hote hain. Stage prefs me persist (KEY_MOVE_URIS).
+    private final Set<String> mMoveUris = new HashSet<>();
+    private boolean mDeletingOriginals = false;
+    private int mPendingDeleteCount = 0;
+    private int mDeletedSoFar = 0;
+    private List<ConsentItem> mConsentQueue = null;
+
+    /** API 29: ek original ki delete-consent (exception ke sath). */
+    private static final class ConsentItem {
+        final Uri uri;
+        final RecoverableSecurityException error;
+        ConsentItem(Uri uri, RecoverableSecurityException error) {
+            this.uri = uri;
+            this.error = error;
+        }
+    }
 
     // View refs (refresh ke liye)
     private Spinner mSpinner;
@@ -102,6 +142,11 @@ public class BulkStageActivity extends Activity {
     private LinearLayout mProgressBar;
     private TextView mUnlockHint;
     private TextView mDropEmpty;
+    // v130: khaali staging par ye sab GONE — sirf pick pill row rehti hai
+    private View mLinkView;
+    private View mStep1View;
+    private View mDropBoxView;
+    private View mBottomBarView;
 
     // ------------------------------------------------------------ lifecycle
 
@@ -137,6 +182,9 @@ public class BulkStageActivity extends Activity {
             mSpinner.setSelection(sel);
         }
         refreshStates();
+        // v130: pichle commit ke reh gaye move-deletes (masalan Run ke
+        // baad activity band ho gayi thi) — Stage khulte hi mukammal karo
+        processPendingDeletes();
     }
 
     private List<BulkProjects.ProjectInfo> loadProjects() {
@@ -168,14 +216,47 @@ public class BulkStageActivity extends Activity {
         mSelectedNumber = sp.getInt(KEY_PROJECT, -1);
         mCols = BulkStaging.clampColumns(sp.getInt(KEY_COLS, 2));
         if (selectedProject() == null) mSelectedNumber = -1;
+        mMoveUris.clear();
+        mMoveUris.addAll(decodeUriSet(sp.getString(KEY_MOVE_URIS, "")));
+        pruneMoveUris();
     }
 
     private void persistStage() {
+        pruneMoveUris();
         stagePrefs().edit()
             .putString(KEY_ITEMS, BulkStaging.encode(mStaged))
             .putInt(KEY_PROJECT, mSelectedNumber)
             .putInt(KEY_COLS, mCols)
+            .putString(KEY_MOVE_URIS, encodeUriSet(mMoveUris))
             .apply();
+    }
+
+    /** Move-intent sirf un URIs par rehta hai jo ab bhi staged hain. */
+    private void pruneMoveUris() {
+        if (mMoveUris.isEmpty()) return;
+        Set<String> staged = new HashSet<>();
+        for (BulkStaging.Item it : mStaged) staged.add(it.uri);
+        mMoveUris.retainAll(staged);
+    }
+
+    private static Set<String> decodeUriSet(String data) {
+        Set<String> out = new LinkedHashSet<>();
+        if (data == null || data.isEmpty()) return out;
+        for (String line : data.split("\n", -1)) {
+            String s = line.trim();
+            if (!s.isEmpty()) out.add(s);
+        }
+        return out;
+    }
+
+    private static String encodeUriSet(Set<String> uris) {
+        StringBuilder sb = new StringBuilder();
+        for (String u : uris) {
+            if (u == null || u.isEmpty()) continue;
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(u);
+        }
+        return sb.toString();
     }
 
     // ------------------------------------------------------------ image picker
@@ -199,11 +280,18 @@ public class BulkStageActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_DELETE) {
+            // v130: MediaStore delete consent ka result (data aksar null hota hai)
+            onDeleteRequestResult(resultCode);
+            return;
+        }
         if (resultCode != RESULT_OK || data == null) return;
         if (requestCode == REQ_GALLERY) {
-            // App Gallery se ayi selection — aage wohi staging flow
+            // App Gallery se ayi selection — aage wohi staging flow.
+            // v130: Move mode me confirm hua tha to in URIs par move-intent.
             ArrayList<Uri> uris = data.getParcelableArrayListExtra(BulkGalleryActivity.EXTRA_URIS);
-            if (uris != null && !uris.isEmpty()) handlePicked(uris);
+            boolean move = data.getBooleanExtra(BulkGalleryActivity.EXTRA_MOVE, false);
+            if (uris != null && !uris.isEmpty()) handlePicked(uris, move);
             return;
         }
         if (requestCode != REQ_PICK) return;
@@ -223,6 +311,15 @@ public class BulkStageActivity extends Activity {
 
     /** Dono routes (App Gallery / System Picker) ka mushtarka staging rasta. */
     private void handlePicked(List<Uri> picked) {
+        handlePicked(picked, false);
+    }
+
+    /**
+     * @param move Gallery ke Move mode se aye hain — staging me in par
+     *             move-intent lage ga (commit + copy verify ke baad
+     *             original delete). System Picker hamesha copy-only hai.
+     */
+    private void handlePicked(List<Uri> picked, final boolean move) {
         // Persistable permission + naam/size yahin (halka kaam); hash or
         // duplicates ka faisla background thread par hota hai.
         // v128: video kisi bhi route se aye to khamoshi se skip — video
@@ -240,7 +337,7 @@ public class BulkStageActivity extends Activity {
             infos.add(info);
         }
         if (kept.isEmpty()) return;
-        new Thread(() -> processPicked(kept, infos)).start();
+        new Thread(() -> processPicked(kept, infos, move)).start();
     }
 
     /** Pick video hai? Naam ki extension ya resolver ka video/* MIME. */
@@ -259,7 +356,7 @@ public class BulkStageActivity extends Activity {
      * mojooda staged hashes se muqabla — duplicate ho to staging ki
      * bajaye Duplicates holding me; warna hash ke sath staging me add.
      */
-    private void processPicked(List<Uri> picked, List<String[]> infos) {
+    private void processPicked(List<Uri> picked, List<String[]> infos, boolean move) {
         // 1) Mojooda staged items ke ghayab hashes bhardo (snapshot par)
         List<BulkStaging.Item> snapshot;
         synchronized (mStageLock) { snapshot = new ArrayList<>(mStaged); }
@@ -309,6 +406,16 @@ public class BulkStageActivity extends Activity {
             }
             for (BulkStaging.Item item : accepted) {
                 BulkStaging.addIfAbsent(mStaged, item);
+            }
+            if (move) {
+                // Sirf asal staged hue items par intent — duplicate
+                // (holding me gaya) item project me copy hi nahi hota,
+                // us ka original delete karna ghalat hoga
+                for (BulkStaging.Item item : accepted) {
+                    if (BulkStaging.containsUri(mStaged, item.uri)) {
+                        mMoveUris.add(item.uri);
+                    }
+                }
             }
             persistStage();
         }
@@ -429,12 +536,16 @@ public class BulkStageActivity extends Activity {
 
         // Naya design: pick pill row pehle, phir project, phir Drop Box
         body.addView(pickRow());
-        body.addView(systemPickerLink());
-        body.addView(step1Panel(), panelLp(12));
-        body.addView(dropBoxPanel(), panelLp(12));
+        mLinkView = systemPickerLink();
+        body.addView(mLinkView);
+        mStep1View = step1Panel();
+        body.addView(mStep1View, panelLp(12));
+        mDropBoxView = dropBoxPanel();
+        body.addView(mDropBoxView, panelLp(12));
 
         // Fixed bottom action bar (design): unlock hint + Add / Run Now
-        root.addView(bottomBar());
+        mBottomBarView = bottomBar();
+        root.addView(mBottomBarView);
 
         refreshStates();
         refreshStagedViews();
@@ -1045,6 +1156,14 @@ public class BulkStageActivity extends Activity {
 
     /** Lock halat: commit/run sirf project + staged images ke sath. */
     private void refreshStates() {
+        // v130: staging KHAALI ho to sirf pick pill row — bara khaali
+        // box (Step 1 + Drop Box panels) or locked bottom bar nahi.
+        // Pehli image stage hote hi sab wapas VISIBLE.
+        boolean stageEmpty = mStaged.isEmpty();
+        if (mLinkView != null) mLinkView.setVisibility(stageEmpty ? View.GONE : View.VISIBLE);
+        if (mStep1View != null) mStep1View.setVisibility(stageEmpty ? View.GONE : View.VISIBLE);
+        if (mDropBoxView != null) mDropBoxView.setVisibility(stageEmpty ? View.GONE : View.VISIBLE);
+        if (mBottomBarView != null) mBottomBarView.setVisibility(stageEmpty ? View.GONE : View.VISIBLE);
         BulkProjects.ProjectInfo sel = selectedProject();
         boolean hasProject = sel != null;
         if (mStep1Status != null) {
@@ -1113,6 +1232,7 @@ public class BulkStageActivity extends Activity {
         if (!BulkStaging.canCommit(sel.number, mStaged.size())) return;
         if (runNow && sel.workCmd == null) return;
         final List<BulkStaging.Item> todo = new ArrayList<>(mStaged);
+        final Set<String> moveSnapshot = new HashSet<>(mMoveUris);
         final File destDir = BulkProjects.wallpapersDir(sel.number);
         mCopying = true;
         refreshStates();
@@ -1124,10 +1244,10 @@ public class BulkStageActivity extends Activity {
             runOnUiThread(() -> {
                 mCopying = false;
                 setProgressUi(false, "", 0);
+                Set<String> failedSet = new HashSet<>(result.failedUris);
                 if (result.copied > 0) {
                     // Sirf copy hue items staging se saaf — fail hue (or copy ke
                     // doran add hue naye) items mehfooz rehte hain
-                    Set<String> failedSet = new HashSet<>(result.failedUris);
                     List<BulkStaging.Item> keep = new ArrayList<>();
                     for (BulkStaging.Item it : mStaged) {
                         boolean inTodo = BulkStaging.containsUri(todo, it.uri);
@@ -1137,6 +1257,16 @@ public class BulkStageActivity extends Activity {
                     mStaged = keep;
                     persistStage();
                 }
+                // v130 MOVE: copy VERIFY hue + move-intent wale items ke
+                // originals delete-queue me (asal delete processPendingDeletes
+                // karegi — fail hue item ka original kabhi queue nahi hota)
+                List<Uri> moveDelete = new ArrayList<>();
+                for (BulkStaging.Item it : todo) {
+                    if (!failedSet.contains(it.uri) && moveSnapshot.contains(it.uri)) {
+                        moveDelete.add(Uri.parse(it.uri));
+                    }
+                }
+                if (!moveDelete.isEmpty()) queuePendingDeletes(moveDelete);
                 refreshStagedViews();
                 if (result.copied == 0) {
                     BulkTheme.showToast(BulkStageActivity.this, "Copy fail ho gaya.");
@@ -1149,9 +1279,14 @@ public class BulkStageActivity extends Activity {
                 BulkTheme.showToast(BulkStageActivity.this, msg);
                 BulkLog.add(msg); // v129: Home live-log card ke liye
                 if (runNow) {
-                    // v127: run ke sawal app manage karti hai (BulkRunHelper)
+                    // v127: run ke sawal app manage karti hai (BulkRunHelper).
+                    // Move-deletes yahan process nahi hote — run ke baad
+                    // activity band ho jati hai; queue prefs me mehfooz
+                    // hai, agli dafa Stage khulte hi process hogi.
                     BulkRunHelper.startRun(BulkStageActivity.this, sel,
                         () -> finish());
+                } else {
+                    processPendingDeletes();
                 }
             });
         }).start();
@@ -1179,6 +1314,13 @@ public class BulkStageActivity extends Activity {
                 ? item.name : displayName(cr, uri);
             File dest = uniqueFile(destDir, sanitizeFileName(rawName));
             boolean ok = copyUri(cr, uri, dest);
+            if (ok && (!dest.exists() || dest.length() == 0)) {
+                // v130: copy VERIFY — dest mojood + khaali na ho, warna
+                // fail gino (Move wala original isi verify par delete hota hai)
+                //noinspection ResultOfMethodCallIgnored
+                dest.delete();
+                ok = false;
+            }
             if (ok) {
                 result.copied++;
                 //noinspection ResultOfMethodCallIgnored
@@ -1258,6 +1400,151 @@ public class BulkStageActivity extends Activity {
         } finally {
             try { if (in != null) in.close(); } catch (Exception ignored) {}
             try { if (out != null) out.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    // ------------------------------------------------------------ v130 MOVE — originals delete
+
+    /** Copy verify hue move items ko delete-queue (prefs) me daalo — process alag se hota hai. */
+    private void queuePendingDeletes(List<Uri> uris) {
+        SharedPreferences sp = stagePrefs();
+        Set<String> pending = decodeUriSet(sp.getString(KEY_PENDING_DELETES, ""));
+        for (Uri u : uris) pending.add(u.toString());
+        sp.edit().putString(KEY_PENDING_DELETES, encodeUriSet(pending)).apply();
+    }
+
+    /**
+     * Queue me pare move-originals ka asal delete. Ek dafa me ek hi
+     * process; list pehle saaf kar di jati hai taake dobara launch na ho
+     * (consent cancel ho to original mehfooz rehta hai — copy project
+     * me pehle se mehfooz hai).
+     */
+    private void processPendingDeletes() {
+        if (mDeletingOriginals || mCopying) return;
+        SharedPreferences sp = stagePrefs();
+        Set<String> pending = decodeUriSet(sp.getString(KEY_PENDING_DELETES, ""));
+        if (pending.isEmpty()) return;
+        sp.edit().putString(KEY_PENDING_DELETES, "").apply();
+        List<Uri> uris = new ArrayList<>();
+        for (String s : pending) uris.add(Uri.parse(s));
+        mDeletingOriginals = true;
+        mPendingDeleteCount = uris.size();
+        mDeletedSoFar = 0;
+        deleteOriginals(uris);
+    }
+
+    private void deleteOriginals(final List<Uri> uris) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            try {
+                // Poore batch ke liye EK system confirmation dialog
+                PendingIntent pi = MediaStore.createDeleteRequest(getContentResolver(), uris);
+                startIntentSenderForResult(pi.getIntentSender(), REQ_DELETE, null, 0, 0, 0);
+                return;
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Delete request nahi bana, seedha rasta: " + e);
+            }
+        }
+        new Thread(() -> {
+            int deleted = 0;
+            List<ConsentItem> consent = new ArrayList<>();
+            for (Uri u : uris) {
+                try {
+                    if (getContentResolver().delete(u, null, null) > 0) { deleted++; continue; }
+                    if (deleteFileFallback(u)) { deleted++; continue; }
+                } catch (RecoverableSecurityException rse) {
+                    // API 29: is item ke liye user ki razamandi chahiye
+                    consent.add(new ConsentItem(u, rse));
+                    continue;
+                } catch (Exception e) {
+                    Logger.logError(LOG_TAG, "Original delete fail " + u + ": " + e);
+                    continue;
+                }
+                Logger.logError(LOG_TAG, "Original delete nahi hua: " + u);
+            }
+            final int fDeleted = deleted;
+            final List<ConsentItem> fConsent = consent;
+            runOnUiThread(() -> {
+                mDeletedSoFar = fDeleted;
+                if (!fConsent.isEmpty()) {
+                    mConsentQueue = new ArrayList<>(fConsent);
+                    launchNextConsent();
+                } else {
+                    finishDeleteOriginals(fDeleted);
+                }
+            });
+        }).start();
+    }
+
+    /** MediaStore delete 0 rows de to asal file (All-Files-Access se) hata kar rescan. */
+    private boolean deleteFileFallback(Uri uri) {
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(uri,
+                new String[]{MediaStore.Images.Media.DATA}, null, null, null);
+            if (c == null || !c.moveToFirst()) return false;
+            String path = c.getString(0);
+            if (path == null || path.isEmpty()) return false;
+            File f = new File(path);
+            if (!f.exists() || !f.delete()) return false;
+            android.media.MediaScannerConnection.scanFile(this,
+                new String[]{path}, null, null);
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
+    /** API 29 consent queue: ek item ki razamandi, phir delete, phir agli. */
+    private void launchNextConsent() {
+        if (mConsentQueue == null || mConsentQueue.isEmpty()) {
+            mConsentQueue = null;
+            finishDeleteOriginals(mDeletedSoFar);
+            return;
+        }
+        ConsentItem item = mConsentQueue.get(0);
+        try {
+            IntentSender sender = item.error.getUserAction().getActionIntent().getIntentSender();
+            startIntentSenderForResult(sender, REQ_DELETE, null, 0, 0, 0);
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Consent nahi khula " + item.uri + ": " + e);
+            mConsentQueue.remove(0);
+            launchNextConsent();
+        }
+    }
+
+    private void onDeleteRequestResult(int resultCode) {
+        if (mConsentQueue != null && !mConsentQueue.isEmpty()) {
+            // API 29 wala rasta: sirf pehle item ki razamandi thi
+            final ConsentItem item = mConsentQueue.remove(0);
+            if (resultCode != RESULT_OK) {
+                mConsentQueue = null;
+                finishDeleteOriginals(mDeletedSoFar);
+                return;
+            }
+            new Thread(() -> {
+                boolean ok = false;
+                try {
+                    ok = getContentResolver().delete(item.uri, null, null) > 0
+                        || deleteFileFallback(item.uri);
+                } catch (Exception ignored) {}
+                if (ok) mDeletedSoFar++;
+                runOnUiThread(this::launchNextConsent);
+            }).start();
+            return;
+        }
+        // API 30+ batch request: OK = poora batch delete ho gaya
+        finishDeleteOriginals(resultCode == RESULT_OK ? mPendingDeleteCount : mDeletedSoFar);
+    }
+
+    private void finishDeleteOriginals(int deleted) {
+        mDeletingOriginals = false;
+        mConsentQueue = null;
+        if (deleted > 0) {
+            String msg = BulkStrings.format(this, BulkStrings.MOVED_ORIGINALS_TOAST, deleted);
+            BulkTheme.showToast(this, msg);
+            BulkLog.add(msg);
         }
     }
 
