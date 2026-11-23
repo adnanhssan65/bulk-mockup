@@ -202,10 +202,10 @@ jobs:
           echo "$BULK_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/bulk.jks"
           ls -l "$RUNNER_TEMP/bulk.jks"
 
-      - name: Unit tests (projects.conf parser + BulkProjects)
+      - name: Unit tests (projects.conf parser + BulkProjects + BulkStaging)
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --stacktrace
 
       - name: APK build (release, signed)
         env:
@@ -245,6 +245,13 @@ jobs:
           grep -q 'com.termux.app.BulkAddProjectActivity' /tmp/tree.txt \
             && echo "BulkAddProjectActivity OK" \
             || { echo "FAIL: BulkAddProjectActivity manifest me sahi naam se nahi"; exit 1; }
+          # v125 screen: Projects
+          grep -q 'com.termux.app.BulkProjectsActivity' /tmp/tree.txt \
+            && echo "BulkProjectsActivity OK" \
+            || { echo "FAIL: BulkProjectsActivity manifest me sahi naam se nahi"; exit 1; }
+          grep -q 'com.termux.app.BulkDuplicatesActivity' /tmp/tree.txt \
+            && echo "BulkDuplicatesActivity OK" \
+            || { echo "FAIL: BulkDuplicatesActivity manifest me sahi naam se nahi"; exit 1; }
           echo "MANIFEST CHECK OK"
 
       - name: APK asset check — termux-usr.dat sahi naam + size ke sath andar ho

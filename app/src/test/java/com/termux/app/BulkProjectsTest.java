@@ -224,4 +224,123 @@ public class BulkProjectsTest {
         assertEquals("cd /storage/emulated/0/mockup_project_12 && python adnan_core.py process 12",
             BulkProjects.fullCommand(12, "adnan_core.py", "process"));
     }
+
+    // ------------------------------------------------------------ v125: Run/Batch/Delete commands
+
+    @Test
+    public void runBatchDeleteCommands() {
+        // Projects screen ke teenon actions — command ki shakal har action par
+        assertEquals("cd /storage/emulated/0/mockup_project_9 && python w9.py process 9",
+            BulkProjects.fullCommand(9, "w9.py", "process"));
+        assertEquals("cd /storage/emulated/0/mockup_project_9 && python w9.py batch 9",
+            BulkProjects.fullCommand(9, "w9.py", "batch"));
+        assertEquals("cd /storage/emulated/0/mockup_project_9 && python w9.py del 9",
+            BulkProjects.fullCommand(9, "w9.py", "del"));
+    }
+
+    // ------------------------------------------------------------ v125: ZIP add — exactly once
+
+    /** BulkProjectInstaller.appendAliases ka decision loop (pure hissa) yahan simulate hota hai. */
+    private static String simulateAliasAppend(String content, int n, String script) {
+        StringBuilder add = new StringBuilder();
+        String[] aliasNames = {"w" + n, "d" + n, "b" + n};
+        List<String> lines = BulkProjects.aliasLines(n, script);
+        for (int i = 0; i < aliasNames.length; i++) {
+            if (!BulkProjects.aliasAlreadyDefined(content, aliasNames[i])) {
+                add.append(lines.get(i)).append("\n");
+            }
+        }
+        return content + add;
+    }
+
+    /** BulkProjectInstaller.appendConfLine ka decision (pure hissa). */
+    private static String simulateConfAppend(String content, int n) {
+        if (BulkProjects.confHasProject(content, n)) return content;
+        return content + BulkProjects.confLine(n) + "\n";
+    }
+
+    private static int occurrences(String haystack, String needle) {
+        int count = 0;
+        int idx = 0;
+        while ((idx = haystack.indexOf(needle, idx)) >= 0) {
+            count++;
+            idx += needle.length();
+        }
+        return count;
+    }
+
+    @Test
+    public void aliasAppendExactlyOnceOnReAdd() {
+        String bashrc = "# user ki apni file\n";
+        bashrc = simulateAliasAppend(bashrc, 9, "w9.py");
+        assertEquals(1, occurrences(bashrc, "alias w9="));
+        assertEquals(1, occurrences(bashrc, "alias d9="));
+        assertEquals(1, occurrences(bashrc, "alias b9="));
+        // Dobara add (re-add) — kuch nahi badalna chahiye
+        String again = simulateAliasAppend(bashrc, 9, "w9.py");
+        assertEquals(bashrc, again);
+    }
+
+    @Test
+    public void aliasAppendKeepsExistingUserAlias() {
+        // User ki apni w9 pehle se hai (alag script) — sirf d9/b9 add hon, w9 waisi ki waisi
+        String bashrc = "alias w9='cd /storage/emulated/0/mockup_project_9 && python custom.py process 9'\n";
+        String out = simulateAliasAppend(bashrc, 9, "w9.py");
+        assertEquals(1, occurrences(out, "alias w9="));
+        assertTrue(out.contains("custom.py"));
+        assertEquals(1, occurrences(out, "alias d9="));
+        assertEquals(1, occurrences(out, "alias b9="));
+    }
+
+    @Test
+    public void confAppendExactlyOnceOnReAdd() {
+        String conf = simulateConfAppend("", 9);
+        assertEquals(1, occurrences(conf, "Project 9 |"));
+        String again = simulateConfAppend(conf, 9);
+        assertEquals(conf, again);
+        // Dusra project add ho sakta hai — pehla wala duplicate nahi hona chahiye
+        String two = simulateConfAppend(again, 10);
+        assertEquals(1, occurrences(two, "Project 9 |"));
+        assertEquals(1, occurrences(two, "Project 10 |"));
+    }
+
+    @Test
+    public void confAppendSkipsWhenCustomNameExists() {
+        // projects.conf me custom naam ke sath project 9 pehle se hai (command w9 se pehchan)
+        String conf = "Mera Project | w9 | b9 | d9\n";
+        assertTrue(BulkProjects.confHasProject(conf, 9));
+        assertEquals(conf, simulateConfAppend(conf, 9));
+    }
+
+    // ------------------------------------------------------------ v125: subfolders + dir helpers
+
+    @Test
+    public void subfolderNamesForInstall() {
+        assertEquals(
+            Arrays.asList("9_wallpapers", "9_Mockups", "9_Ready_Wallpapers", "Ready_Upload_Batches"),
+            BulkProjects.subfolderNames(9));
+        assertEquals(
+            Arrays.asList("17_wallpapers", "17_Mockups", "17_Ready_Wallpapers", "Ready_Upload_Batches"),
+            BulkProjects.subfolderNames(17));
+    }
+
+    @Test
+    public void isImageFileCheck() {
+        assertTrue(BulkProjects.isImageFile("photo.JPG"));
+        assertTrue(BulkProjects.isImageFile("a.png"));
+        assertTrue(BulkProjects.isImageFile("b.webp"));
+        assertFalse(BulkProjects.isImageFile("script.py"));
+        assertFalse(BulkProjects.isImageFile("notes.txt"));
+        assertFalse(BulkProjects.isImageFile(null));
+    }
+
+    @Test
+    public void dirHelpersPointInsideProject() {
+        assertEquals("/storage/emulated/0/mockup_project_7/7_wallpapers",
+            BulkProjects.wallpapersDir(7).getPath());
+        assertEquals("/storage/emulated/0/mockup_project_7/7_Mockups",
+            BulkProjects.mockupsDir(7).getPath());
+        assertEquals("/storage/emulated/0/mockup_project_7/7_Ready_Wallpapers",
+            BulkProjects.readyDir(7).getPath());
+    }
 }

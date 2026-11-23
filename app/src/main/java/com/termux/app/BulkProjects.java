@@ -67,6 +67,36 @@ public final class BulkProjects {
         return new File(STORAGE_ROOT, projectDirName(n));
     }
 
+    public static File wallpapersDir(int n) {
+        return new File(projectDir(n), n + "_wallpapers");
+    }
+
+    public static File mockupsDir(int n) {
+        return new File(projectDir(n), n + "_Mockups");
+    }
+
+    public static File readyDir(int n) {
+        return new File(projectDir(n), n + "_Ready_Wallpapers");
+    }
+
+    /** Naam image file wala hai ya nahi (preview grids ke liye). */
+    public static boolean isImageFile(String name) {
+        if (name == null) return false;
+        String n = name.toLowerCase();
+        return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png")
+            || n.endsWith(".webp") || n.endsWith(".gif") || n.endsWith(".bmp");
+    }
+
+    /** Project install par banne wale subfolders (installer inhi ko banata hai). */
+    public static List<String> subfolderNames(int n) {
+        List<String> subs = new ArrayList<>();
+        subs.add(n + "_wallpapers");
+        subs.add(n + "_Mockups");
+        subs.add(n + "_Ready_Wallpapers");
+        subs.add("Ready_Upload_Batches");
+        return subs;
+    }
+
     /** "mockup_project_15" se 15; na mile to -1. */
     public static int parseFolderNumber(String folderName) {
         if (folderName == null) return -1;

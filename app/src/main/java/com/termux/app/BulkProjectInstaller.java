@@ -88,8 +88,7 @@ public final class BulkProjectInstaller {
             throw new Exception("Project " + n + " pehle se hai.");
         }
         copyDir(extractedProjectDir, target);
-        String[] subs = {n + "_wallpapers", n + "_Mockups", n + "_Ready_Wallpapers", "Ready_Upload_Batches"};
-        for (String sub : subs) {
+        for (String sub : BulkProjects.subfolderNames(n)) {
             File d = new File(target, sub);
             if (!d.exists()) d.mkdirs();
         }

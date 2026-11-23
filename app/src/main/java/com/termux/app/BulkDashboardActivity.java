@@ -1,27 +1,31 @@
 package com.termux.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.termux.R;
 import com.termux.shared.logger.Logger;
 
-import java.util.List;
-
 /**
- * Termux Mod — Dashboard (v124). App ki front screen (LAUNCHER).
- *
- * Bilkul saada screen: bare buttons, projects ki plain list (naam, counts,
- * Run / Delete / Batch), or neeche Terminal / Permissions / Updates / About.
- * Koi fancy styling nahi — standard Android look.
+ * Termux Mod — Home (v125). App ki front screen (LAUNCHER), approved
+ * design ki native shakal: top bar (drawer + theme toggle), hero,
+ * wave, 4 glass pill rows — Add Wallpapers / Projects / New Project
+ * (ZIP) / Terminal — footer badge + credits + waves, or left sidebar
+ * drawer. Projects ki list ab alag screen (BulkProjectsActivity) par hai.
  *
  * Pehli setup mukammal na ho to ye screen TermuxActivity ki taraf bhej
  * deti hai (wahan bootstrap + packages setup v123 ki tarah chalta hai);
@@ -37,6 +41,10 @@ public class BulkDashboardActivity extends Activity {
     public static final String EXTRA_OPEN_DASHBOARD_AFTER_SETUP = "bulk_open_dashboard_after_setup";
 
     private boolean mRoutedToSetup = false;
+    private View mScrim;
+    private View mDrawer;
+    private int mDrawerWidth;
+    private boolean mDrawerOpen = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,199 +71,536 @@ public class BulkDashboardActivity extends Activity {
         super.onResume();
         if (mRoutedToSetup) return;
         if (!BulkMockupSetup.isSetupDone()) return; // setup abhi chal raha hoga
-        buildUi(); // har dafa fresh — counts taaza rehte hain
+        // Duplicates expiry — dashboard khulne par TTL guzri copies saaf
+        new Thread(() -> BulkDuplicatesStore.runExpiry(this)).start();
+        buildUi();
         // App ke andar wale projects: jo folder na ho, peeche lag jata hai
         BulkProjectBundles.installInBackground(this, () -> runOnUiThread(() -> {
-            if (!isFinishing()) buildUi();
+            if (!isFinishing() && !mDrawerOpen) buildUi();
         }));
     }
 
-    private void buildUi() {
-        int dp = (int) (getResources().getDisplayMetrics().density + 0.5f);
-        int pad = 16 * dp;
+    // ------------------------------------------------------------ UI
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(pad, pad, pad, pad);
+    private void buildUi() {
+        BulkTheme.applyWindow(this);
+        mDrawerOpen = false;
+        int dp = BulkTheme.dp(this, 1);
+
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(BulkTheme.appBg(this));
+
+        BulkWaveView rays = new BulkWaveView(this, BulkWaveView.MODE_RAYS);
+        frame.addView(rays, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // ---- main column (scroll sirf chhoti screens par kaam ayega)
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+
+        // Top utility bar: drawer button (left) + theme toggle (right)
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 14), BulkTheme.dp(this, 20), BulkTheme.dp(this, 4));
+        topBar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_menu, 34, v -> openDrawer()));
+        topBar.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        int themeIcon = BulkTheme.isLight(this) ? R.drawable.ic_bulk_moon : R.drawable.ic_bulk_sun;
+        topBar.addView(BulkTheme.circleButton(this, themeIcon, 34, v -> {
+            BulkTheme.toggle(this);
+            buildUi();
+        }));
+        column.addView(topBar);
+
+        // Hero
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.HORIZONTAL);
+        hero.setClipChildren(false);
+        hero.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 4), BulkTheme.dp(this, 20), 0);
+
+        LinearLayout heroLeft = new LinearLayout(this);
+        heroLeft.setOrientation(LinearLayout.VERTICAL);
+        heroLeft.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        android.widget.ImageView monitor = BulkTheme.icon(this, R.drawable.ic_bulk_monitor, BulkTheme.accent(this), 42);
+        monitor.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 42), BulkTheme.dp(this, 37)));
+        heroLeft.addView(monitor);
 
         TextView title = new TextView(this);
-        title.setText("Termux Mod");
-        title.setTextSize(22);
-        title.setPadding(0, 0, 0, 12 * dp);
-        root.addView(title);
+        title.setText(twoToneTitle());
+        title.setTextSize(27);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(0, BulkTheme.dp(this, 6), 0, 0);
+        title.setLayoutParams(titleLp);
+        heroLeft.addView(title);
 
-        Button addWallpapers = new Button(this);
-        addWallpapers.setText("Wallpapers Add Karo");
-        addWallpapers.setTextSize(17);
-        addWallpapers.setOnClickListener(v -> {
-            try {
-                startActivity(new Intent(this, BulkWallpapersActivity.class));
-            } catch (Exception e) {
-                Toast.makeText(this, "Wallpapers wali screen nahi khul saki.", Toast.LENGTH_SHORT).show();
-            }
-        });
-        root.addView(addWallpapers, fullWidth());
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Powerful Terminal Experience");
+        subtitle.setTextSize(11.5f);
+        subtitle.setTypeface(medium());
+        subtitle.setTextColor(BulkTheme.textSub(this));
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.setMargins(0, BulkTheme.dp(this, 6), 0, 0);
+        subtitle.setLayoutParams(subLp);
+        heroLeft.addView(subtitle);
 
-        Button addProject = new Button(this);
-        addProject.setText("Naya Project Add Karo (ZIP)");
-        addProject.setTextSize(17);
-        addProject.setOnClickListener(v -> {
-            try {
-                startActivity(new Intent(this, BulkAddProjectActivity.class));
-            } catch (Exception e) {
-                Toast.makeText(this, "Project add wali screen nahi khul saki.", Toast.LENGTH_SHORT).show();
-            }
-        });
-        root.addView(addProject, fullWidth());
+        View accentBar = new View(this);
+        accentBar.setBackground(BulkTheme.accentBarBg(this));
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(BulkTheme.dp(this, 96), BulkTheme.dp(this, 2));
+        barLp.setMargins(0, BulkTheme.dp(this, 8), 0, 0);
+        accentBar.setLayoutParams(barLp);
+        heroLeft.addView(accentBar);
+        hero.addView(heroLeft);
 
-        TextView projectsHeader = new TextView(this);
-        projectsHeader.setText("PROJECTS");
-        projectsHeader.setTextSize(16);
-        projectsHeader.setPadding(0, 14 * dp, 0, 6 * dp);
-        root.addView(projectsHeader);
+        // 3D tilted terminal card
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(BulkTheme.heroCardBg(this));
+        card.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10), BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(BulkTheme.dp(this, 124), BulkTheme.dp(this, 126));
+        card.setLayoutParams(cardLp);
+        card.setRotationY(-14f);
+        card.setRotationX(4f);
+        card.setCameraDistance(12000f);
 
-        List<BulkProjects.ProjectInfo> projects = loadProjects();
-        if (projects.isEmpty()) {
-            TextView empty = new TextView(this);
-            empty.setText("Koi project nahi.");
-            empty.setTextSize(14);
-            root.addView(empty);
+        LinearLayout dots = new LinearLayout(this);
+        dots.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < 3; i++) {
+            View dot = new View(this);
+            GradientDrawable dotBg = new GradientDrawable();
+            dotBg.setShape(GradientDrawable.OVAL);
+            dotBg.setColor(BulkTheme.textMuted(this));
+            dot.setBackground(dotBg);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(BulkTheme.dp(this, 6), BulkTheme.dp(this, 6));
+            if (i > 0) dlp.setMargins(BulkTheme.dp(this, 6), 0, 0, 0);
+            dot.setLayoutParams(dlp);
+            dots.addView(dot);
         }
-        for (final BulkProjects.ProjectInfo p : projects) {
-            TextView name = new TextView(this);
-            name.setText(p.name);
-            name.setTextSize(16);
-            name.setPadding(0, 10 * dp, 0, 0);
-            root.addView(name);
+        card.addView(dots);
+        card.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+        TextView prompt = new TextView(this);
+        prompt.setText("$_");
+        prompt.setTextSize(19);
+        prompt.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        prompt.setTextColor(BulkTheme.accent(this));
+        card.addView(prompt);
+        card.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
+        View cardBar = new View(this);
+        GradientDrawable cardBarBg = new GradientDrawable();
+        cardBarBg.setColor(BulkTheme.accentSoft(this));
+        cardBarBg.setCornerRadius(BulkTheme.dp(this, 999));
+        cardBar.setBackground(cardBarBg);
+        card.addView(cardBar, new LinearLayout.LayoutParams(BulkTheme.dp(this, 36), BulkTheme.dp(this, 4)));
+        hero.addView(card);
+        column.addView(hero);
 
-            if (p.number > 0) {
-                TextView counts = new TextView(this);
-                counts.setText(BulkProjects.countsLineFor(p.number));
-                counts.setTextSize(13);
-                root.addView(counts);
-            }
+        // Wave divider
+        BulkWaveView wave = new BulkWaveView(this, BulkWaveView.MODE_HERO_WAVE);
+        LinearLayout.LayoutParams waveLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 32));
+        waveLp.setMargins(0, -BulkTheme.dp(this, 8), 0, 0);
+        wave.setLayoutParams(waveLp);
+        column.addView(wave);
 
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            Button run = new Button(this);
-            run.setText("Run");
-            run.setEnabled(p.workCmd != null);
-            run.setOnClickListener(v -> runInTerminal(p.workCmd));
-            row.addView(run, thirdWidth());
-            Button batch = new Button(this);
-            batch.setText("Batch");
-            batch.setEnabled(p.batchCmd != null);
-            batch.setOnClickListener(v -> runInTerminal(p.batchCmd));
-            row.addView(batch, thirdWidth());
-            Button delete = new Button(this);
-            delete.setText("Delete");
-            delete.setEnabled(p.deleteCmd != null);
-            delete.setOnClickListener(v -> runInTerminal(p.deleteCmd));
-            row.addView(delete, thirdWidth());
-            root.addView(row, fullWidth());
+        // 4 pill rows
+        LinearLayout pills = new LinearLayout(this);
+        pills.setOrientation(LinearLayout.VERTICAL);
+        pills.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 6), BulkTheme.dp(this, 20), 0);
+        pills.addView(pill(R.drawable.ic_bulk_image, "Add Wallpapers",
+            v -> openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki.")));
+        pills.addView(pill(R.drawable.ic_bulk_folder, "Projects",
+            v -> openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.")), gapLp(dp));
+        pills.addView(pill(R.drawable.ic_bulk_file, "New Project (ZIP)",
+            v -> openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.")), gapLp(dp));
+        pills.addView(pill(R.drawable.ic_bulk_terminal, "Terminal",
+            v -> openTerminal()), gapLp(dp));
+        column.addView(pills);
 
-            if (p.workCmd == null) {
-                TextView note = new TextView(this);
-                note.setText("Script nahi mila");
-                note.setTextSize(12);
-                root.addView(note);
-            }
-        }
+        // Spacer
+        View spacer = new View(this);
+        LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        spacerLp.setMargins(0, BulkTheme.dp(this, 24), 0, 0);
+        spacer.setLayoutParams(spacerLp);
+        column.addView(spacer);
 
-        Button terminal = new Button(this);
-        terminal.setText("Terminal");
-        terminal.setTextSize(17);
-        LinearLayout.LayoutParams tlp = fullWidth();
-        tlp.setMargins(0, 14 * dp, 0, 0);
-        terminal.setLayoutParams(tlp);
-        terminal.setOnClickListener(v -> {
-            try {
-                startActivity(new Intent(this, TermuxActivity.class));
-            } catch (Exception e) {
-                Toast.makeText(this, "Terminal nahi khul saka.", Toast.LENGTH_SHORT).show();
-            }
-        });
-        root.addView(terminal);
+        // Footer: lines + >_ badge
+        LinearLayout badgeRow = new LinearLayout(this);
+        badgeRow.setOrientation(LinearLayout.HORIZONTAL);
+        badgeRow.setGravity(Gravity.CENTER_VERTICAL);
+        badgeRow.setPadding(BulkTheme.dp(this, 48), 0, BulkTheme.dp(this, 48), 0);
+        View lineL = new View(this);
+        lineL.setBackground(BulkTheme.lineBg(this, true));
+        badgeRow.addView(lineL, new LinearLayout.LayoutParams(0, Math.max(2, BulkTheme.dp(this, 1.5f)), 1));
+        TextView badge = new TextView(this);
+        badge.setText(">_");
+        badge.setTextSize(13.5f);
+        badge.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        badge.setTextColor(BulkTheme.accent(this));
+        badge.setGravity(Gravity.CENTER);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setShape(GradientDrawable.OVAL);
+        badgeBg.setColor(BulkTheme.glassBg(this));
+        badgeBg.setStroke(BulkTheme.dp(this, 2), BulkTheme.accent(this));
+        badge.setBackground(badgeBg);
+        LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(BulkTheme.dp(this, 38), BulkTheme.dp(this, 38));
+        badgeLp.setMargins(BulkTheme.dp(this, 12), 0, BulkTheme.dp(this, 12), 0);
+        badge.setLayoutParams(badgeLp);
+        badge.setClickable(true);
+        badge.setOnClickListener(v -> openTerminal());
+        badgeRow.addView(badge);
+        View lineR = new View(this);
+        lineR.setBackground(BulkTheme.lineBg(this, false));
+        badgeRow.addView(lineR, new LinearLayout.LayoutParams(0, Math.max(2, BulkTheme.dp(this, 1.5f)), 1));
+        column.addView(badgeRow);
 
-        LinearLayout bottomRow = new LinearLayout(this);
-        bottomRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button permissions = new Button(this);
-        permissions.setText("Permissions");
-        permissions.setOnClickListener(v -> {
-            try {
-                startActivity(new Intent(this, BulkPermissionsActivity.class));
-            } catch (Exception e) {
-                Toast.makeText(this, "Permissions screen nahi khul saki.", Toast.LENGTH_SHORT).show();
-            }
-        });
-        bottomRow.addView(permissions, thirdWidth());
-        Button updates = new Button(this);
-        updates.setText("Updates");
-        updates.setOnClickListener(v -> {
-            try {
-                startActivity(new Intent(this, BulkUpdateActivity.class));
-            } catch (Exception e) {
-                Toast.makeText(this, "Update screen nahi khul saki.", Toast.LENGTH_SHORT).show();
-            }
-        });
-        bottomRow.addView(updates, thirdWidth());
-        Button about = new Button(this);
-        about.setText("About");
-        about.setOnClickListener(v -> showAbout());
-        bottomRow.addView(about, thirdWidth());
-        root.addView(bottomRow, fullWidth());
+        // Credits
+        TextView credits = new TextView(this);
+        credits.setText(creditsText());
+        credits.setTextSize(10);
+        credits.setTypeface(Typeface.DEFAULT_BOLD);
+        credits.setGravity(Gravity.CENTER);
+        try { credits.setLetterSpacing(0.2f); } catch (Exception ignored) {}
+        LinearLayout.LayoutParams creditsLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        creditsLp.setMargins(0, BulkTheme.dp(this, 10), 0, 0);
+        credits.setLayoutParams(creditsLp);
+        column.addView(credits);
+
+        TextView phone = new TextView(this);
+        phone.setText("+44 7404032136");
+        phone.setTextSize(10);
+        phone.setTypeface(Typeface.MONOSPACE);
+        phone.setTextColor(BulkTheme.textMuted(this));
+        phone.setGravity(Gravity.CENTER);
+        try { phone.setLetterSpacing(0.18f); } catch (Exception ignored) {}
+        LinearLayout.LayoutParams phoneLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        phoneLp.setMargins(0, BulkTheme.dp(this, 2), 0, 0);
+        phone.setLayoutParams(phoneLp);
+        column.addView(phone);
+
+        // Footer waves
+        BulkWaveView footerWaves = new BulkWaveView(this, BulkWaveView.MODE_FOOTER_WAVES);
+        LinearLayout.LayoutParams fwLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 44));
+        fwLp.setMargins(0, BulkTheme.dp(this, 6), 0, 0);
+        footerWaves.setLayoutParams(fwLp);
+        column.addView(footerWaves);
 
         ScrollView scroll = new ScrollView(this);
-        scroll.addView(root);
-        setContentView(scroll);
+        scroll.setFillViewport(true);
+        scroll.addView(column, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        frame.addView(scroll, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        buildDrawer(frame);
+        setContentView(frame);
     }
 
-    private List<BulkProjects.ProjectInfo> loadProjects() {
+    private LinearLayout.LayoutParams gapLp(int dp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 52));
+        lp.setMargins(0, BulkTheme.dp(this, 10), 0, 0);
+        return lp;
+    }
+
+    private LinearLayout pill(int iconRes, String label, View.OnClickListener click) {
+        int height = BulkTheme.dp(this, 52);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), 0, BulkTheme.dp(this, 12), 0);
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height));
+        row.setClickable(true);
+        row.setOnClickListener(click);
+
+        LinearLayout iconBox = new LinearLayout(this);
+        iconBox.setGravity(Gravity.CENTER);
+        iconBox.setBackground(BulkTheme.iconBoxBg(this));
+        iconBox.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 34), BulkTheme.dp(this, 34)));
+        android.widget.ImageView iv = BulkTheme.icon(this, iconRes, BulkTheme.accent(this), 18);
+        iv.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 18), BulkTheme.dp(this, 18)));
+        iconBox.addView(iv);
+        row.addView(iconBox);
+
+        View divider = new View(this);
+        divider.setBackgroundColor(BulkTheme.accentBorder(this));
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(Math.max(1, BulkTheme.dp(this, 0.6f)), BulkTheme.dp(this, 20));
+        divLp.setMargins(BulkTheme.dp(this, 11), 0, BulkTheme.dp(this, 11), 0);
+        divider.setLayoutParams(divLp);
+        row.addView(divider);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(14.5f);
+        text.setTypeface(medium());
+        text.setTextColor(BulkTheme.textMain(this));
+        text.setSingleLine(true);
+        row.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        LinearLayout arrow = new LinearLayout(this);
+        arrow.setGravity(Gravity.CENTER);
+        arrow.setBackground(BulkTheme.arrowCircleBg(this));
+        arrow.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 26), BulkTheme.dp(this, 26)));
+        android.widget.ImageView av = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.accent(this), 14);
+        av.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        arrow.addView(av);
+        row.addView(arrow);
+        return row;
+    }
+
+    // ------------------------------------------------------------ drawer
+
+    private void buildDrawer(FrameLayout frame) {
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        mDrawerWidth = Math.min((int) (screenW * 0.78f), BulkTheme.dp(this, 286));
+
+        mScrim = new View(this);
+        mScrim.setBackgroundColor(0xAD000000);
+        mScrim.setAlpha(0f);
+        mScrim.setVisibility(View.GONE);
+        mScrim.setOnClickListener(v -> closeDrawer());
+        frame.addView(mScrim, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        FrameLayout drawerWrap = new FrameLayout(this);
+        LinearLayout drawer = new LinearLayout(this);
+        drawer.setOrientation(LinearLayout.VERTICAL);
+        drawer.setBackgroundColor(BulkTheme.drawerBg(this));
+        drawer.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 18), BulkTheme.dp(this, 14), BulkTheme.dp(this, 16));
+
+        // Header
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.TOP);
+        TextView logo = new TextView(this);
+        logo.setText(">_");
+        logo.setTextSize(14);
+        logo.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        logo.setTextColor(BulkTheme.accent(this));
+        logo.setGravity(Gravity.CENTER);
+        logo.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 12, BulkTheme.accentStrong(this), 1));
+        logo.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 36), BulkTheme.dp(this, 36)));
+        header.addView(logo);
+
+        LinearLayout headTexts = new LinearLayout(this);
+        headTexts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams htLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        htLp.setMargins(BulkTheme.dp(this, 10), 0, BulkTheme.dp(this, 6), 0);
+        headTexts.setLayoutParams(htLp);
+        TextView dTitle = new TextView(this);
+        dTitle.setText(twoToneTitle());
+        dTitle.setTextSize(16);
+        dTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        headTexts.addView(dTitle);
+        TextView dDev = new TextView(this);
+        dDev.setText("Developer: Mehar Adnan");
+        dDev.setTextSize(10.5f);
+        dDev.setTypeface(medium());
+        dDev.setTextColor(BulkTheme.textSub(this));
+        headTexts.addView(dDev);
+        TextView dPhone = new TextView(this);
+        dPhone.setText("+44 7404032136");
+        dPhone.setTextSize(10);
+        dPhone.setTypeface(Typeface.MONOSPACE);
+        dPhone.setTextColor(BulkTheme.textMuted(this));
+        headTexts.addView(dPhone);
+        header.addView(headTexts);
+        header.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_close, 28, v -> closeDrawer()));
+        drawer.addView(header);
+
+        View hLine = new View(this);
+        hLine.setBackground(BulkTheme.hLine(this));
+        LinearLayout.LayoutParams hlLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f)));
+        hlLp.setMargins(0, BulkTheme.dp(this, 14), 0, BulkTheme.dp(this, 10));
+        hLine.setLayoutParams(hlLp);
+        drawer.addView(hLine);
+
+        // Nav rows (design ki tartib)
+        drawer.addView(drawerRow("Home", true, v -> closeDrawer()));
+        drawer.addView(drawerRow("Add Wallpapers", false, v -> {
+            closeDrawer();
+            openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki.");
+        }));
+        drawer.addView(drawerRow("Projects", false, v -> {
+            closeDrawer();
+            openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.");
+        }));
+        drawer.addView(drawerRow("New Project (ZIP)", false, v -> {
+            closeDrawer();
+            openScreen(BulkAddProjectActivity.class, "Project add wali screen nahi khul saki.");
+        }));
+        drawer.addView(drawerRow("Terminal", false, v -> {
+            closeDrawer();
+            openTerminal();
+        }));
+        drawer.addView(drawerRow("Permissions", false, v -> {
+            closeDrawer();
+            openScreen(BulkPermissionsActivity.class, "Permissions screen nahi khul saki.");
+        }));
+        drawer.addView(drawerRow("Check for Updates", false, v -> {
+            closeDrawer();
+            openScreen(BulkUpdateActivity.class, "Update screen nahi khul saki.");
+        }));
+        drawer.addView(drawerRow("About", false, v -> {
+            closeDrawer();
+            BulkTheme.showAboutDialog(this);
+        }));
+
+        drawer.addView(new View(this), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+
+        // Footer
+        View fLine = new View(this);
+        fLine.setBackground(BulkTheme.hLine(this));
+        LinearLayout.LayoutParams flLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f)));
+        flLp.setMargins(0, 0, 0, BulkTheme.dp(this, 12));
+        fLine.setLayoutParams(flLp);
+        drawer.addView(fLine);
+
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL);
+        TextView version = new TextView(this);
+        version.setText("Termux Mod v125");
+        version.setTextSize(11);
+        version.setTextColor(BulkTheme.textMuted(this));
+        footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView switchTheme = new TextView(this);
+        switchTheme.setText("Switch Theme");
+        switchTheme.setTextSize(11);
+        switchTheme.setTypeface(Typeface.DEFAULT_BOLD);
+        switchTheme.setTextColor(BulkTheme.accent(this));
+        switchTheme.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 8, BulkTheme.accentBorder(this), 1));
+        switchTheme.setPadding(BulkTheme.dp(this, 10), BulkTheme.dp(this, 4), BulkTheme.dp(this, 10), BulkTheme.dp(this, 4));
+        switchTheme.setClickable(true);
+        switchTheme.setOnClickListener(v -> {
+            BulkTheme.toggle(this);
+            buildUi();
+        });
+        footer.addView(switchTheme);
+        drawer.addView(footer);
+
+        drawerWrap.addView(drawer, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        View rightBorder = new View(this);
+        rightBorder.setBackgroundColor(BulkTheme.accentStrong(this));
+        FrameLayout.LayoutParams rbLp = new FrameLayout.LayoutParams(Math.max(1, BulkTheme.dp(this, 0.8f)),
+            ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT);
+        drawerWrap.addView(rightBorder, rbLp);
+
+        FrameLayout.LayoutParams dwLp = new FrameLayout.LayoutParams(mDrawerWidth,
+            ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT);
+        drawerWrap.setLayoutParams(dwLp);
+        drawerWrap.setTranslationX(-mDrawerWidth - BulkTheme.dp(this, 16));
+        drawerWrap.setVisibility(View.GONE);
+        frame.addView(drawerWrap);
+        mDrawer = drawerWrap;
+    }
+
+    private LinearLayout drawerRow(String label, boolean active, View.OnClickListener click) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.drawerRowBg(this, active));
+        row.setPadding(BulkTheme.dp(this, 11), BulkTheme.dp(this, 9), BulkTheme.dp(this, 11), BulkTheme.dp(this, 9));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, BulkTheme.dp(this, 4));
+        row.setLayoutParams(lp);
+        row.setClickable(true);
+        row.setOnClickListener(click);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(13.5f);
+        text.setTypeface(medium());
+        text.setTextColor(active ? BulkTheme.accent(this) : BulkTheme.textMain(this));
+        row.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            active ? BulkTheme.accent(this) : BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+        return row;
+    }
+
+    private void openDrawer() {
+        if (mDrawer == null || mScrim == null) return;
+        mDrawerOpen = true;
+        mScrim.setVisibility(View.VISIBLE);
+        mDrawer.setVisibility(View.VISIBLE);
+        mScrim.animate().alpha(1f).setDuration(200).start();
+        mDrawer.animate().translationX(0).setDuration(260).start();
+    }
+
+    private void closeDrawer() {
+        if (mDrawer == null || mScrim == null) return;
+        mDrawerOpen = false;
+        mScrim.animate().alpha(0f).setDuration(200).start();
+        mDrawer.animate().translationX(-mDrawerWidth - BulkTheme.dp(this, 16)).setDuration(260)
+            .withEndAction(() -> {
+                if (!mDrawerOpen) {
+                    mDrawer.setVisibility(View.GONE);
+                    mScrim.setVisibility(View.GONE);
+                }
+            }).start();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (mDrawerOpen) {
+            closeDrawer();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    // ------------------------------------------------------------ helpers
+
+    private SpannableString twoToneTitle() {
+        SpannableString s = new SpannableString("Termux Mod");
+        s.setSpan(new ForegroundColorSpan(BulkTheme.textMain(this)), 0, 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.setSpan(new ForegroundColorSpan(BulkTheme.accent(this)), 7, 10, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return s;
+    }
+
+    private SpannableString creditsText() {
+        SpannableString s = new SpannableString("DEVELOPER • MEHAR ADNAN");
+        s.setSpan(new ForegroundColorSpan(BulkTheme.textSub(this)), 0, 11, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        s.setSpan(new ForegroundColorSpan(BulkTheme.accent(this)), 12, 23, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return s;
+    }
+
+    private static Typeface medium() {
         try {
-            return BulkProjects.mergeProjects(ProjectsLauncher.readProjectsList(), BulkProjects.scanDiskProjects());
+            return Typeface.create("sans-serif-medium", Typeface.NORMAL);
         } catch (Exception e) {
-            Logger.logError(LOG_TAG, "Projects parhne me masla: " + e.getMessage());
-            return java.util.Collections.emptyList();
+            return Typeface.DEFAULT;
         }
     }
 
-    /** Command ko terminal me chalao — TermuxActivity khol kar wahan type ho jati hai. */
-    private void runInTerminal(String command) {
-        if (command == null) return;
+    private void openScreen(Class<?> cls, String errorToast) {
         try {
-            Intent intent = new Intent(this, TermuxActivity.class);
-            intent.putExtra(EXTRA_RUN_COMMAND, command);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            startActivity(intent);
+            startActivity(new Intent(this, cls));
+        } catch (Exception e) {
+            Toast.makeText(this, errorToast, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void openTerminal() {
+        try {
+            startActivity(new Intent(this, TermuxActivity.class));
         } catch (Exception e) {
             Toast.makeText(this, "Terminal nahi khul saka.", Toast.LENGTH_SHORT).show();
         }
-    }
-
-    private void showAbout() {
-        new AlertDialog.Builder(this)
-            .setTitle("Termux Mod")
-            .setMessage("Termux Mod\nVersion: " + versionName() + "\n\n"
-                + "Tamam mockup projects ke liye — packages pehle se andar hain, koi setup nahi.\n\n"
-                + "Owner: Mehar Adnan")
-            .setPositiveButton("OK", null)
-            .show();
-    }
-
-    private String versionName() {
-        try {
-            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Exception e) {
-            return "?";
-        }
-    }
-
-    private LinearLayout.LayoutParams fullWidth() {
-        return new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    }
-
-    private LinearLayout.LayoutParams thirdWidth() {
-        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
     }
 }

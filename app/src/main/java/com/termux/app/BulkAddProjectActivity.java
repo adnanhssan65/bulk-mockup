@@ -1,18 +1,21 @@
 package com.termux.app;
 
 import android.app.Activity;
-import android.app.ProgressDialog;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
+import android.provider.OpenableColumns;
+import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
+import com.termux.R;
 import com.termux.shared.logger.Logger;
 
 import java.io.File;
@@ -21,43 +24,300 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Termux Mod — "Naya Project Add Karo (ZIP)" (v124).
+ * Termux Mod (v125) — "New Project (ZIP)" screen (approved design).
  *
  * ZIP select karo — baqi sab khud (BulkProjectInstaller): unzip, project
  * number + main script pehchanna, /storage/emulated/0/mockup_project_<N>
  * me lagana, ghayab subfolders, aliases or projects.conf line (sirf jab
  * pehle se na hon). Folder pehle se ho to ruk jata hai — overwrite nahi.
- * Screen par sirf short labels / buttons.
+ * Engine v124 wala hi hai; sirf screen design ke states me hai:
+ * idle ("Install Project Package") → installing (progress) → done.
  */
 public class BulkAddProjectActivity extends Activity {
 
     private static final String LOG_TAG = "BulkAddProject";
     private static final int REQ_PICK_ZIP = 42;
 
+    private LinearLayout mIdlePanel;
+    private LinearLayout mBusyPanel;
+    private LinearLayout mDonePanel;
+    private TextView mBusyFile;
+    private LinearLayout mBusyBar;
+    private TextView mDoneName;
+    private TextView mDoneFrom;
+    private final AtomicBoolean mBusyAnim = new AtomicBoolean(false);
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setTitle("Naya Project Add Karo");
-
+        BulkTheme.applyWindow(this);
         if (!hasStorageAccess()) {
-            showMessage("Storage permission chahiye.", true);
+            setContentView(buildMessageUi("Storage permission chahiye.", true));
             return;
         }
-        launchPicker();
+        setContentView(buildUi());
+        showState(0);
     }
 
+    /** v124 wali storage check: Android 11+ par all-files access. */
     private boolean hasStorageAccess() {
-        if (Build.VERSION.SDK_INT >= 30) {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
             try {
-                return Environment.isExternalStorageManager();
+                return android.os.Environment.isExternalStorageManager();
             } catch (Exception e) {
                 return true;
             }
         }
         return true;
     }
+
+    // ------------------------------------------------------------ UI
+
+    private View buildUi() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BulkTheme.appBg(this));
+        root.addView(BulkTheme.subHeader(this, "New Project (ZIP)",
+            "Auto-install script & mockup template"));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.setFillViewport(true);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),
+            BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
+        scroll.addView(body);
+        root.addView(scroll);
+
+        body.addView(idlePanel());
+        body.addView(busyPanel(), topLp(12));
+        body.addView(donePanel(), topLp(12));
+        return root;
+    }
+
+    private LinearLayout.LayoutParams topLp(int topDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = BulkTheme.dp(this, topDp);
+        return lp;
+    }
+
+    private LinearLayout designPanel() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(BulkTheme.glassPanel(this));
+        panel.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 22),
+            BulkTheme.dp(this, 18), BulkTheme.dp(this, 22));
+        return panel;
+    }
+
+    private View idlePanel() {
+        mIdlePanel = designPanel();
+        TextView title = new TextView(this);
+        title.setText("Install Project Package");
+        title.setTextColor(BulkTheme.textMain(this));
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        mIdlePanel.addView(title);
+
+        TextView sub = new TextView(this);
+        sub.setText("Select a .ZIP file containing script & template");
+        sub.setTextColor(BulkTheme.textMuted(this));
+        sub.setTextSize(12);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sp.topMargin = BulkTheme.dp(this, 5);
+        sub.setLayoutParams(sp);
+        mIdlePanel.addView(sub);
+
+        TextView btn = BulkTheme.primaryButton(this, "Select ZIP File", null);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bp.topMargin = BulkTheme.dp(this, 16);
+        btn.setLayoutParams(bp);
+        btn.setOnClickListener(v -> launchPicker());
+        mIdlePanel.addView(btn);
+        return mIdlePanel;
+    }
+
+    private View busyPanel() {
+        mBusyPanel = designPanel();
+        TextView label = new TextView(this);
+        label.setText("Installing Project Archive...");
+        label.setTextColor(BulkTheme.accent(this));
+        label.setTextSize(13);
+        label.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        mBusyPanel.addView(label);
+
+        mBusyFile = new TextView(this);
+        mBusyFile.setTextColor(BulkTheme.textSub(this));
+        mBusyFile.setTextSize(12.5f);
+        mBusyFile.setTypeface(android.graphics.Typeface.MONOSPACE);
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        fp.topMargin = BulkTheme.dp(this, 8);
+        mBusyFile.setLayoutParams(fp);
+        mBusyPanel.addView(mBusyFile);
+
+        mBusyBar = BulkTheme.progressTrack(this);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 4));
+        bp.topMargin = BulkTheme.dp(this, 12);
+        mBusyBar.setLayoutParams(bp);
+        mBusyPanel.addView(mBusyBar);
+        return mBusyPanel;
+    }
+
+    private View donePanel() {
+        mDonePanel = designPanel();
+        mDonePanel.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        FrameLayout circle = new FrameLayout(this);
+        circle.setBackground(BulkTheme.accentCircleBg(this));
+        circle.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 46), BulkTheme.dp(this, 46)));
+        ImageView check = BulkTheme.icon(this, R.drawable.ic_bulk_check, BulkTheme.onAccent(this), 22);
+        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 22), BulkTheme.dp(this, 22));
+        cp.gravity = Gravity.CENTER;
+        check.setLayoutParams(cp);
+        circle.addView(check);
+        mDonePanel.addView(circle);
+
+        TextView title = new TextView(this);
+        title.setText("Project Installed!");
+        title.setTextColor(BulkTheme.textMain(this));
+        title.setTextSize(16);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tp.topMargin = BulkTheme.dp(this, 12);
+        title.setLayoutParams(tp);
+        mDonePanel.addView(title);
+
+        mDoneName = new TextView(this);
+        mDoneName.setTextColor(BulkTheme.accent(this));
+        mDoneName.setTextSize(13);
+        mDoneName.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        np.topMargin = BulkTheme.dp(this, 4);
+        mDoneName.setLayoutParams(np);
+        mDonePanel.addView(mDoneName);
+
+        mDoneFrom = new TextView(this);
+        mDoneFrom.setTextColor(BulkTheme.textMuted(this));
+        mDoneFrom.setTextSize(11.5f);
+        mDoneFrom.setTypeface(android.graphics.Typeface.MONOSPACE);
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        fp.topMargin = BulkTheme.dp(this, 3);
+        mDoneFrom.setLayoutParams(fp);
+        mDonePanel.addView(mDoneFrom);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rp.topMargin = BulkTheme.dp(this, 16);
+        row.setLayoutParams(rp);
+        TextView another = BulkTheme.secondaryButton(this, "Add Another", null);
+        another.setLayoutParams(new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        another.setOnClickListener(v -> showState(0));
+        row.addView(another);
+        TextView open = BulkTheme.primaryButton(this, "Open Projects", null);
+        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        op.leftMargin = BulkTheme.dp(this, 10);
+        open.setLayoutParams(op);
+        open.setOnClickListener(v -> {
+            startActivity(new Intent(this, BulkProjectsActivity.class));
+            finish();
+        });
+        row.addView(open);
+        mDonePanel.addView(row);
+        return mDonePanel;
+    }
+
+    /** 0 = idle, 1 = installing, 2 = done */
+    private void showState(int state) {
+        if (mIdlePanel == null) return;
+        mIdlePanel.setVisibility(state == 0 ? View.VISIBLE : View.GONE);
+        mBusyPanel.setVisibility(state == 1 ? View.VISIBLE : View.GONE);
+        mDonePanel.setVisibility(state == 2 ? View.VISIBLE : View.GONE);
+        if (state == 1) startBusyAnim();
+        else mBusyAnim.set(false);
+    }
+
+    private void startBusyAnim() {
+        mBusyAnim.set(true);
+        new Thread(() -> {
+            int pct = 8;
+            while (mBusyAnim.get()) {
+                final int p = pct;
+                runOnUiThread(() -> BulkTheme.setProgress(mBusyBar, p));
+                pct += 4;
+                if (pct > 92) pct = 8;
+                try { Thread.sleep(120); } catch (InterruptedException e) { return; }
+            }
+        }).start();
+    }
+
+    private View buildMessageUi(String text, boolean showPermissionsButton) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BulkTheme.appBg(this));
+        root.setPadding(BulkTheme.dp(this, 16), BulkTheme.dp(this, 16),
+            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16));
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(BulkTheme.glassPanelStrong(this));
+        panel.setPadding(BulkTheme.dp(this, 16), BulkTheme.dp(this, 16),
+            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16));
+
+        TextView msg = new TextView(this);
+        msg.setText(text);
+        msg.setTextColor(BulkTheme.textMain(this));
+        msg.setTextSize(15);
+        panel.addView(msg);
+
+        if (showPermissionsButton) {
+            TextView perm = BulkTheme.primaryButton(this, "Permissions", null);
+            LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            pp.topMargin = BulkTheme.dp(this, 14);
+            perm.setLayoutParams(pp);
+            perm.setOnClickListener(v -> {
+                startActivity(new Intent(this, BulkPermissionsActivity.class));
+                finish();
+            });
+            panel.addView(perm);
+        }
+
+        TextView close = BulkTheme.secondaryButton(this, "Band Karo", null);
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cp.topMargin = BulkTheme.dp(this, 10);
+        close.setLayoutParams(cp);
+        close.setOnClickListener(v -> finish());
+        panel.addView(close);
+
+        root.addView(panel);
+        return root;
+    }
+
+    private void showError(String text) {
+        setContentView(buildMessageUi(text, false));
+    }
+
+    // ------------------------------------------------------------ picker + install (v124 engine)
 
     private void launchPicker() {
         try {
@@ -67,7 +327,7 @@ public class BulkAddProjectActivity extends Activity {
             startActivityForResult(intent, REQ_PICK_ZIP);
         } catch (Exception e) {
             Logger.logError(LOG_TAG, "ZIP picker nahi khula: " + e.getMessage());
-            showMessage("Picker nahi khul saka.", false);
+            showError("Picker nahi khul saka.");
         }
     }
 
@@ -76,17 +336,35 @@ public class BulkAddProjectActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQ_PICK_ZIP) return;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) {
-            finish();
+            showState(0); // cancel — idle screen par wapas
             return;
         }
         installFromZip(data.getData());
     }
 
+    private String zipDisplayName(Uri uri) {
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(uri, null, null, null, null);
+            if (c != null && c.moveToFirst()) {
+                int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (idx >= 0) {
+                    String name = c.getString(idx);
+                    if (name != null && !name.isEmpty()) return name;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        String seg = uri.getLastPathSegment();
+        return seg != null ? seg : "project.zip";
+    }
+
     private void installFromZip(final Uri zipUri) {
-        final ProgressDialog progress = new ProgressDialog(this);
-        progress.setMessage("Project add ho raha hai...");
-        progress.setCancelable(false);
-        progress.show();
+        final String zipName = zipDisplayName(zipUri);
+        mBusyFile.setText(zipName);
+        showState(1);
 
         new Thread(() -> {
             String error = null;
@@ -145,52 +423,16 @@ public class BulkAddProjectActivity extends Activity {
             final String fError = error;
             final int fNumber = addedNumber;
             runOnUiThread(() -> {
-                try { progress.dismiss(); } catch (Exception ignored) {}
+                mBusyAnim.set(false);
                 if (fError == null) {
-                    showMessage("Project " + fNumber + " tayyar hai — list me add ho gaya", false);
+                    mDoneName.setText("Project " + fNumber);
+                    mDoneFrom.setText("Extracted from " + zipName);
+                    showState(2);
                 } else {
-                    showMessage(fError != null ? fError : "Project add nahi ho saka.", false);
+                    showError(fError != null ? fError : "Project add nahi ho saka.");
                 }
             });
         }).start();
-    }
-
-    // ------------------------------------------------------------ UI
-
-    private void showMessage(String text, boolean showPermissionsButton) {
-        int dp = (int) (getResources().getDisplayMetrics().density + 0.5f);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(16 * dp, 16 * dp, 16 * dp, 16 * dp);
-
-        TextView msg = new TextView(this);
-        msg.setText(text);
-        msg.setTextSize(16);
-        msg.setPadding(0, 0, 0, 12 * dp);
-        root.addView(msg);
-
-        if (showPermissionsButton) {
-            Button perm = new Button(this);
-            perm.setText("Permissions");
-            perm.setOnClickListener(v -> {
-                try {
-                    startActivity(new Intent(this, BulkPermissionsActivity.class));
-                } catch (Exception e) {
-                    Toast.makeText(this, "Permissions screen nahi khul saki.", Toast.LENGTH_SHORT).show();
-                }
-                finish();
-            });
-            root.addView(perm, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        }
-
-        Button close = new Button(this);
-        close.setText("Band Karo");
-        close.setOnClickListener(v -> finish());
-        root.addView(close, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        setContentView(root);
     }
 
     // ------------------------------------------------------------ file helpers
