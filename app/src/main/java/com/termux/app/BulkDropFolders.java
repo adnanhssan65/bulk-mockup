@@ -2,7 +2,6 @@ package com.termux.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.media.MediaScannerConnection;
 
 import com.termux.shared.logger.Logger;
 
@@ -654,99 +653,53 @@ public final class BulkDropFolders {
      * Drop folder (Project N) mojood na ho to skip: is sync se koi
      * folder khud nahi banta (manual mode ki izzat). Subfolder tab
      * hi banta hai jab kuch copy karna ho.
-     * v141: copies dono subfolders se JORA-WAR mixed tartib me
-     * hoti hain (BulkMirror.interleavedCopyOrder — Sequence tab
-     * wali jora tareef, jora mockup ki mtime se) or har copy ke
-     * baad foran media scan, taake mirror copies ka DATE_ADDED
-     * bhi mockup -> wallpaper sequence rakhe. Pehle poora
-     * Mockups block phir poora Ready block copy hota tha or scan
-     * bilkul nahi hota tha — DATE_ADDED par sort karne wale
-     * pickers (Threads, app ki apni gallery) me wahan grouping
-     * ban jati thi.
      * @return copy hui kul files
      */
     public static int syncMirrorForProject(Context ctx, int n) {
         if (ctx == null || n <= 0) return 0;
         File dropDir = new File(rootDir(), dropFolderName(n));
         if (!dropDir.isDirectory()) return 0;
-        File mockSrcDir = BulkProjects.mockupsDir(n);
-        File readySrcDir = BulkProjects.readyDir(n);
-        File mockDstDir = new File(dropDir, BulkMirror.MOCKUPS_SUB);
-        File readyDstDir = new File(dropDir, BulkMirror.READY_SUB);
-        Map<String, String> mockSrc = mirrorSignatures(mockSrcDir);
-        Map<String, String> readySrc = mirrorSignatures(readySrcDir);
-        BulkMirror.Plan mockPlan = BulkMirror.planSync(
-            mockSrc, mirrorSignatures(mockDstDir));
-        BulkMirror.Plan readyPlan = BulkMirror.planSync(
-            readySrc, mirrorSignatures(readyDstDir));
-        if (mockPlan.isEmpty() && readyPlan.isEmpty()) return 0;
-        if (!mockPlan.toCopy.isEmpty() && !mockDstDir.isDirectory()) {
+        int copied = 0;
+        copied += syncOneMirror(ctx, n, BulkProjects.mockupsDir(n),
+            new File(dropDir, BulkMirror.MOCKUPS_SUB), true);
+        copied += syncOneMirror(ctx, n, BulkProjects.readyDir(n),
+            new File(dropDir, BulkMirror.READY_SUB), false);
+        return copied;
+    }
+
+    private static int syncOneMirror(Context ctx, int n, File srcDir, File dstDir,
+                                     boolean mockups) {
+        Map<String, String> src = mirrorSignatures(srcDir);
+        Map<String, String> dst = mirrorSignatures(dstDir);
+        BulkMirror.Plan plan = BulkMirror.planSync(src, dst);
+        if (plan.isEmpty()) return 0;
+        if (!plan.toCopy.isEmpty() && !dstDir.isDirectory()) {
             //noinspection ResultOfMethodCallIgnored
-            mockDstDir.mkdirs();
+            dstDir.mkdirs();
         }
-        if (!readyPlan.toCopy.isEmpty() && !readyDstDir.isDirectory()) {
-            //noinspection ResultOfMethodCallIgnored
-            readyDstDir.mkdirs();
-        }
-        List<BulkMirror.CopyStep> order = BulkMirror.interleavedCopyOrder(
-            new ArrayList<>(mockSrc.keySet()), mirrorMtimes(mockSrcDir),
-            new ArrayList<>(readySrc.keySet()), mirrorMtimes(readySrcDir),
-            new HashSet<>(mockPlan.toCopy), new HashSet<>(readyPlan.toCopy));
-        int copiedMockups = 0;
-        int copiedReady = 0;
-        for (BulkMirror.CopyStep step : order) {
-            File s = new File(step.mockup ? mockSrcDir : readySrcDir, step.name);
-            File d = new File(step.mockup ? mockDstDir : readyDstDir, step.name);
+        int copied = 0;
+        for (String name : plan.toCopy) {
+            File s = new File(srcDir, name);
+            File d = new File(dstDir, name);
             if (copyFileVerified(s, d)) {
                 // Mirror file par source ka mtime — agli pass me
                 // signature mil jata hai, dobara copy nahi hoti
                 //noinspection ResultOfMethodCallIgnored
                 d.setLastModified(s.lastModified());
-                scanMirrorCopy(ctx, d);
-                if (step.mockup) copiedMockups++; else copiedReady++;
+                copied++;
             }
         }
-        for (String name : mockPlan.toDelete) {
+        for (String name : plan.toDelete) {
             // Delete SIRF mirror side par — project side mehfooz
             //noinspection ResultOfMethodCallIgnored
-            new File(mockDstDir, name).delete();
+            new File(dstDir, name).delete();
         }
-        for (String name : readyPlan.toDelete) {
-            //noinspection ResultOfMethodCallIgnored
-            new File(readyDstDir, name).delete();
-        }
-        if (copiedMockups > 0) {
+        if (copied > 0) {
             BulkLog.add(BulkStrings.format(ctx,
-                BulkStrings.LOG_MIRROR_MOCKUPS, n, copiedMockups));
+                mockups ? BulkStrings.LOG_MIRROR_MOCKUPS : BulkStrings.LOG_MIRROR_READY,
+                n, copied));
         }
-        if (copiedReady > 0) {
-            BulkLog.add(BulkStrings.format(ctx,
-                BulkStrings.LOG_MIRROR_READY, n, copiedReady));
-        }
-        return copiedMockups + copiedReady;
-    }
-
-    /** v141: mirror copy ko foran MediaStore me bhejna — copy
-     *  wali tartib me hi, taake DATE_ADDED jora-war bane. */
-    private static void scanMirrorCopy(Context ctx, File f) {
-        try {
-            MediaScannerConnection.scanFile(ctx,
-                new String[]{f.getAbsolutePath()}, null, null);
-        } catch (Exception ignored) {}
-    }
-
-    /** Dir ki seedhi files (directories/hidden nahi) ke mtimes. */
-    private static Map<String, Long> mirrorMtimes(File dir) {
-        Map<String, Long> out = new HashMap<>();
-        if (dir == null || !dir.isDirectory()) return out;
-        File[] files = dir.listFiles();
-        if (files == null) return out;
-        for (File f : files) {
-            if (!f.isFile()) continue;
-            if (f.getName().startsWith(".")) continue;
-            out.put(f.getName(), f.lastModified());
-        }
-        return out;
+        return copied;
     }
 
     /** Dir ki seedhi files (directories/hidden nahi) ke signatures. */
