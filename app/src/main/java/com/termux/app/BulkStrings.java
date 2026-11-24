@@ -233,6 +233,60 @@ public final class BulkStrings {
     public static final String LOG_MIRROR_MOCKUPS = "log_mirror_mockups";
     public static final String LOG_MIRROR_READY = "log_mirror_ready";
 
+    // v135 — Control Panel
+    public static final String CONTROL_PANEL = "control_panel";
+    public static final String CP_ENTER_PASSWORD = "cp_enter_password";
+    public static final String CP_PASSWORD = "cp_password";
+    public static final String CP_WRONG_PASSWORD = "cp_wrong_password";
+    public static final String CP_UNLOCK = "cp_unlock";
+    public static final String CP_APP_LOCK = "cp_app_lock";
+    public static final String CP_APP_LOCK_HINT = "cp_app_lock_hint";
+    public static final String CP_CHANGE_PASSWORD = "cp_change_password";
+    public static final String CP_CURRENT_PASSWORD = "cp_current_password";
+    public static final String CP_NEW_PASSWORD = "cp_new_password";
+    public static final String CP_PASSWORD_CHANGED = "cp_password_changed";
+    public static final String CP_PASSWORD_MISMATCH = "cp_password_mismatch";
+    public static final String CP_APP_SECTION = "cp_app_section";
+    public static final String CP_HOME_SECTION = "cp_home_section";
+    public static final String CP_APPEARANCE_SECTION = "cp_appearance_section";
+    public static final String CP_RUN_SECTION = "cp_run_section";
+    public static final String CP_MORE_SECTION = "cp_more_section";
+    public static final String CP_APP_LOGO = "cp_app_logo";
+    public static final String CP_PICK_IMAGE = "cp_pick_image";
+    public static final String CP_LOGO_ZOOM = "cp_logo_zoom";
+    public static final String CP_APP_NAME = "cp_app_name";
+    public static final String CP_HOME_SLOGAN = "cp_home_slogan";
+    public static final String CP_HOME_ROWS = "cp_home_rows";
+    public static final String CP_FONT_SIZE = "cp_font_size";
+    public static final String CP_SIZE_SMALL = "cp_size_small";
+    public static final String CP_SIZE_NORMAL = "cp_size_normal";
+    public static final String CP_SIZE_LARGE = "cp_size_large";
+    public static final String CP_SIZE_XLARGE = "cp_size_xlarge";
+    public static final String CP_LAUNCHER_PRESET = "cp_launcher_preset";
+    public static final String CP_ICON_TILE = "cp_icon_tile";
+    public static final String CP_ICON_GLYPH = "cp_icon_glyph";
+    public static final String CP_ICON_LIGHT = "cp_icon_light";
+    public static final String CP_ICON_PRO = "cp_icon_pro";
+    public static final String CP_ICON_CHANGED = "cp_icon_changed";
+    public static final String CP_ACCENT_COLOR = "cp_accent_color";
+    public static final String CP_ACCENT_THEME = "cp_accent_theme";
+    public static final String CP_CONTACT_NUMBER = "cp_contact_number";
+    public static final String CP_SETTINGS_BACKUP = "cp_settings_backup";
+    public static final String CP_EXPORT = "cp_export";
+    public static final String CP_IMPORT = "cp_import";
+    public static final String CP_EXPORT_DONE = "cp_export_done";
+    public static final String CP_IMPORT_CONFIRM_TITLE = "cp_import_confirm_title";
+    public static final String CP_IMPORT_CONFIRM_MSG = "cp_import_confirm_msg";
+    public static final String CP_IMPORT_DONE = "cp_import_done";
+    public static final String CP_IMPORT_NOT_FOUND = "cp_import_not_found";
+    public static final String CP_IMPORT_FAILED = "cp_import_failed";
+    public static final String CP_RESET = "cp_reset";
+    public static final String CP_RESET_MSG = "cp_reset_msg";
+    public static final String CP_RESET_DONE = "cp_reset_done";
+    public static final String CP_PREVIEW_VIDEO = "cp_preview_video";
+    public static final String CP_SAVED = "cp_saved";
+    public static final String SAVE = "save_btn";
+
     // v129 — Drop Wallpapers (Ready Assets ke andar), Home live logs, permission popup
     public static final String DROP_WALLPAPERS = "drop_wallpapers";
     public static final String DROP_WALLPAPERS_SUB = "drop_wallpapers_sub";
@@ -627,6 +681,64 @@ public final class BulkStrings {
             "Delete %d selected file(s)? The files will be removed from the project folder. This cannot be undone.",
             "Select kiye hue %d file delete kar dun? Files project folder se hat jayengi. Ye wapas nahi hoga.");
         put(DONE_BTN, "Done", "Ho Gaya");
+
+        // v135 — Control Panel
+        put(CONTROL_PANEL, "Control Panel", "Control Panel");
+        put(CP_ENTER_PASSWORD, "Enter Control Panel password", "Control Panel ka password likho");
+        put(CP_PASSWORD, "Password", "Password");
+        put(CP_WRONG_PASSWORD, "Wrong password", "Ghalat password");
+        put(CP_UNLOCK, "Unlock", "Kholo");
+        put(CP_APP_LOCK, "App Lock", "App Lock");
+        put(CP_APP_LOCK_HINT, "Ask for the password when the app opens", "App khulne par password poochho");
+        put(CP_CHANGE_PASSWORD, "Change Password", "Password Badlo");
+        put(CP_CURRENT_PASSWORD, "Current Password", "Purana Password");
+        put(CP_NEW_PASSWORD, "New Password", "Naya Password");
+        put(CP_PASSWORD_CHANGED, "Password changed", "Password badal gaya");
+        put(CP_PASSWORD_MISMATCH, "Current password is wrong", "Purana password ghalat hai");
+        put(CP_APP_SECTION, "App", "App");
+        put(CP_HOME_SECTION, "Home Screen", "Home Screen");
+        put(CP_APPEARANCE_SECTION, "Appearance", "Appearance");
+        put(CP_RUN_SECTION, "Run & Folders", "Run & Folders");
+        put(CP_MORE_SECTION, "More", "More");
+        put(CP_APP_LOGO, "App Logo", "App Logo");
+        put(CP_PICK_IMAGE, "Pick Image", "Image Chuno");
+        put(CP_LOGO_ZOOM, "Logo Size", "Logo Size");
+        put(CP_APP_NAME, "App Name", "App Ka Naam");
+        put(CP_HOME_SLOGAN, "Home Slogan", "Home Slogan");
+        put(CP_HOME_ROWS, "Home Rows — Order & Show/Hide", "Home Rows — Tartib & Show/Hide");
+        put(CP_FONT_SIZE, "Font Size", "Font Size");
+        put(CP_SIZE_SMALL, "Small", "Chhota");
+        put(CP_SIZE_NORMAL, "Normal", "Normal");
+        put(CP_SIZE_LARGE, "Large", "Bara");
+        put(CP_SIZE_XLARGE, "Extra Large", "Sab Se Bara");
+        put(CP_LAUNCHER_PRESET, "Launcher Name & Icon", "Launcher Name & Icon");
+        put(CP_ICON_TILE, "Termux Mod", "Termux Mod");
+        put(CP_ICON_GLYPH, "Bulk Mockup", "Bulk Mockup");
+        put(CP_ICON_LIGHT, "Mockup Studio", "Mockup Studio");
+        put(CP_ICON_PRO, "Termux Pro", "Termux Pro");
+        put(CP_ICON_CHANGED, "Launcher name & icon changed", "Launcher name & icon badal gaya");
+        put(CP_ACCENT_COLOR, "Accent Color", "Accent Color");
+        put(CP_ACCENT_THEME, "Theme Default", "Theme Default");
+        put(CP_CONTACT_NUMBER, "Contact Admin Number", "Contact Admin Number");
+        put(CP_SETTINGS_BACKUP, "Settings Backup", "Settings Backup");
+        put(CP_EXPORT, "Export", "Export");
+        put(CP_IMPORT, "Import", "Import");
+        put(CP_EXPORT_DONE, "Settings saved to %s", "Settings %s par save ho gayin");
+        put(CP_IMPORT_CONFIRM_TITLE, "Import Settings", "Settings Import Karo");
+        put(CP_IMPORT_CONFIRM_MSG,
+            "This will replace all current settings with the backup file. Continue?",
+            "Backup file se tamam mojooda settings badal jayengi. Aage barho?");
+        put(CP_IMPORT_DONE, "Settings imported", "Settings import ho gayin");
+        put(CP_IMPORT_NOT_FOUND, "Backup file not found", "Backup file nahi mili");
+        put(CP_IMPORT_FAILED, "Import failed — file is not valid", "Import fail — file durust nahi hai");
+        put(CP_RESET, "Reset to Defaults", "Defaults Par Wapas");
+        put(CP_RESET_MSG,
+            "All settings will return to factory defaults. The Control Panel password will also reset to the default. Continue?",
+            "Tamam settings factory defaults par wapas chali jayengi. Control Panel ka password bhi default ho jayega. Aage barho?");
+        put(CP_RESET_DONE, "Settings reset to defaults", "Settings defaults par wapas ho gayin");
+        put(CP_PREVIEW_VIDEO, "Preview Video", "Preview Video");
+        put(CP_SAVED, "Saved", "Save ho gaya");
+        put(SAVE, "Save", "Save Karo");
     }
 
     private BulkStrings() {}

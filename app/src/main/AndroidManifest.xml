@@ -241,16 +241,80 @@
             android:label="Check for updates" />
 
         <!-- v124: Dashboard hi app ka front door hai (LAUNCHER) -->
+        <!-- v135: LAUNCHER entry ab 4 activity-alias presets me hai
+             (Control Panel -> Launcher Name & Icon). Har alias apna
+             label + icon rakhta hai; DEFAULT enabled = Termux Pro.
+             Dashboard activity khud bina intent-filter ke rehti hai. -->
         <activity
             android:name=".app.BulkDashboardActivity"
             android:exported="true"
-            android:label="@string/application_name">
+            android:label="@string/application_name" />
+
+        <activity-alias
+            android:name=".app.BulkIconTermuxMod"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/launcher_name_termux_mod"
+            android:targetActivity=".app.BulkDashboardActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".app.BulkIconBulkMockup"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_glyph"
+            android:roundIcon="@mipmap/ic_launcher_glyph_round"
+            android:label="@string/launcher_name_bulk_mockup"
+            android:targetActivity=".app.BulkDashboardActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".app.BulkIconMockupStudio"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_light"
+            android:roundIcon="@mipmap/ic_launcher_light_round"
+            android:label="@string/launcher_name_mockup_studio"
+            android:targetActivity=".app.BulkDashboardActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".app.BulkIconTermuxPro"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pro"
+            android:roundIcon="@mipmap/ic_launcher_pro_round"
+            android:label="@string/launcher_name_termux_pro"
+            android:targetActivity=".app.BulkDashboardActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- v135: Control Panel (password gate andar khud hai) -->
+        <activity
+            android:name=".app.BulkControlPanelActivity"
+            android:exported="false"
+            android:label="Control Panel" />
 
         <activity
             android:name=".app.BulkWallpapersActivity"

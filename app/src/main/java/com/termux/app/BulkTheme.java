@@ -90,16 +90,41 @@ public final class BulkTheme {
     // ------------------------------------------------------------ colors
 
     public static int appBg(Context c)        { return currentPalette(c).bg; }
-    public static int accent(Context c)       { return currentPalette(c).accent; }
-    public static int accentSoft(Context c)   { return currentPalette(c).accentSoft; }
-    public static int accentBorder(Context c) { return currentPalette(c).border; }
-    public static int accentStrong(Context c) { return currentPalette(c).accentStrong; }
+
+    // v135: Control Panel ka Accent override — set ho to palette ke
+    // accent ki jagah wahi rang (shades palette wale alpha se);
+    // override na ho to palette values byte-for-byte waisa hi.
+    public static int accent(Context c) {
+        BulkPalettes.Palette p = currentPalette(c);
+        return BulkPanelSettings.effectiveAccent(p.accent, BulkPanelSettings.accentOverride(c));
+    }
+
+    private static int withAlpha(int argb, int alpha) {
+        return (alpha << 24) | (argb & 0x00FFFFFF);
+    }
+
+    private static int shadeOr(Context c, int paletteValue) {
+        int ov = BulkPanelSettings.accentOverride(c);
+        if (ov == BulkPanelSettings.ACCENT_NONE) return paletteValue;
+        return withAlpha(ov, Color.alpha(paletteValue));
+    }
+
+    public static int accentSoft(Context c)   { return shadeOr(c, currentPalette(c).accentSoft); }
+    public static int accentBorder(Context c) { return shadeOr(c, currentPalette(c).border); }
+    public static int accentStrong(Context c) { return shadeOr(c, currentPalette(c).accentStrong); }
     public static int textMain(Context c)     { return currentPalette(c).text; }
     public static int textSub(Context c)      { return currentPalette(c).textSub; }
     public static int textMuted(Context c)    { return currentPalette(c).muted; }
-    public static int onAccent(Context c)     { return currentPalette(c).onAccent; }
+
+    public static int onAccent(Context c) {
+        BulkPalettes.Palette p = currentPalette(c);
+        int ov = BulkPanelSettings.accentOverride(c);
+        if (ov != BulkPanelSettings.ACCENT_NONE) return BulkPanelSettings.onAccentFor(ov);
+        return p.onAccent;
+    }
+
     public static int glassBg(Context c)      { return currentPalette(c).glassBg; }
-    public static int iconBoxColor(Context c) { return currentPalette(c).iconBox; }
+    public static int iconBoxColor(Context c) { return shadeOr(c, currentPalette(c).iconBox); }
     public static int cardStart(Context c)    { return currentPalette(c).surface; }
     public static int cardEnd(Context c)      { return currentPalette(c).surfaceMuted; }
     public static int drawerBg(Context c)     { return currentPalette(c).drawerBg; }
@@ -824,7 +849,9 @@ public final class BulkTheme {
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = new TextView(a);
-        title.setText(BulkStrings.t(a, BulkStrings.ABOUT_TITLE));
+        // v135: About ka title Control Panel wale App Name se
+        title.setText(BulkStrings.t(a, BulkStrings.ABOUT_TITLE)
+            .replace("Termux Mod", BulkPanelSettings.appName(a)));
         title.setTextSize(15);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(accent(a));
@@ -860,7 +887,8 @@ public final class BulkTheme {
         devName.setTextColor(textMain(a));
         devBox.addView(devName);
         TextView devContact = new TextView(a);
-        devContact.setText("Contact: +44 7404 032136");
+        // v135: number Control Panel ki Contact setting se
+        devContact.setText("Contact: " + BulkPanelSettings.contactNumber(a));
         devContact.setTextSize(11.5f);
         devContact.setTypeface(Typeface.MONOSPACE);
         devContact.setTextColor(accent(a));

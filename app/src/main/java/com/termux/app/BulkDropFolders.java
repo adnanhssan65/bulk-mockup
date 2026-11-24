@@ -440,7 +440,10 @@ public final class BulkDropFolders {
         if (BulkRecreateSettings.mayCreateFolders(BulkRecreateSettings.foldersAuto(ctx))) {
             ensureDropFolders(known);
         }
-        if (BulkRecreateSettings.mayCopyVideos(BulkRecreateSettings.videosAuto(ctx))) {
+        // v135: Preview Video ka master switch (Control Panel) OFF ho
+        // to video kabhi copy nahi hoti — Auto ON ho tab bhi nahi.
+        if (BulkRecreateSettings.mayCopyVideos(BulkRecreateSettings.videosAuto(ctx),
+                BulkRecreateSettings.videosEnabled(ctx))) {
             ensurePreviewVideos(ctx, known);
         }
         int fetched = fetchAll(ctx, known);

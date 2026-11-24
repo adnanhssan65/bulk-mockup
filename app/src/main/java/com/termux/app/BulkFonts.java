@@ -7,6 +7,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import com.termux.R;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -142,35 +144,63 @@ public final class BulkFonts {
 
     // ------------------------------------------------------------ apply
 
+    /** v135: Control Panel ka font-size multiplier (1.0 = Normal). */
+    public static float scaleFactor(Context c) {
+        try {
+            return BulkPanelSettings.fontScale(c);
+        } catch (Exception e) {
+            return 1f;
+        }
+    }
+
     /**
      * Activity ki poori view tree ke har TextView par mojooda font lagao
-     * (bold style mehfooz rehta hai). Default font par kuch nahi hota.
+     * (bold style mehfooz rehta hai).
+     * v135: font-size scale HAR surat lagta hai — Default (system)
+     * font par bhi; typeface ho to font + size dono sath lagte hain.
      */
     public static void apply(Activity a) {
         if (a == null) return;
         Typeface tf = typeface(a);
-        if (tf == null) return;
+        float scale = scaleFactor(a);
+        if (tf == null && scale == 1f) return;
         try {
             View root = a.findViewById(android.R.id.content);
-            if (root != null) applyToTree(root, tf);
+            if (root != null) applyToTree(root, tf, scale);
         } catch (Exception ignored) {}
     }
 
     /** Kisi bhi view tree (dialogs samet) par font lagao. */
     public static void applyToTree(View root, Typeface tf) {
-        if (root == null || tf == null) return;
+        applyToTree(root, tf, 1f);
+    }
+
+    /**
+     * Font + optional size scale. Scale ek TextView par SIRF ek dafa
+     * lagta hai (tag guard) — dobara apply double-scale nahi karta.
+     * tf null ho to sirf size scale lagta hai.
+     */
+    public static void applyToTree(View root, Typeface tf, float scale) {
+        if (root == null) return;
         if (root instanceof TextView) {
             TextView tv = (TextView) root;
             try {
-                Typeface cur = tv.getTypeface();
-                int style = cur != null ? cur.getStyle() : Typeface.NORMAL;
-                tv.setTypeface(tf, style);
+                if (tf != null) {
+                    Typeface cur = tv.getTypeface();
+                    int style = cur != null ? cur.getStyle() : Typeface.NORMAL;
+                    tv.setTypeface(tf, style);
+                }
+                if (scale != 1f && tv.getTag(R.id.bulk_font_scaled) == null) {
+                    tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
+                        tv.getTextSize() * scale);
+                    tv.setTag(R.id.bulk_font_scaled, Boolean.TRUE);
+                }
             } catch (Exception ignored) {}
         }
         if (root instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) root;
             for (int i = 0; i < vg.getChildCount(); i++) {
-                applyToTree(vg.getChildAt(i), tf);
+                applyToTree(vg.getChildAt(i), tf, scale);
             }
         }
     }
@@ -178,6 +208,8 @@ public final class BulkFonts {
     /** Dialog waghera ke liye: activity ke current font se tree par lagao. */
     public static void applyToTree(Context c, View root) {
         Typeface tf = typeface(c);
-        if (tf != null) applyToTree(root, tf);
+        float scale = scaleFactor(c);
+        if (tf == null && scale == 1f) return;
+        applyToTree(root, tf, scale);
     }
 }

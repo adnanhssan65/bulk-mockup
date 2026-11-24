@@ -23,10 +23,15 @@ public final class BulkRecreateSettings {
     private static final String PREFS = "bulk_mockup";
     public static final String KEY_FOLDERS_AUTO = "recreate_folders_auto";
     public static final String KEY_VIDEOS_AUTO = "recreate_videos_auto";
+    /** v135: Preview Video ka master on/off (Control Panel) — OFF ho to
+     *  video kabhi copy nahi hoti, Auto ON ho tab bhi nahi. */
+    public static final String KEY_VIDEOS_ENABLED = "recreate_videos_enabled";
 
     /** Factory defaults: dono MANUAL. */
     public static final boolean DEFAULT_FOLDERS_AUTO = false;
     public static final boolean DEFAULT_VIDEOS_AUTO = false;
+    /** Factory default: preview video ON (v134 wala rawaiya). */
+    public static final boolean DEFAULT_VIDEOS_ENABLED = true;
 
     private BulkRecreateSettings() {}
 
@@ -40,6 +45,11 @@ public final class BulkRecreateSettings {
     /** Preview videos khud-ba-khud copy hon? Sirf auto ON ho to. */
     public static boolean mayCopyVideos(boolean videosAuto) {
         return videosAuto;
+    }
+
+    /** v135 gate: video tab hi copy ho jab Auto ON ho OR master switch ON ho. */
+    public static boolean mayCopyVideos(boolean videosAuto, boolean videosEnabled) {
+        return videosAuto && videosEnabled;
     }
 
     // ------------------------------------------------------------ persisted
@@ -73,6 +83,20 @@ public final class BulkRecreateSettings {
     public static void setVideosAuto(Context c, boolean on) {
         try {
             prefs(c).edit().putBoolean(KEY_VIDEOS_AUTO, on).apply();
+        } catch (Exception ignored) {}
+    }
+
+    public static boolean videosEnabled(Context c) {
+        try {
+            return prefs(c).getBoolean(KEY_VIDEOS_ENABLED, DEFAULT_VIDEOS_ENABLED);
+        } catch (Exception e) {
+            return DEFAULT_VIDEOS_ENABLED;
+        }
+    }
+
+    public static void setVideosEnabled(Context c, boolean on) {
+        try {
+            prefs(c).edit().putBoolean(KEY_VIDEOS_ENABLED, on).apply();
         } catch (Exception ignored) {}
     }
 }

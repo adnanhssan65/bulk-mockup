@@ -70,10 +70,13 @@ public class BulkDashboardActivity extends Activity {
     private static boolean sPermPopupShown = false;
     private boolean mPermPopupOpen = false;
 
+    // v135: App Lock gate (Control Panel) — process me ek dafa
+    private boolean mLockGateOpen = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setTitle("Termux Mod");
+        setTitle(BulkPanelSettings.appName(this));
 
         if (!BulkMockupSetup.isSetupDone()) {
             // Setup baqi hai — terminal ki taraf bhejo; setup ke baad wapas yahin ana hai.
@@ -116,6 +119,12 @@ public class BulkDashboardActivity extends Activity {
         if (mRoutedToSetup) return;
         if (mRoutedToPermissions) return;
         if (!BulkMockupSetup.isSetupDone()) return; // setup abhi chal raha hoga
+        // v135: App Lock ON ho or is process me abhi unlock na hua ho
+        // to pehle password gate — dashboard ka kuch nahi banta.
+        if (BulkPanelSettings.appLockEnabled(this) && !BulkPanelSettings.sAppUnlocked) {
+            showAppLockGate();
+            return;
+        }
         // Duplicates expiry — dashboard khulne par TTL guzri copies saaf
         new Thread(() -> BulkDuplicatesStore.runExpiry(this)).start();
         buildUi();
@@ -167,6 +176,87 @@ public class BulkDashboardActivity extends Activity {
         mLogHandler.removeCallbacks(mLogTicker);
         stopLogPulse();
         super.onPause();
+    }
+
+    /**
+     * v135 — App Lock gate: themed password popup (Control Panel wala
+     * hi password). Cancel nahi hota; durust password par unlock flag
+     * set karke activity recreate — aam onResume flow phir khud chalta
+     * hai. Ghalat par error text, entry nahi.
+     */
+    private void showAppLockGate() {
+        if (mLockGateOpen || isFinishing()) return;
+        mLockGateOpen = true;
+        // Peeche kuch nazar na aye — khaali themed background
+        View blank = new View(this);
+        blank.setBackgroundColor(BulkTheme.appBg(this));
+        setContentView(blank);
+
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.CONTROL_PANEL), dialog);
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
+
+        TextView hint = new TextView(this);
+        hint.setText(BulkStrings.t(this, BulkStrings.CP_ENTER_PASSWORD));
+        hint.setTextSize(12.5f);
+        hint.setTextColor(BulkTheme.textSub(this));
+        panel.addView(hint);
+
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint(BulkStrings.t(this, BulkStrings.CP_PASSWORD));
+        input.setSingleLine(true);
+        input.setTextSize(14);
+        input.setTextColor(BulkTheme.textMain(this));
+        input.setHintTextColor(BulkTheme.textMuted(this));
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setBackground(BulkTheme.pillBg(this));
+        input.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        LinearLayout.LayoutParams inLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        inLp.setMargins(0, BulkTheme.dp(this, 10), 0, 0);
+        input.setLayoutParams(inLp);
+        panel.addView(input);
+
+        final TextView error = new TextView(this);
+        error.setTextSize(12);
+        error.setTextColor(BulkTheme.danger(this));
+        error.setVisibility(View.GONE);
+        LinearLayout.LayoutParams erLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        erLp.setMargins(0, BulkTheme.dp(this, 8), 0, 0);
+        error.setLayoutParams(erLp);
+        panel.addView(error);
+
+        TextView unlock = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.CP_UNLOCK), null);
+        LinearLayout.LayoutParams unLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        unLp.setMargins(0, BulkTheme.dp(this, 14), 0, 0);
+        unlock.setLayoutParams(unLp);
+        unlock.setOnClickListener(v -> {
+            if (BulkPanelSettings.verifyPassword(this, input.getText().toString())) {
+                BulkPanelSettings.sAppUnlocked = true;
+                mLockGateOpen = false;
+                dialog.dismiss();
+                recreate();
+            } else {
+                error.setText(BulkStrings.t(this, BulkStrings.CP_WRONG_PASSWORD));
+                error.setVisibility(View.VISIBLE);
+            }
+        });
+        panel.addView(unlock);
+        // X se band karne par bhi gate wapas — unlock baghair entry nahi
+        dialog.setOnDismissListener(d -> {
+            if (!BulkPanelSettings.sAppUnlocked && BulkPanelSettings.appLockEnabled(this)) {
+                mLockGateOpen = false;
+                showAppLockGate();
+            }
+        });
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     /** Hero card ki log lines taaza karo (BulkLog ki aakhri ~6 lines). */
@@ -596,9 +686,21 @@ public class BulkDashboardActivity extends Activity {
         heroLeft.setOrientation(LinearLayout.VERTICAL);
         heroLeft.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
-        android.widget.ImageView monitor = BulkTheme.icon(this, R.drawable.ic_bulk_monitor, BulkTheme.accent(this), 42);
-        monitor.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 42), BulkTheme.dp(this, 37)));
-        heroLeft.addView(monitor);
+        // v135: Control Panel se custom logo laga ho to wahi, warna
+        // pehle wala monitor icon (design bilkul waisa hi)
+        android.graphics.Bitmap customLogo = BulkPanelSettings.loadLogo(this);
+        if (customLogo != null) {
+            android.widget.ImageView logoIv = new android.widget.ImageView(this);
+            logoIv.setImageBitmap(customLogo);
+            logoIv.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            logoIv.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 12, BulkTheme.accentBorder(this), 1));
+            logoIv.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 42), BulkTheme.dp(this, 42)));
+            heroLeft.addView(logoIv);
+        } else {
+            android.widget.ImageView monitor = BulkTheme.icon(this, R.drawable.ic_bulk_monitor, BulkTheme.accent(this), 42);
+            monitor.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 42), BulkTheme.dp(this, 37)));
+            heroLeft.addView(monitor);
+        }
 
         TextView title = new TextView(this);
         title.setText(twoToneTitle());
@@ -611,7 +713,8 @@ public class BulkDashboardActivity extends Activity {
         heroLeft.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText(BulkStrings.t(this, BulkStrings.SUBTITLE));
+        // v135: slogan Control Panel ki Home Slogan setting se
+        subtitle.setText(BulkPanelSettings.slogan(this));
         subtitle.setTextSize(11.5f);
         subtitle.setTypeface(medium());
         subtitle.setTextColor(BulkTheme.textSub(this));
@@ -688,19 +791,46 @@ public class BulkDashboardActivity extends Activity {
 
         // Pill rows (v129 tartib): Add Wallpapers / Run / Projects /
         // Preview Ready Assets / Terminal (Terminal hamesha LAST)
+        // v135: tartib + show/hide Control Panel ki Home Rows setting
+        // se — default bilkul v129 wali hi tartib hai.
         LinearLayout pills = new LinearLayout(this);
         pills.setOrientation(LinearLayout.VERTICAL);
         pills.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 6), BulkTheme.dp(this, 20), 0);
-        pills.addView(pill(R.drawable.ic_bulk_image, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
-            v -> openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki.")));
-        pills.addView(pill(R.drawable.ic_bulk_play, BulkStrings.t(this, BulkStrings.NAV_RUN),
-            v -> showQuickRun()), gapLp(dp));
-        pills.addView(pill(R.drawable.ic_bulk_folder, BulkStrings.t(this, BulkStrings.PROJECTS),
-            v -> openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki.")), gapLp(dp));
-        pills.addView(pill(R.drawable.ic_bulk_eye, BulkStrings.t(this, BulkStrings.PREVIEW_READY),
-            v -> openScreen(BulkReadyAssetsActivity.class, "Ready Assets screen nahi khul saki.")), gapLp(dp));
-        pills.addView(pill(R.drawable.ic_bulk_terminal, BulkStrings.t(this, BulkStrings.TERMINAL),
-            v -> openTerminal()), gapLp(dp));
+        java.util.List<String> homeRows = BulkPanelSettings.visibleRows(
+            BulkPanelSettings.homeOrder(this), BulkPanelSettings.homeHidden(this));
+        boolean firstPill = true;
+        for (String rowId : homeRows) {
+            LinearLayout p;
+            switch (rowId) {
+                case BulkPanelSettings.ROW_RUN:
+                    p = pill(R.drawable.ic_bulk_play, BulkStrings.t(this, BulkStrings.NAV_RUN),
+                        v -> showQuickRun());
+                    break;
+                case BulkPanelSettings.ROW_PROJECTS:
+                    p = pill(R.drawable.ic_bulk_folder, BulkStrings.t(this, BulkStrings.PROJECTS),
+                        v -> openScreen(BulkProjectsActivity.class, "Projects screen nahi khul saki."));
+                    break;
+                case BulkPanelSettings.ROW_PREVIEW:
+                    p = pill(R.drawable.ic_bulk_eye, BulkStrings.t(this, BulkStrings.PREVIEW_READY),
+                        v -> openScreen(BulkReadyAssetsActivity.class, "Ready Assets screen nahi khul saki."));
+                    break;
+                case BulkPanelSettings.ROW_TERMINAL:
+                    p = pill(R.drawable.ic_bulk_terminal, BulkStrings.t(this, BulkStrings.TERMINAL),
+                        v -> openTerminal());
+                    break;
+                case BulkPanelSettings.ROW_ADD:
+                default:
+                    p = pill(R.drawable.ic_bulk_image, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
+                        v -> openScreen(BulkWallpapersActivity.class, "Wallpapers wali screen nahi khul saki."));
+                    break;
+            }
+            if (firstPill) {
+                pills.addView(p);
+                firstPill = false;
+            } else {
+                pills.addView(p, gapLp(dp));
+            }
+        }
         column.addView(pills);
 
         // Spacer
@@ -755,7 +885,8 @@ public class BulkDashboardActivity extends Activity {
         column.addView(credits);
 
         TextView phone = new TextView(this);
-        phone.setText("+44 7404 032136");
+        // v135: number Control Panel ki Contact setting se
+        phone.setText(BulkPanelSettings.contactNumber(this));
         phone.setTextSize(10);
         phone.setTypeface(Typeface.MONOSPACE);
         phone.setTextColor(BulkTheme.textMuted(this));
@@ -868,15 +999,26 @@ public class BulkDashboardActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.TOP);
-        TextView logo = new TextView(this);
-        logo.setText(">_");
-        logo.setTextSize(14);
-        logo.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        logo.setTextColor(BulkTheme.accent(this));
-        logo.setGravity(Gravity.CENTER);
-        logo.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 12, BulkTheme.accentStrong(this), 1));
-        logo.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 36), BulkTheme.dp(this, 36)));
-        header.addView(logo);
+        // v135: custom logo (Control Panel) ho to drawer header me bhi wahi
+        android.graphics.Bitmap drawerLogo = BulkPanelSettings.loadLogo(this);
+        if (drawerLogo != null) {
+            android.widget.ImageView logoIv = new android.widget.ImageView(this);
+            logoIv.setImageBitmap(drawerLogo);
+            logoIv.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            logoIv.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 12, BulkTheme.accentStrong(this), 1));
+            logoIv.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 36), BulkTheme.dp(this, 36)));
+            header.addView(logoIv);
+        } else {
+            TextView logo = new TextView(this);
+            logo.setText(">_");
+            logo.setTextSize(14);
+            logo.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            logo.setTextColor(BulkTheme.accent(this));
+            logo.setGravity(Gravity.CENTER);
+            logo.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 12, BulkTheme.accentStrong(this), 1));
+            logo.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 36), BulkTheme.dp(this, 36)));
+            header.addView(logo);
+        }
 
         LinearLayout headTexts = new LinearLayout(this);
         headTexts.setOrientation(LinearLayout.VERTICAL);
@@ -895,7 +1037,7 @@ public class BulkDashboardActivity extends Activity {
         dDev.setTextColor(BulkTheme.textSub(this));
         headTexts.addView(dDev);
         TextView dPhone = new TextView(this);
-        dPhone.setText("+44 7404 032136");
+        dPhone.setText(BulkPanelSettings.contactNumber(this));
         dPhone.setTextSize(10);
         dPhone.setTypeface(Typeface.MONOSPACE);
         dPhone.setTextColor(BulkTheme.textMuted(this));
@@ -952,6 +1094,12 @@ public class BulkDashboardActivity extends Activity {
             closeDrawer();
             openScreen(BulkPermissionsActivity.class, "Permissions screen nahi khul saki.");
         }));
+        // v135: Control Panel — chhoti si row (owner ka UI rule);
+        // khulte hi panel password gate ata hai (activity khud karti hai)
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.CONTROL_PANEL), false, v -> {
+            closeDrawer();
+            openScreen(BulkControlPanelActivity.class, "Control Panel nahi khul saka.");
+        }));
         drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.CHECK_FOR_UPDATES), false, v -> {
             closeDrawer();
             openScreen(BulkUpdateActivity.class, "Update screen nahi khul saki.");
@@ -978,7 +1126,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v134");
+        version.setText("Termux Mod v135");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -1246,7 +1394,8 @@ public class BulkDashboardActivity extends Activity {
         label.setTextColor(BulkTheme.textMain(this));
         texts.addView(label);
         TextView number = new TextView(this);
-        number.setText("+44 7404 032136");
+        // v135: number Control Panel ki Contact setting se
+        number.setText(BulkPanelSettings.contactNumber(this));
         number.setTextSize(10.5f);
         number.setTypeface(Typeface.MONOSPACE);
         number.setTextColor(BulkTheme.textMuted(this));
@@ -1267,7 +1416,9 @@ public class BulkDashboardActivity extends Activity {
 
     /** WhatsApp par number kholo; app na ho to browser fallback (wa.me). */
     private void openWhatsApp() {
-        android.net.Uri uri = android.net.Uri.parse("https://wa.me/447404032136");
+        // v135: number Control Panel ki Contact setting se (digits only)
+        android.net.Uri uri = android.net.Uri.parse(
+            "https://wa.me/" + BulkPanelSettings.digitsOf(BulkPanelSettings.contactNumber(this)));
         try {
             Intent wa = new Intent(Intent.ACTION_VIEW, uri);
             wa.setPackage("com.whatsapp");
@@ -1292,10 +1443,21 @@ public class BulkDashboardActivity extends Activity {
 
     // ------------------------------------------------------------ helpers
 
+    /**
+     * v135: two-tone title Control Panel ke App Name se — tamam alfaz
+     * dark, AKHRI lafz accent; ek-lafz naam poora dark (accent bar
+     * neeche pehle jesa hi rehta hai).
+     */
     private SpannableString twoToneTitle() {
-        SpannableString s = new SpannableString("Termux Mod");
-        s.setSpan(new ForegroundColorSpan(BulkTheme.textMain(this)), 0, 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-        s.setSpan(new ForegroundColorSpan(BulkTheme.accent(this)), 7, 10, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        String name = BulkPanelSettings.appName(this);
+        SpannableString s = new SpannableString(name);
+        s.setSpan(new ForegroundColorSpan(BulkTheme.textMain(this)), 0, name.length(),
+            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        int cut = BulkPanelSettings.accentStart(name);
+        if (cut >= 0) {
+            s.setSpan(new ForegroundColorSpan(BulkTheme.accent(this)), cut, name.length(),
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
         return s;
     }
 
