@@ -2,12 +2,12 @@
 # Asal shortcuts pehle se lage hue hain — Project 1, 2 or 8 ke liye koi
 # command chalane ki zaroorat nahi, seedha w1 / w2 / w8 chalega.
 # Baqi projects ke shortcuts chahiye to un ki ek line isi tarah neeche jor do.
-alias w1='cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py process 1'
-alias d1='cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py del 1'
-alias b1='cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py batch 1'
-alias w2='cd /storage/emulated/0/TermuxMod/mockup_project_2 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_2 python dual_core.py process 2'
-alias d2='cd /storage/emulated/0/TermuxMod/mockup_project_2 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_2 python dual_core.py del 2'
-alias b2='cd /storage/emulated/0/TermuxMod/mockup_project_2 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_2 python dual_core.py batch 2'
-alias w8='cd /storage/emulated/0/TermuxMod/mockup_project_8 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_8 python w8.py process'
-alias d8='cd /storage/emulated/0/TermuxMod/mockup_project_8 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_8 python w8.py del'
-alias b8='cd /storage/emulated/0/TermuxMod/mockup_project_8 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_8 python w8.py batch'
+alias w1='cd /data/data/com.termux/files/home/mockup_project_1 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_1 python adnan_core.py process 1'
+alias d1='cd /data/data/com.termux/files/home/mockup_project_1 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_1 python adnan_core.py del 1'
+alias b1='cd /data/data/com.termux/files/home/mockup_project_1 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_1 python adnan_core.py batch 1'
+alias w2='cd /data/data/com.termux/files/home/mockup_project_2 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_2 python dual_core.py process 2'
+alias d2='cd /data/data/com.termux/files/home/mockup_project_2 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_2 python dual_core.py del 2'
+alias b2='cd /data/data/com.termux/files/home/mockup_project_2 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_2 python dual_core.py batch 2'
+alias w8='cd /data/data/com.termux/files/home/mockup_project_8 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_8 python w8.py process'
+alias d8='cd /data/data/com.termux/files/home/mockup_project_8 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_8 python w8.py del'
+alias b8='cd /data/data/com.termux/files/home/mockup_project_8 && MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_8 python w8.py batch'

@@ -697,10 +697,11 @@ public final class BulkRunHelper {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(selected ? BulkTheme.secondaryBg(a) : BulkTheme.pillBg(a));
-        row.setPadding(BulkTheme.dp(a, 12), BulkTheme.dp(a, 11), BulkTheme.dp(a, 12), BulkTheme.dp(a, 11));
+        // v136: compact radio rows (gallery settings wali hi height family)
+        row.setPadding(BulkTheme.dp(a, 12), BulkTheme.dp(a, 7), BulkTheme.dp(a, 12), BulkTheme.dp(a, 7));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = BulkTheme.dp(a, 8);
+        lp.bottomMargin = BulkTheme.dp(a, 6);
         row.setLayoutParams(lp);
 
         TextView dot = new TextView(a);

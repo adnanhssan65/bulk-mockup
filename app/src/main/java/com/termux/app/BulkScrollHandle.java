@@ -25,20 +25,25 @@ import android.widget.ScrollView;
  * taps bilkul wese hi chalte hain. Idle par ~2.5s me halki (fade)
  * ho jati hai; scroll/drag par wapas jaag jati hai.
  *
- * Visibility ka faisla har update par: BulkScrollSettings (Show/
- * Hide toggle, gallery gear popup) + surface ka gate (masalan Drop
- * Box sirf expanded halat me) + content asal me scrollable hai ya
- * nahi.
+ * v136 (owner ke final rules):
+ *   - Handle SIRF Add Wallpapers ki gallery grids me hota hai
+ *     (All Images + folder grids — BulkGalleryActivity). Baqi har
+ *     surface se hata diya gaya hai; forScrollView factory ab
+ *     koi istemal nahi karta (sirf tareekhi wajah se mehfooz).
+ *   - Shakal system gallery wali pill jesi: patli (36dp), kul
+ *     ~64dp unchi, right edge se CHIPKI hui (flush — margin 0),
+ *     halki semi-transparent surface, naram shadow, chhote
+ *     chevrons or darmiyan hairline divider.
  *
- * Do binding shaklein: AbsListView (gallery GridView) or ScrollView
- * (Ready Assets / Preview / Drop Box / Duplicates / Projects —
- * wahan grid page-scroll ke andar hota hai).
+ * Visibility ka faisla har update par: BulkScrollSettings (Show/
+ * Hide toggle, gallery gear popup) + surface ka gate + content
+ * asal me scrollable hai ya nahi.
  */
 public final class BulkScrollHandle extends View {
 
     private static final int WIDTH_DP = 36;
-    private static final int HEIGHT_DP = 80;
-    private static final int EDGE_MARGIN_DP = 8;
+    private static final int HEIGHT_DP = 64;
+    private static final int EDGE_MARGIN_DP = 0;
     private static final int TRACK_INSET_DP = 10;
 
     private final Paint mFill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -63,15 +68,20 @@ public final class BulkScrollHandle extends View {
 
     private BulkScrollHandle(Context c) {
         super(c);
+        // v136: halki semi-transparent surface + naram shadow
+        // (shadow layer ke liye software layer lazmi hai)
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         mFill.setStyle(Paint.Style.FILL);
         mFill.setColor(BulkTheme.glassBg(c));
-        mFill.setAlpha(225);
+        mFill.setAlpha(150);
+        mFill.setShadowLayer(BulkTheme.dp(c, 4), BulkTheme.dp(c, -1),
+            BulkTheme.dp(c, 1), 0x40000000);
         mStroke.setStyle(Paint.Style.STROKE);
         mStroke.setColor(BulkTheme.accentBorder(c));
-        mStroke.setStrokeWidth(BulkTheme.dp(c, 1));
+        mStroke.setStrokeWidth(BulkTheme.dp(c, 0.75f));
         mChevron.setStyle(Paint.Style.STROKE);
         mChevron.setColor(BulkTheme.accentStrong(c));
-        mChevron.setStrokeWidth(BulkTheme.dp(c, 2.5f));
+        mChevron.setStrokeWidth(BulkTheme.dp(c, 2));
         mChevron.setStrokeCap(Paint.Cap.ROUND);
         mChevron.setStrokeJoin(Paint.Join.ROUND);
         setContentDescription("Scroll handle");
@@ -246,15 +256,19 @@ public final class BulkScrollHandle extends View {
         float w = getWidth();
         float h = getHeight();
         float r = w / 2f;
-        RectF body = new RectF(1, 1, w - 1, h - 1);
+        // v136: right edge se CHIPKI hui shakal — body dayein taraf
+        // view se bahar tak jata hai, is liye dayein konay gol nahi
+        // bante (flush), bayein konay gol rehte hain (system pill).
+        RectF body = new RectF(1, 1, w + r, h - 1);
         canvas.drawRoundRect(body, r, r, mFill);
         canvas.drawRoundRect(body, r, r, mStroke);
-        mStroke.setAlpha(120);
-        canvas.drawLine(w * 0.22f, h / 2f, w * 0.78f, h / 2f, mStroke);
+        // Hairline divider (˄ / ˅ ke darmiyan)
+        mStroke.setAlpha(90);
+        canvas.drawLine(w * 0.20f, h / 2f, w * 0.72f, h / 2f, mStroke);
         mStroke.setAlpha(255);
-        float cx = w / 2f;
-        float arm = w * 0.24f;
-        float lift = h * 0.09f;
+        float cx = w * 0.46f;
+        float arm = w * 0.20f;
+        float lift = h * 0.08f;
         float cyTop = h * 0.25f;
         Path up = new Path();
         up.moveTo(cx - arm, cyTop + lift);

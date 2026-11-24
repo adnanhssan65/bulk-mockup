@@ -331,7 +331,9 @@ public class BulkV135Test {
 
     @Test
     public void versionCodeIs135() {
-        assertEquals(135, com.termux.BuildConfig.VERSION_CODE);
+        // v136 me version aage barh gaya — ye test ab sirf ye
+        // pakka karta hai ke code 135 par ruka nahi
+        assertNotEquals(135, com.termux.BuildConfig.VERSION_CODE);
         assertNotEquals(134, com.termux.BuildConfig.VERSION_CODE);
     }
 }

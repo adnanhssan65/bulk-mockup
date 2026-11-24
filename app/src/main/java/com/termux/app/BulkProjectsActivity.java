@@ -87,13 +87,9 @@ public class BulkProjectsActivity extends Activity {
         mBody.setOrientation(LinearLayout.VERTICAL);
         mBody.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8), BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
         scroll.addView(mBody);
-        // v134: scroll handle (right edge) — page-scroll par track
-        android.widget.FrameLayout scrollWrap = new android.widget.FrameLayout(this);
-        scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        scrollWrap.addView(scroll);
-        BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
-        root.addView(scrollWrap, new LinearLayout.LayoutParams(
+        // v136: scroll handle yahan NAHI — sirf Add Wallpapers ki
+        // gallery grids me hota hai (owner ka rule)
+        root.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
         // Bottom fixed bar: Add New Project (ZIP)
@@ -551,11 +547,12 @@ public class BulkProjectsActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(selected ? BulkTheme.secondaryBg(this) : BulkTheme.pillBg(this));
-        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
-            BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
+        // v136: compact radio rows (Run Settings wali hi height family)
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 7));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = BulkTheme.dp(this, 8);
+        lp.bottomMargin = BulkTheme.dp(this, 6);
         row.setLayoutParams(lp);
 
         TextView dot = new TextView(this);

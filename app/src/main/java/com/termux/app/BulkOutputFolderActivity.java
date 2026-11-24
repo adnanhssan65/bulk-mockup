@@ -24,11 +24,13 @@ import java.util.List;
 /**
  * Termux Mod (v127) — Output Folder (drawer se khulti hai).
  * Design me ye screen editable thi (folder rename / path presets),
- * lekin runner scripts ke paths hardcoded hain (/storage/emulated/0/
- * mockup_project_<N>) — rename karne se sara engine toot jayega.
- * Is liye ye screen READ-ONLY hai: asal storage location, selected
- * project ka asal folder, aur live folder structure (asal counts ke
- * sath). Deviation report me darj hai.
+ * lekin engine ke paths pakke hain — rename karne se sara engine
+ * toot jayega. Is liye ye screen READ-ONLY hai: asal location,
+ * selected project ka asal folder, aur live folder structure
+ * (asal counts ke sath). Deviation report me darj hai.
+ * v136: engine ab $HOME ke andar hai (chhupa hua) — location wahi
+ * dikhti hai; shared storage par sirf TermuxMod/Project N drop
+ * folders hote hain, jin ke outputs app wahan mirror karti hai.
  */
 public class BulkOutputFolderActivity extends Activity {
 
@@ -81,7 +83,7 @@ public class BulkOutputFolderActivity extends Activity {
         root.addView(scroll);
 
         body.addView(infoBox(BulkStrings.t(this, BulkStrings.STORAGE_LOCATION),
-            BulkProjects.STORAGE_ROOT));
+            BulkProjects.HOME_PATH));
 
         body.addView(projectPicker(), boxLp(12));
 

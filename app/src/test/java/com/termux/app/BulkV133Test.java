@@ -190,16 +190,16 @@ public class BulkV133Test {
             BulkProjects.newProjectDir(7).getPath());
         assertEquals("/storage/emulated/0/mockup_project_7",
             BulkProjects.oldProjectDir(7).getPath());
-        // Test machine par /storage nahi — v134 resolution ROOT dega
-        assertEquals("/storage/emulated/0/mockup_project_7",
+        // v136: projectDir hamesha $HOME engine folder hai
+        assertEquals("/data/data/com.termux/files/home/mockup_project_7",
             BulkProjects.projectDir(7).getPath());
     }
 
     @Test
     public void fullCommandSetsMockupBase() {
         String cmd = BulkProjects.fullCommand(4, "adnan_core.py", "process");
-        assertTrue(cmd.startsWith("cd /storage/emulated/0/mockup_project_4 && "));
-        assertTrue(cmd.contains("MOCKUP_BASE=/storage/emulated/0/mockup_project_4 "));
+        assertTrue(cmd.startsWith("cd /data/data/com.termux/files/home/mockup_project_4 && "));
+        assertTrue(cmd.contains("MOCKUP_BASE=/data/data/com.termux/files/home/mockup_project_4 "));
         assertTrue(cmd.endsWith("python adnan_core.py process 4"));
     }
 

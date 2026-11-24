@@ -144,7 +144,6 @@ public class BulkStageActivity extends Activity {
     // sirf is screen ki zindagi tak (default har dafa compact).
     private LinearLayout mDropPreviewRow;
     private LinearLayout mDropCollapseRow;
-    private BulkScrollHandle mScrollHandle;
     private boolean mDropExpanded = false;
     // v130: khaali staging par ye sab GONE — sirf pick pill row rehti hai
     private View mLinkView;
@@ -569,10 +568,8 @@ public class BulkStageActivity extends Activity {
         scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         scrollWrap.addView(scroll);
-        // v134: scroll handle — is screen par sirf Drop Box ki
-        // expanded halat me (gate refreshStagedViews se lagta hai)
-        mScrollHandle = BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
-        mScrollHandle.setGateOpen(false);
+        // v136: scroll handle yahan NAHI (Drop Box par bhi nahi) —
+        // sirf Add Wallpapers ki gallery grids me hota hai
         root.addView(scrollWrap);
 
         // Naya design: pick pill row pehle, phir project, phir Drop Box
@@ -901,7 +898,8 @@ public class BulkStageActivity extends Activity {
         scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         scrollWrap.addView(scroll);
-        BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
+        // v136: scroll handle yahan (Select Project list) NAHI —
+        // sirf Add Wallpapers ki gallery grids me hota hai
         root.addView(scrollWrap);
 
         refreshPickerList();
@@ -1371,8 +1369,6 @@ public class BulkStageActivity extends Activity {
         if (mDropCollapseRow != null) {
             mDropCollapseRow.setVisibility(has && !compact ? View.VISIBLE : View.GONE);
         }
-        // v134: scroll handle ka gate — sirf expanded Drop Box par
-        if (mScrollHandle != null) mScrollHandle.setGateOpen(has && !compact);
         if (mDropEmpty != null) mDropEmpty.setVisibility(has ? View.GONE : View.VISIBLE);
         if (mSelectMode) {
             mSelectCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mChecked.size()));

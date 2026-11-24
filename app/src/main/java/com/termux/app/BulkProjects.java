@@ -19,13 +19,25 @@ import java.util.regex.Pattern;
  * banana or pehle se mojood hain ya nahi check karna.
  *
  * Convention (owner ki asal, tamam projects ke liye aik jesi):
- *   folder:  /storage/emulated/0/mockup_project_<N>
+ *   folder:  $HOME/mockup_project_<N>  (v136: engine app ke andar
+ *            chhupa hai — shared storage me sirf TermuxMod/Project N
+ *            drop folders dikhte hain, mockup_project_<N> wahan
+ *            kabhi nahi banta)
  *   chalana: python <script> process|del|batch <N>
  *   aliases: w<N> = process, b<N> = batch, d<N> = delete
  */
 public final class BulkProjects {
 
     public static final String STORAGE_ROOT = "/storage/emulated/0";
+
+    /**
+     * v136: Termux HOME ka path (TermuxConstants.TERMUX_HOME_DIR_PATH
+     * ke barabar — ye class pure rehne ke liye literal rakhti hai;
+     * BulkV136Test dono ki barabari verify karta hai). Tamam project
+     * ENGINE folders ab yahin bante hain: file manager me nazar nahi
+     * ate, or shared storage par mockup_project_<N> kabhi nahi banta.
+     */
+    public static final String HOME_PATH = "/data/data/com.termux/files/home";
 
     private static final Pattern NAME_NUMBER = Pattern.compile("(?i)project\\s*[-_ ]?\\s*(\\d+)");
     private static final Pattern CMD_NUMBER = Pattern.compile("(?i)^\\s*w\\s*(\\d+)\\s*$");
@@ -64,22 +76,26 @@ public final class BulkProjects {
         return "mockup_project_" + n;
     }
 
-    /** v133: app-managed projects ki NAYI jagah — TermuxMod folder ke andar. */
+    /** v133 wali jagah — TermuxMod folder ke andar (v136 migration ka SOURCE 1). */
     public static File newProjectDir(int n) {
         return new File(new File(STORAGE_ROOT, "TermuxMod"), projectDirName(n));
     }
 
-    /** Purani jagah — storage root par seedha mockup_project_<N>. */
+    /** v134/v135 wali jagah — storage root par (v136 migration ka SOURCE 2). */
     public static File oldProjectDir(int n) {
         return new File(STORAGE_ROOT, projectDirName(n));
     }
 
+    /** v136: ENGINE ki asal jagah — Termux HOME ke andar (chhupa hua). */
+    public static File homeProjectDir(int n) {
+        return new File(HOME_PATH, projectDirName(n));
+    }
+
     /**
-     * Location ka faisla (pure) — v134: ROOT (purani jagah) ko
-     * tarjeeh: root par folder ho to wahi; warna TermuxMod ke andar
-     * wala ho to wahi (jo project wahan reh gaya ho wo chalta rahe);
-     * dono na hon to ROOT (fresh install / extraction wahin banta
-     * hai — TermuxMod ke andar project folder ab kabhi nahi banta).
+     * Location ka faisla (pure) — v133/v134 wala resolution, ab
+     * SIRF ek legacy helper (tests ke liye mehfooz). v136 me
+     * projectDir() is ko istemal NAHI karta: engine hamesha $HOME
+     * me hota hai, purani jagahen sirf migration ke sources hain.
      */
     public static File pickProjectDir(File newDir, File oldDir,
                                       boolean newExists, boolean oldExists) {
@@ -89,15 +105,13 @@ public final class BulkProjects {
     }
 
     /**
-     * v133: project ka ASAL folder — resolution upar wale usool se.
-     * App ka har kaam (counts, run, batch, delete, staging commit,
-     * Ready Assets, drop-fetch) isi ko istemal karta hai, is liye
-     * project chahe jahan ho, sab kuch chalta rehta hai.
+     * Project ka ASAL (engine) folder — v136: hamesha $HOME ke
+     * andar. App ka har kaam (counts, run, batch, delete, staging
+     * commit, Ready Assets, drop-fetch) isi ko istemal karta hai.
+     * Shared storage par ye folder kabhi nahi banta.
      */
     public static File projectDir(int n) {
-        File newDir = newProjectDir(n);
-        File oldDir = oldProjectDir(n);
-        return pickProjectDir(newDir, oldDir, newDir.isDirectory(), oldDir.isDirectory());
+        return homeProjectDir(n);
     }
 
     public static File wallpapersDir(int n) {
@@ -430,11 +444,37 @@ public final class BulkProjects {
     // ------------------------------------------------------------ disk IO helpers
 
     /**
-     * Disk par jitne mockup_project_<N> folders hain — DONO jagah
-     * (purani root + nayi TermuxMod ke andar), un ke numbers + scripts.
-     * Script hamesha RESOLVED folder se parhi jati hai.
+     * ENGINE home ($HOME) me jitne mockup_project_<N> folders hain,
+     * un ke numbers + scripts. v136: disk scan ka matlab ab sirf
+     * $HOME hai — shared storage kabhi scan nahi hoti (wahan ke
+     * folders sirf migration ke sources hain, neeche dekho).
      */
     public static Map<Integer, String> scanDiskProjects() {
+        Map<Integer, String> map = new LinkedHashMap<>();
+        List<Integer> numbers = new ArrayList<>();
+        File[] kids = new File(HOME_PATH).listFiles();
+        if (kids != null) {
+            for (File k : kids) {
+                if (!k.isDirectory()) continue;
+                int n = parseFolderNumber(k.getName());
+                if (n > 0 && !numbers.contains(n)) numbers.add(n);
+            }
+        }
+        Collections.sort(numbers);
+        for (int n : numbers) {
+            map.put(n, detectMainScript(listFileNames(projectDir(n)), n));
+        }
+        return map;
+    }
+
+    /**
+     * v136 migration ke liye: SHARED storage par bache hue purane
+     * project folders (root + TermuxMod ke andar) ke numbers +
+     * scripts. Script migration-source ki tarjeeh se parhi jati
+     * hai: TermuxMod wali copy pehle, warna root wali. Ye scan
+     * SIRF migration istemal karti hai — aam app flow kabhi nahi.
+     */
+    public static Map<Integer, String> scanSharedProjects() {
         Map<Integer, String> map = new LinkedHashMap<>();
         List<Integer> numbers = new ArrayList<>();
         File[] roots = {new File(STORAGE_ROOT), new File(STORAGE_ROOT, "TermuxMod")};
@@ -449,7 +489,8 @@ public final class BulkProjects {
         }
         Collections.sort(numbers);
         for (int n : numbers) {
-            map.put(n, detectMainScript(listFileNames(projectDir(n)), n));
+            File src = newProjectDir(n).isDirectory() ? newProjectDir(n) : oldProjectDir(n);
+            map.put(n, detectMainScript(listFileNames(src), n));
         }
         return map;
     }

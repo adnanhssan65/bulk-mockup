@@ -139,15 +139,11 @@ public class BulkDuplicatesActivity extends Activity {
         body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),
             BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
         scroll.addView(body);
-        // v134: scroll handle (right edge) — page-scroll par track
-        android.widget.FrameLayout scrollWrap = new android.widget.FrameLayout(this);
-        scrollWrap.setLayoutParams(new LinearLayout.LayoutParams(
+        // v136: scroll handle yahan NAHI — sirf Add Wallpapers ki
+        // gallery grids me hota hai (owner ka rule)
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        scrollWrap.addView(scroll);
-        BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
-        root.addView(scrollWrap);
+        root.addView(scroll);
 
         body.addView(settingRow());
         // v131 (Item 5): toolbars pakki 44dp height ke sath (topLp

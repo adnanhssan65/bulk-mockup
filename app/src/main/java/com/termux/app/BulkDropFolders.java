@@ -202,6 +202,36 @@ public final class BulkDropFolders {
         return new int[]{created, present};
     }
 
+    /**
+     * v136: TermuxMod root + har known project ka drop folder us ke
+     * output subfolders (Mockups / Ready Wallpapers) ke SATH banao.
+     * Sirf do jagah istemal hota hai: v136 ki pehli-dafa setup
+     * (BulkHomeMigration) or Recreate Folders (manual) — aam app
+     * flow me kabhi nahi.
+     * @return int[]{created, alreadyPresent}
+     */
+    public static int[] ensureDropFoldersFull(Set<Integer> knownNumbers) {
+        int[] counts = ensureDropFolders(knownNumbers);
+        int created = counts[0], present = counts[1];
+        if (knownNumbers != null) {
+            File root = rootDir();
+            for (int n : knownNumbers) {
+                if (n <= 0) continue;
+                File dir = new File(root, dropFolderName(n));
+                String[] subs = {BulkMirror.MOCKUPS_SUB, BulkMirror.READY_SUB};
+                for (String sub : subs) {
+                    File s = new File(dir, sub);
+                    if (s.isDirectory()) {
+                        present++;
+                    } else if (s.mkdirs() || s.isDirectory()) {
+                        created++;
+                    }
+                }
+            }
+        }
+        return new int[]{created, present};
+    }
+
     /** Ek project ka drop folder (ZIP se naya project ane par). */
     public static void ensureForProject(int n) {
         if (n <= 0) return;
@@ -216,7 +246,8 @@ public final class BulkDropFolders {
      * @return int[]{created, alreadyPresent}
      */
     public static int[] recreateAll(Set<Integer> knownNumbers) {
-        int[] counts = ensureDropFolders(knownNumbers);
+        // v136: Recreate = poora set (drop folder + output subfolders)
+        int[] counts = ensureDropFoldersFull(knownNumbers);
         int created = counts[0], present = counts[1];
         Set<Integer> candidates = new TreeSet<>();
         if (knownNumbers != null) candidates.addAll(knownNumbers);
@@ -407,10 +438,12 @@ public final class BulkDropFolders {
         File root = rootDir();
         for (int n : knownNumbers) {
             if (n <= 0) continue;
-            File dest = new File(new File(root, dropFolderName(n)), previewFileName(n));
+            File dropDir = new File(root, dropFolderName(n));
+            // v136: video SIRF mojooda drop folder me — folder khud
+            // kabhi nahi banta (owner ka delete kiya hua waisa hi)
+            if (!dropDir.isDirectory()) continue;
+            File dest = new File(dropDir, previewFileName(n));
             if (dest.exists()) continue;
-            File parent = dest.getParentFile();
-            if (parent != null && !parent.isDirectory()) parent.mkdirs();
             try (InputStream in = ctx.getAssets().open(previewAssetPath(n));
                  OutputStream out = new FileOutputStream(dest)) {
                 byte[] buf = new byte[1 << 16];
@@ -425,23 +458,25 @@ public final class BulkDropFolders {
     }
 
     /**
-     * Ek pass: (auto ON ho to) drop folders ensure + preview
-     * videos, phir fetch. Dashboard / Add / Projects ke khulne par
+     * Ek pass: preview videos (sirf mojooda folders me), phir
+     * fetch + mirror. Dashboard / Add / Projects ke khulne par
      * background thread se chalaya jata hai.
-     * v134: DEFAULT MANUAL hai — auto toggles OFF hon to missing
-     * folders/videos khud NAHI bante (owner jo delete kare wo
-     * delete hi rehta hai); fetch sirf mojooda folders par chalta
-     * hai. Toggles Permissions -> Recreate Folders ki settings me.
+     * v136 LIFECYCLE (owner ka final rule): pehli-dafa setup
+     * (BulkHomeMigration, dropfolders_initialized) ke BAAD ye pass
+     * koi drop folder KABHI nahi banata — na Dashboard/Add/Projects
+     * khulne par, na sync me. Owner jo folder delete kare wo
+     * delete hi rehta hai or us ki ghair-mojoodgi se kahin koi
+     * masla nahi hota (fetch/mirror sirf mojooda folders par
+     * chalte hain, missing = khamosh skip). Wapas lane ka wahid
+     * rasta Permissions -> Recreate Folders (manual) hai.
      * @return project me move hui kul files
      */
     public static int syncNow(Context ctx) {
         Set<Integer> known = knownNumbers();
         if (known.isEmpty()) return 0;
-        if (BulkRecreateSettings.mayCreateFolders(BulkRecreateSettings.foldersAuto(ctx))) {
-            ensureDropFolders(known);
-        }
         // v135: Preview Video ka master switch (Control Panel) OFF ho
         // to video kabhi copy nahi hoti — Auto ON ho tab bhi nahi.
+        // v136: videos bhi sirf MOJOOD drop folders me jati hain.
         if (BulkRecreateSettings.mayCopyVideos(BulkRecreateSettings.videosAuto(ctx),
                 BulkRecreateSettings.videosEnabled(ctx))) {
             ensurePreviewVideos(ctx, known);

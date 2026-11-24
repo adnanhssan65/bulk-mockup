@@ -144,27 +144,30 @@ public class BulkDashboardActivity extends Activity {
                 if (!isFinishing() && !mDrawerOpen) buildUi();
             });
         }).start();
-        // v134: project folders ki WAPSI — TermuxMod ke andar se
-        // wapas storage root par (owner ka faisla: TermuxMod me sirf
-        // "Project N" drop folders rahen). Storage access ho to
-        // peeche ek pass (har project sirf ek dafa check hota hai);
-        // pehli dafa kuch wapas/stay ho to EK design-style summary.
-        // v133 wali andar-shift ab KABHI nahi chalti.
+        // v136: ENGINE ka $HOME shift + drop folders ki pehli
+        // setup — BulkHomeMigration ka ek pass (har project sirf
+        // ek dafa, drop setup bhi ek dafa). Storage access ho tab
+        // hi chalta hai; pehli dafa kuch shift/setup ho to EK
+        // design-style summary. Is ke baad shared storage par
+        // sirf TermuxMod/Project N folders rehte hain or app koi
+        // folder khud dobara nahi banati. v133/v134 wali shifts
+        // (BulkMigration / BulkMigrationBack) RETIRED hain —
+        // kabhi nahi chaltin.
         new Thread(() -> {
             if (!BulkStorageAccess.hasAccess(this)) return;
-            BulkMigrationBack.Result r = BulkMigrationBack.moveBackAll(this);
-            if (r.moved > 0) runOnUiThread(() -> {
+            BulkHomeMigration.Result r = BulkHomeMigration.runFirstRunPass(this);
+            if (r.moved > 0 || r.dropCreated > 0) runOnUiThread(() -> {
                 if (!isFinishing() && !mDrawerOpen) buildUi();
             });
-            if (r.evaluated > 0 && !BulkMigrationBack.isSummaryShown(this)) {
-                BulkMigrationBack.markSummaryShown(this);
+            if (r.anyWork() && !BulkHomeMigration.isSummaryShown(this)) {
+                BulkHomeMigration.markSummaryShown(this);
                 final int fMoved = r.moved;
-                final int fStayed = r.stayed;
+                final int fImages = r.images;
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     BulkTheme.showConfirm(this,
-                        BulkStrings.t(this, BulkStrings.MOVEDBACK_TITLE),
-                        BulkStrings.format(this, BulkStrings.MOVEDBACK_MSG, fMoved, fStayed),
+                        BulkStrings.t(this, BulkStrings.HOMEMIG_TITLE),
+                        BulkStrings.format(this, BulkStrings.HOMEMIG_MSG, fMoved, fImages),
                         BulkStrings.t(this, BulkStrings.OK), false, null);
                 });
             }
@@ -912,10 +915,8 @@ public class BulkDashboardActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         frame.addView(scroll, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // v134: scroll handle (right edge) — Home ki lambi page par
-        // bhi wohi control (drawer is ke UPER ata hai, baad me add
-        // hota hai)
-        BulkScrollHandle.forScrollView(this, frame, scroll);
+        // v136: scroll handle yahan NAHI — owner ka rule: handle
+        // sirf Add Wallpapers ki gallery grids me hota hai.
 
         buildDrawer(frame);
         setContentView(frame);
@@ -1126,7 +1127,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v135");
+        version.setText("Termux Mod v136");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));

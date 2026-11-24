@@ -233,6 +233,11 @@ public final class BulkStrings {
     public static final String LOG_MIRROR_MOCKUPS = "log_mirror_mockups";
     public static final String LOG_MIRROR_READY = "log_mirror_ready";
 
+    // v136 — engine $HOME shift + drop folders pehli setup
+    public static final String HOMEMIG_TITLE = "homemig_title";
+    public static final String HOMEMIG_MSG = "homemig_msg";
+    public static final String LOG_HOMEMIG = "log_homemig";
+
     // v135 — Control Panel
     public static final String CONTROL_PANEL = "control_panel";
     public static final String CP_ENTER_PASSWORD = "cp_enter_password";
@@ -610,6 +615,14 @@ public final class BulkStrings {
         put(LOG_MOVEBACK_MOVED,
             "Project %d moved back to the main storage (root)",
             "Project %d wapas main storage (root) par shift ho gaya");
+        // v136
+        put(HOMEMIG_TITLE, "Folders Updated", "Folders Update Ho Gaye");
+        put(HOMEMIG_MSG,
+            "%d project(s) moved inside the app — storage now shows only the TermuxMod folder with Project folders. %d file(s) kept safe. Nothing was lost.",
+            "%d project(s) app ke andar shift ho gaye — ab storage me sirf TermuxMod folder dikhega, us ke andar Project folders. %d file(s) mehfooz rahi. Kuch bhi zaya nahi hua.");
+        put(LOG_HOMEMIG,
+            "Project %d moved inside the app (hidden engine)",
+            "Project %d app ke andar shift ho gaya (chhupa engine)");
         put(LOG_MIRROR_MOCKUPS,
             "Project %d -> %d mockups (Project folder)",
             "Project %d -> %d mockups (Project folder me)");
