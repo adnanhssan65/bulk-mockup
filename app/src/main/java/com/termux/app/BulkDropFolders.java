@@ -443,6 +443,116 @@ public final class BulkDropFolders {
         if (BulkRecreateSettings.mayCopyVideos(BulkRecreateSettings.videosAuto(ctx))) {
             ensurePreviewVideos(ctx, known);
         }
-        return fetchAll(ctx, known);
+        int fetched = fetchAll(ctx, known);
+        // v134: output mirror HAR pass me (recreate toggles se
+        // alag — ye outputs hain, drop folders nahi)
+        syncAllMirrors(ctx, known);
+        return fetched;
+    }
+
+    // ------------------------------------------------------------ output mirror (v134)
+
+    /** Har known project ke outputs ka mirror drop folder ke andar. */
+    public static void syncAllMirrors(Context ctx, Set<Integer> knownNumbers) {
+        if (ctx == null || knownNumbers == null) return;
+        for (int n : knownNumbers) {
+            if (n > 0) syncMirrorForProject(ctx, n);
+        }
+    }
+
+    /**
+     * Ek project: <N>_Mockups -> "Project N/Mockups" or
+     * <N>_Ready_Wallpapers -> "Project N/Ready Wallpapers" ka true
+     * mirror (naya/badla copy, ghayab delete — sirf mirror side).
+     * Drop folder (Project N) mojood na ho to skip: is sync se koi
+     * folder khud nahi banta (manual mode ki izzat). Subfolder tab
+     * hi banta hai jab kuch copy karna ho.
+     * @return copy hui kul files
+     */
+    public static int syncMirrorForProject(Context ctx, int n) {
+        if (ctx == null || n <= 0) return 0;
+        File dropDir = new File(rootDir(), dropFolderName(n));
+        if (!dropDir.isDirectory()) return 0;
+        int copied = 0;
+        copied += syncOneMirror(ctx, n, BulkProjects.mockupsDir(n),
+            new File(dropDir, BulkMirror.MOCKUPS_SUB), true);
+        copied += syncOneMirror(ctx, n, BulkProjects.readyDir(n),
+            new File(dropDir, BulkMirror.READY_SUB), false);
+        return copied;
+    }
+
+    private static int syncOneMirror(Context ctx, int n, File srcDir, File dstDir,
+                                     boolean mockups) {
+        Map<String, String> src = mirrorSignatures(srcDir);
+        Map<String, String> dst = mirrorSignatures(dstDir);
+        BulkMirror.Plan plan = BulkMirror.planSync(src, dst);
+        if (plan.isEmpty()) return 0;
+        if (!plan.toCopy.isEmpty() && !dstDir.isDirectory()) {
+            //noinspection ResultOfMethodCallIgnored
+            dstDir.mkdirs();
+        }
+        int copied = 0;
+        for (String name : plan.toCopy) {
+            File s = new File(srcDir, name);
+            File d = new File(dstDir, name);
+            if (copyFileVerified(s, d)) {
+                // Mirror file par source ka mtime — agli pass me
+                // signature mil jata hai, dobara copy nahi hoti
+                //noinspection ResultOfMethodCallIgnored
+                d.setLastModified(s.lastModified());
+                copied++;
+            }
+        }
+        for (String name : plan.toDelete) {
+            // Delete SIRF mirror side par — project side mehfooz
+            //noinspection ResultOfMethodCallIgnored
+            new File(dstDir, name).delete();
+        }
+        if (copied > 0) {
+            BulkLog.add(BulkStrings.format(ctx,
+                mockups ? BulkStrings.LOG_MIRROR_MOCKUPS : BulkStrings.LOG_MIRROR_READY,
+                n, copied));
+        }
+        return copied;
+    }
+
+    /** Dir ki seedhi files (directories/hidden nahi) ke signatures. */
+    private static Map<String, String> mirrorSignatures(File dir) {
+        Map<String, String> out = new HashMap<>();
+        if (dir == null || !dir.isDirectory()) return out;
+        File[] files = dir.listFiles();
+        if (files == null) return out;
+        for (File f : files) {
+            if (!f.isFile()) continue;
+            if (f.getName().startsWith(".")) continue;
+            out.put(f.getName(), BulkMirror.signature(f.length(), f.lastModified()));
+        }
+        return out;
+    }
+
+    /** Copy + size verify (moveFile wala hi pattern, delete baghair). */
+    private static boolean copyFileVerified(File src, File dest) {
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            in = new FileInputStream(src);
+            out = new FileOutputStream(dest);
+            byte[] buf = new byte[1 << 16];
+            int r;
+            while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+            out.flush();
+            if (dest.length() != src.length()) {
+                //noinspection ResultOfMethodCallIgnored
+                dest.delete();
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Mirror copy fail " + src.getName() + ": " + e.getMessage());
+            return false;
+        } finally {
+            try { if (in != null) in.close(); } catch (Exception ignored) {}
+            try { if (out != null) out.close(); } catch (Exception ignored) {}
+        }
     }
 }

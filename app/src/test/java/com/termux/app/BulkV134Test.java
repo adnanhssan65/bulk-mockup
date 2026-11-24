@@ -165,6 +165,39 @@ public class BulkV134Test {
         assertFalse(BulkScrollSettings.mayShow(false));
     }
 
+    // ------------------------------------------------- Mirror planner
+
+    @Test
+    public void mirrorPlanNewChangedDeleted() {
+        java.util.Map<String, String> src = new java.util.HashMap<>();
+        src.put("a.jpg", BulkMirror.signature(100, 1000));
+        src.put("b.jpg", BulkMirror.signature(200, 2000));
+        src.put("c.jpg", BulkMirror.signature(300, 3000));
+        java.util.Map<String, String> dst = new java.util.HashMap<>();
+        dst.put("b.jpg", BulkMirror.signature(200, 2000)); // same — no copy
+        dst.put("c.jpg", BulkMirror.signature(301, 3000)); // changed size — copy
+        dst.put("old.jpg", BulkMirror.signature(1, 1));    // gone from source — delete
+        BulkMirror.Plan plan = BulkMirror.planSync(src, dst);
+        assertEquals(java.util.Arrays.asList("a.jpg", "c.jpg"), plan.toCopy);
+        assertEquals(java.util.Collections.singletonList("old.jpg"), plan.toDelete);
+    }
+
+    @Test
+    public void mirrorPlanIdenticalIsEmpty() {
+        java.util.Map<String, String> src = new java.util.HashMap<>();
+        src.put("x.jpg", BulkMirror.signature(5, 5));
+        BulkMirror.Plan plan = BulkMirror.planSync(src, new java.util.HashMap<>(src));
+        assertTrue(plan.isEmpty());
+        // Source khaali + mirror me files -> sab delete (true mirror)
+        BulkMirror.Plan wipe = BulkMirror.planSync(
+            new java.util.HashMap<>(), src);
+        assertEquals(java.util.Collections.singletonList("x.jpg"), wipe.toDelete);
+        assertTrue(wipe.toCopy.isEmpty());
+        // Subfolder ke naam pakke
+        assertEquals("Mockups", BulkMirror.MOCKUPS_SUB);
+        assertEquals("Ready Wallpapers", BulkMirror.READY_SUB);
+    }
+
     // ------------------------------------------------- H: entry layout model
 
     @Test

@@ -398,6 +398,11 @@ public final class BulkRunHelper {
             }
             BulkLog.setStatus(null);
             BulkLog.add(doneMsg);
+            // v134: run ke outputs (mockups + ready) ka mirror
+            // TermuxMod/Project N ke andar — background thread par,
+            // run ki completion is par nahi rukti
+            final int mirrorProject = p.number;
+            new Thread(() -> BulkDropFolders.syncMirrorForProject(a, mirrorProject)).start();
             final int fExit = exit;
             a.runOnUiThread(() -> {
                 if (!shown.isShowing()) return;

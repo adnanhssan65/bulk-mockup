@@ -230,6 +230,8 @@ public final class BulkStrings {
     public static final String LOG_MOVEBACK_STAY_ROOT = "log_moveback_stay_root";
     public static final String LOG_MOVEBACK_STAY_RUNNER = "log_moveback_stay_runner";
     public static final String LOG_MOVEBACK_MOVED = "log_moveback_moved";
+    public static final String LOG_MIRROR_MOCKUPS = "log_mirror_mockups";
+    public static final String LOG_MIRROR_READY = "log_mirror_ready";
 
     // v129 — Drop Wallpapers (Ready Assets ke andar), Home live logs, permission popup
     public static final String DROP_WALLPAPERS = "drop_wallpapers";
@@ -554,6 +556,12 @@ public final class BulkStrings {
         put(LOG_MOVEBACK_MOVED,
             "Project %d moved back to the main storage (root)",
             "Project %d wapas main storage (root) par shift ho gaya");
+        put(LOG_MIRROR_MOCKUPS,
+            "Project %d -> %d mockups (Project folder)",
+            "Project %d -> %d mockups (Project folder me)");
+        put(LOG_MIRROR_READY,
+            "Project %d -> %d ready wallpapers (Project folder)",
+            "Project %d -> %d ready wallpapers (Project folder me)");
         put(STAGED_DROP_SUB, "Staged images — not added to a project yet",
             "Staged images — abhi kisi project me add nahi hue");
 
