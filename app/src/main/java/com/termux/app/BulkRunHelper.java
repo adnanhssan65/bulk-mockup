@@ -69,6 +69,18 @@ public final class BulkRunHelper {
         }
     }
 
+    /**
+     * v133: pehle se bani hui piped command console popup me chalao
+     * (Projects screen ka Delete popup isay istemal karta hai —
+     * printf se digit pipe hota hai, output wahi console me dikhta
+     * hai jahan Run dikhta hai).
+     */
+    public static void runCommandInPopup(final Activity a, final BulkProjects.ProjectInfo p,
+                                         final String pipedCommand) {
+        if (a == null || p == null || pipedCommand == null) return;
+        runLiveInPopup(a, p, pipedCommand, null);
+    }
+
     // ------------------------------------------------------------ MANUAL popup
 
     private static void showManualPopup(final Activity a, final BulkProjects.ProjectInfo p,

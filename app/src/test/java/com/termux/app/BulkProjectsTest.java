@@ -124,9 +124,9 @@ public class BulkProjectsTest {
     public void aliasLinesUniform() {
         List<String> lines = BulkProjects.aliasLines(15, "w15.py");
         assertEquals(3, lines.size());
-        assertEquals("alias w15='cd /storage/emulated/0/mockup_project_15 && python w15.py process 15'", lines.get(0));
-        assertEquals("alias d15='cd /storage/emulated/0/mockup_project_15 && python w15.py del 15'", lines.get(1));
-        assertEquals("alias b15='cd /storage/emulated/0/mockup_project_15 && python w15.py batch 15'", lines.get(2));
+        assertEquals("alias w15='cd /storage/emulated/0/TermuxMod/mockup_project_15 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_15 python w15.py process 15'", lines.get(0));
+        assertEquals("alias d15='cd /storage/emulated/0/TermuxMod/mockup_project_15 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_15 python w15.py del 15'", lines.get(1));
+        assertEquals("alias b15='cd /storage/emulated/0/TermuxMod/mockup_project_15 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_15 python w15.py batch 15'", lines.get(2));
     }
 
     @Test
@@ -177,11 +177,11 @@ public class BulkProjectsTest {
         assertEquals("Project 8", merged.get(1).name);
         assertEquals("Project 15", merged.get(2).name);
         assertFalse(merged.get(2).fromConf);
-        assertEquals("cd /storage/emulated/0/mockup_project_15 && python w15.py process 15",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_15 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_15 python w15.py process 15",
             merged.get(2).workCmd);
-        assertEquals("cd /storage/emulated/0/mockup_project_15 && python w15.py batch 15",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_15 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_15 python w15.py batch 15",
             merged.get(2).batchCmd);
-        assertEquals("cd /storage/emulated/0/mockup_project_15 && python w15.py del 15",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_15 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_15 python w15.py del 15",
             merged.get(2).deleteCmd);
         assertEquals("Project 16", merged.get(3).name);
         assertNull(merged.get(3).workCmd);
@@ -221,7 +221,7 @@ public class BulkProjectsTest {
 
     @Test
     public void fullCommandFormat() {
-        assertEquals("cd /storage/emulated/0/mockup_project_12 && python adnan_core.py process 12",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_12 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_12 python adnan_core.py process 12",
             BulkProjects.fullCommand(12, "adnan_core.py", "process"));
     }
 
@@ -230,11 +230,11 @@ public class BulkProjectsTest {
     @Test
     public void runBatchDeleteCommands() {
         // Projects screen ke teenon actions — command ki shakal har action par
-        assertEquals("cd /storage/emulated/0/mockup_project_9 && python w9.py process 9",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_9 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_9 python w9.py process 9",
             BulkProjects.fullCommand(9, "w9.py", "process"));
-        assertEquals("cd /storage/emulated/0/mockup_project_9 && python w9.py batch 9",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_9 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_9 python w9.py batch 9",
             BulkProjects.fullCommand(9, "w9.py", "batch"));
-        assertEquals("cd /storage/emulated/0/mockup_project_9 && python w9.py del 9",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_9 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_9 python w9.py del 9",
             BulkProjects.fullCommand(9, "w9.py", "del"));
     }
 
@@ -396,11 +396,11 @@ public class BulkProjectsTest {
 
     @Test
     public void dirHelpersPointInsideProject() {
-        assertEquals("/storage/emulated/0/mockup_project_7/7_wallpapers",
+        assertEquals("/storage/emulated/0/TermuxMod/mockup_project_7/7_wallpapers",
             BulkProjects.wallpapersDir(7).getPath());
-        assertEquals("/storage/emulated/0/mockup_project_7/7_Mockups",
+        assertEquals("/storage/emulated/0/TermuxMod/mockup_project_7/7_Mockups",
             BulkProjects.mockupsDir(7).getPath());
-        assertEquals("/storage/emulated/0/mockup_project_7/7_Ready_Wallpapers",
+        assertEquals("/storage/emulated/0/TermuxMod/mockup_project_7/7_Ready_Wallpapers",
             BulkProjects.readyDir(7).getPath());
     }
 
@@ -452,13 +452,13 @@ public class BulkProjectsTest {
         Map<Integer, String> scripts = new HashMap<>();
         scripts.put(1, "adnan_core.py");
         scripts.put(12, "w12.py");
-        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py process 1",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py process 1",
             BulkProjects.resolveCommand("w1", scripts));
-        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py batch 1",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py batch 1",
             BulkProjects.resolveCommand("b1", scripts));
-        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py del 1",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py del 1",
             BulkProjects.resolveCommand("d1", scripts));
-        assertEquals("cd /storage/emulated/0/mockup_project_12 && python w12.py process 12",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_12 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_12 python w12.py process 12",
             BulkProjects.resolveCommand(" w12 ", scripts));
     }
 
@@ -466,7 +466,7 @@ public class BulkProjectsTest {
     public void resolveCommandLeavesOtherCommandsAlone() {
         Map<Integer, String> scripts = new HashMap<>();
         scripts.put(1, "adnan_core.py");
-        String full = "cd /storage/emulated/0/mockup_project_1 && python adnan_core.py process 1";
+        String full = "cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py process 1";
         assertEquals(full, BulkProjects.resolveCommand(full, scripts));
         // Script maloom nahi — alias waisa ka waisa (ghalat script invent nahi)
         assertEquals("w7", BulkProjects.resolveCommand("w7", scripts));
@@ -484,11 +484,11 @@ public class BulkProjectsTest {
         List<BulkProjects.ProjectInfo> merged = BulkProjects.mergeProjects(conf, disk);
         assertEquals(1, merged.size());
         BulkProjects.ProjectInfo p = merged.get(0);
-        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py process 1",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py process 1",
             p.workCmd);
-        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py batch 1",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py batch 1",
             p.batchCmd);
-        assertEquals("cd /storage/emulated/0/mockup_project_1 && python adnan_core.py del 1",
+        assertEquals("cd /storage/emulated/0/TermuxMod/mockup_project_1 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_1 python adnan_core.py del 1",
             p.deleteCmd);
         // Koi command bare alias nahi rehni chahiye
         assertFalse(p.workCmd.contains("(w1)"));

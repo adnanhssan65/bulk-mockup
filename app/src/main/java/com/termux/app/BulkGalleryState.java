@@ -51,6 +51,26 @@ public final class BulkGalleryState {
     public static final int MIN_COLUMNS = 2;
     public static final int MAX_COLUMNS = 6;
 
+    // v133: Sort + Grid ab bulk_gallery prefs me persist hote hain —
+    // Gallery, Preview Added, Ready Assets (tabs + Drop) sab EK hi
+    // keys parhte/likhte hain. Factory defaults: Sort Newest, Grid 3.
+    public static final String PREFS_NAME = "bulk_gallery";
+    public static final String KEY_SORT = "sort_mode";
+    public static final String KEY_GRID = "grid_cols";
+    public static final int DEFAULT_GRID = 3;
+    /** Pref ghayab ho (kabhi save na hui ho) to getInt ka sentinel. */
+    public static final int PREF_ABSENT = -1;
+
+    /** Saved sort value ka faisla: valid (0..2) ho to wahi, warna Newest. */
+    public static int resolveSortPref(int stored) {
+        return (stored >= SORT_NEWEST && stored <= SORT_NAME) ? stored : SORT_NEWEST;
+    }
+
+    /** Saved grid value ka faisla: valid (2..6) ho to wahi, warna factory 3. */
+    public static int resolveGridPref(int stored) {
+        return (stored >= MIN_COLUMNS && stored <= MAX_COLUMNS) ? stored : DEFAULT_GRID;
+    }
+
     private BulkGalleryState() {}
 
     /** Gallery ki ek image — MediaStore se (id, display name, date added seconds). */

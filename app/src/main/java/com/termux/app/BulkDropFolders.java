@@ -50,6 +50,16 @@ public final class BulkDropFolders {
         return "Project " + n;
     }
 
+    /** v133: har drop folder me project ki pehchan ke liye preview video ka naam. */
+    public static String previewFileName(int n) {
+        return "Preview - Project " + n + ".mp4";
+    }
+
+    /** Preview video ka bundled asset path. */
+    public static String previewAssetPath(int n) {
+        return "bulk/previews/p" + n + ".mp4";
+    }
+
     /**
      * "Project N" (case-insensitive, extra spaces ok) se number — sirf
      * jab N known projects me ho, warna -1. Naam kuch aur ho (backup,
@@ -271,6 +281,9 @@ public final class BulkDropFolders {
         if (files == null || files.length == 0) return 0;
         List<File> sources = new ArrayList<>();
         for (File f : files) {
+            // v133: preview video kabhi import nahi hoti (wese bhi
+            // video countable nahi — ye check naam se bhi pakka hai)
+            if (f.getName().equals(previewFileName(n))) continue;
             if (f.isFile() && BulkProjects.isCountableWallpaper(f.getName())) {
                 sources.add(f);
             }
@@ -384,6 +397,34 @@ public final class BulkDropFolders {
     }
 
     /**
+     * v133: har drop folder me us project ki ~2s preview video rakho
+     * (gallery/file manager me folder ki pehchan ke liye) — SIRF jab
+     * file wahan na ho; mojooda file kabhi overwrite nahi hoti.
+     * Asset na mile (project bundled na ho) to khamoshi se skip.
+     */
+    public static void ensurePreviewVideos(Context ctx, Set<Integer> knownNumbers) {
+        if (ctx == null || knownNumbers == null) return;
+        File root = rootDir();
+        for (int n : knownNumbers) {
+            if (n <= 0) continue;
+            File dest = new File(new File(root, dropFolderName(n)), previewFileName(n));
+            if (dest.exists()) continue;
+            File parent = dest.getParentFile();
+            if (parent != null && !parent.isDirectory()) parent.mkdirs();
+            try (InputStream in = ctx.getAssets().open(previewAssetPath(n));
+                 OutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[1 << 16];
+                int r;
+                while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+            } catch (Exception e) {
+                // Bundled preview na ho to koi baat nahi — video sirf pehchan ke liye hai
+                //noinspection ResultOfMethodCallIgnored
+                dest.delete();
+            }
+        }
+    }
+
+    /**
      * Ek pass: drop folders ensure + fetch. Dashboard / Add / Projects
      * ke khulne par background thread se chalaya jata hai.
      * @return project me move hui kul files
@@ -392,6 +433,7 @@ public final class BulkDropFolders {
         Set<Integer> known = knownNumbers();
         if (known.isEmpty()) return 0;
         ensureDropFolders(known);
+        ensurePreviewVideos(ctx, known);
         return fetchAll(ctx, known);
     }
 }

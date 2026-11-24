@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -402,7 +403,7 @@ public class BulkProjectsActivity extends Activity {
             delete.setBackground(BulkTheme.dangerBg(this));
             delete.setPadding(BulkTheme.dp(this, 8), BulkTheme.dp(this, 8), BulkTheme.dp(this, 8), BulkTheme.dp(this, 8));
             delete.setClickable(true);
-            delete.setOnClickListener(v -> runInTerminal(p.deleteCmd));
+            delete.setOnClickListener(v -> showDeletePopup(p));
             setEnabledStyle(delete, p.deleteCmd != null);
             actions.addView(delete, actionLp(BulkTheme.dp(this, 8)));
 
@@ -465,6 +466,111 @@ public class BulkProjectsActivity extends Activity {
             Logger.logError(LOG_TAG, "Projects parhne me masla: " + e.getMessage());
             return java.util.Collections.emptyList();
         }
+    }
+
+    // ------------------------------------------------------------ v133 Delete popup
+
+    /**
+     * Delete popup: runner ke apne delete-menu ke radio options
+     * (BulkDeleteMenu — script ke hisab se). Kuch NAHI chalta jab
+     * tak Done na dabay; Cancel / X = koi action nahi. Option 1
+     * pehle se select. Done par:
+     *   - aam choice: del command console popup me, digit printf se
+     *     pipe karke;
+     *   - Warehouse choice: script batch ka sawal poochta hai, is
+     *     liye command terminal par interactive jati hai (bina pipe).
+     */
+    private void showDeletePopup(final BulkProjects.ProjectInfo p) {
+        if (p == null || p.deleteCmd == null || p.number <= 0) return;
+        final String script = BulkProjects.detectMainScript(
+            BulkProjects.listFileNames(BulkProjects.projectDir(p.number)), p.number);
+        final List<BulkDeleteMenu.Option> options = BulkDeleteMenu.optionsFor(script);
+        final int[] selected = {options.get(0).digit};
+
+        final Dialog dialog = new Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            p.name + " — " + BulkStrings.t(this, BulkStrings.DELETE), dialog);
+
+        final LinearLayout group = new LinearLayout(this);
+        group.setOrientation(LinearLayout.VERTICAL);
+        panel.addView(group);
+        final Runnable[] refresh = new Runnable[1];
+        refresh[0] = () -> {
+            group.removeAllViews();
+            for (final BulkDeleteMenu.Option o : options) {
+                group.addView(deleteOptionRow(o, o.digit == selected[0],
+                    () -> { selected[0] = o.digit; refresh[0].run(); }));
+            }
+        };
+        refresh[0].run();
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin = BulkTheme.dp(this, 6);
+        row.setLayoutParams(rowLp);
+        TextView cancel = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.CANCEL), v -> dialog.dismiss());
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cLp.rightMargin = BulkTheme.dp(this, 5);
+        cancel.setLayoutParams(cLp);
+        row.addView(cancel);
+        TextView done = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.DONE_BTN), v -> {
+                dialog.dismiss();
+                if (BulkDeleteMenu.isWarehouse(script, selected[0])) {
+                    runInTerminal(p.deleteCmd);
+                } else {
+                    String piped = BulkRunSettings.buildPipedCommand(p.deleteCmd,
+                        java.util.Collections.singletonList(String.valueOf(selected[0])));
+                    BulkRunHelper.runCommandInPopup(this, p, piped);
+                }
+            });
+        LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        dLp.leftMargin = BulkTheme.dp(this, 5);
+        done.setLayoutParams(dLp);
+        row.addView(done);
+        panel.addView(row);
+
+        BulkTheme.showPanelDialog(this, panel);
+    }
+
+    /** Delete popup ki radio row (Run Settings wali hi shakal: ●/○ + label). */
+    private LinearLayout deleteOptionRow(final BulkDeleteMenu.Option o, boolean selected,
+                                         final Runnable onTap) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(selected ? BulkTheme.secondaryBg(this) : BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = BulkTheme.dp(this, 8);
+        row.setLayoutParams(lp);
+
+        TextView dot = new TextView(this);
+        dot.setText(selected ? "●" : "○");
+        dot.setTextColor(selected ? BulkTheme.accent(this) : BulkTheme.textMuted(this));
+        dot.setTextSize(13);
+        row.addView(dot);
+
+        TextView label = new TextView(this);
+        label.setText(o.digit + ".  " + o.label);
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(13.5f);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.leftMargin = BulkTheme.dp(this, 9);
+        label.setLayoutParams(llp);
+        row.addView(label);
+
+        row.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
+        return row;
     }
 
     /** Command ko terminal me chalao — TermuxActivity khol kar wahan type ho jati hai. */

@@ -15,6 +15,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -43,23 +44,40 @@ public final class BulkTheme {
     private BulkTheme() {}
 
     // ------------------------------------------------------------ theme state
+    // v133: theme ab BulkPalettes ki table se ata hai — "ui_theme" pref
+    // me theme id persist hoti hai; purani "ui_light_mode" boolean sirf
+    // pehli mapping ke liye parhi jati hai (false -> Dark). Factory
+    // default = Default theme (purana Light, byte-for-byte wahi rang).
 
-    public static boolean isLight(Context c) {
+    /** Is waqt muntakhab theme ki palette. */
+    public static BulkPalettes.Palette currentPalette(Context c) {
         try {
-            // v128: factory default LIGHT — sirf tab jab user ne kabhi
-            // theme choose na kiya ho (saved choice hamesha respected).
-            return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LIGHT, true);
+            SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            String saved = sp.getString(BulkPalettes.PREF_KEY, null);
+            Boolean legacy = sp.contains(KEY_LIGHT)
+                ? sp.getBoolean(KEY_LIGHT, true) : null;
+            return BulkPalettes.resolve(saved, legacy);
         } catch (Exception e) {
-            return false;
+            return BulkPalettes.defaultPalette();
         }
     }
 
-    public static void setLight(Context c, boolean light) {
+    /** Theme select karke persist karo (id ghalat ho to kuch nahi hota). */
+    public static void setTheme(Context c, String themeId) {
+        if (BulkPalettes.byId(themeId) == null) return;
         try {
-            SharedPreferences.Editor ed = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
-            ed.putBoolean(KEY_LIGHT, light);
-            ed.apply();
+            c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(BulkPalettes.PREF_KEY, themeId)
+                .apply();
         } catch (Exception ignored) {}
+    }
+
+    public static boolean isLight(Context c) {
+        return currentPalette(c).light;
+    }
+
+    public static void setLight(Context c, boolean light) {
+        setTheme(c, light ? BulkPalettes.ID_DEFAULT : BulkPalettes.ID_DARK);
     }
 
     /** Toggle karke naya mode wapas karo (true = light). */
@@ -71,24 +89,24 @@ public final class BulkTheme {
 
     // ------------------------------------------------------------ colors
 
-    public static int appBg(Context c)        { return isLight(c) ? 0xFFF3F8F3 : 0xFF030603; }
-    public static int accent(Context c)       { return isLight(c) ? 0xFF2E9E00 : 0xFF76FF03; }
-    public static int accentSoft(Context c)   { return isLight(c) ? 0x1C2E9E00 : 0x1F76FF03; }
-    public static int accentBorder(Context c) { return isLight(c) ? 0x592E9E00 : 0x5C76FF03; }
-    public static int accentStrong(Context c) { return isLight(c) ? 0xB82E9E00 : 0xB876FF03; }
-    public static int textMain(Context c)     { return isLight(c) ? 0xFF0D1B0E : 0xFFFFFFFF; }
-    public static int textSub(Context c)      { return isLight(c) ? 0xFF2E4730 : 0xFFA5B8A6; }
-    public static int textMuted(Context c)    { return isLight(c) ? 0xFF556E57 : 0xFF6E8270; }
-    public static int onAccent(Context c)     { return isLight(c) ? 0xFFFFFFFF : 0xFF030803; }
-    public static int glassBg(Context c)      { return isLight(c) ? 0xE0FFFFFF : 0xD60B140C; }
-    public static int iconBoxColor(Context c) { return isLight(c) ? 0x1C2E9E00 : 0x1776FF03; }
-    public static int cardStart(Context c)    { return isLight(c) ? 0xFFFFFFFF : 0xFF0D180E; }
-    public static int cardEnd(Context c)      { return isLight(c) ? 0xFFE7F3E8 : 0xFF050905; }
-    public static int drawerBg(Context c)     { return isLight(c) ? 0xFAF3F8F3 : 0xF7070D08; }
-    public static int modalColor(Context c)   { return isLight(c) ? 0xFAFFFFFF : 0xF50A120B; }
-    public static int danger(Context c)       { return isLight(c) ? 0xFFD32F2F : 0xFFFF5252; }
-    public static int dangerSoft(Context c)   { return isLight(c) ? 0x1FD32F2F : 0x24FF5252; }
-    public static int dangerBorder(Context c) { return isLight(c) ? 0x59D32F2F : 0x59FF5252; }
+    public static int appBg(Context c)        { return currentPalette(c).bg; }
+    public static int accent(Context c)       { return currentPalette(c).accent; }
+    public static int accentSoft(Context c)   { return currentPalette(c).accentSoft; }
+    public static int accentBorder(Context c) { return currentPalette(c).border; }
+    public static int accentStrong(Context c) { return currentPalette(c).accentStrong; }
+    public static int textMain(Context c)     { return currentPalette(c).text; }
+    public static int textSub(Context c)      { return currentPalette(c).textSub; }
+    public static int textMuted(Context c)    { return currentPalette(c).muted; }
+    public static int onAccent(Context c)     { return currentPalette(c).onAccent; }
+    public static int glassBg(Context c)      { return currentPalette(c).glassBg; }
+    public static int iconBoxColor(Context c) { return currentPalette(c).iconBox; }
+    public static int cardStart(Context c)    { return currentPalette(c).surface; }
+    public static int cardEnd(Context c)      { return currentPalette(c).surfaceMuted; }
+    public static int drawerBg(Context c)     { return currentPalette(c).drawerBg; }
+    public static int modalColor(Context c)   { return currentPalette(c).modal; }
+    public static int danger(Context c)       { return currentPalette(c).danger; }
+    public static int dangerSoft(Context c)   { return currentPalette(c).dangerSoft; }
+    public static int dangerBorder(Context c) { return currentPalette(c).dangerBorder; }
 
     // ------------------------------------------------------------ metrics
 
@@ -164,6 +182,7 @@ public final class BulkTheme {
         return g;
     }
 
+
     public static Drawable accentBarBg(Context c) {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{accent(c), Color.TRANSPARENT});
@@ -217,13 +236,87 @@ public final class BulkTheme {
         return box;
     }
 
-    /** Theme toggle wala gol button — dark me sun, light me moon (design jesa). */
+    /**
+     * Theme wala gol button — dark me sun, light me moon (design jesa).
+     * v133: click ab toggle NAHI karta — Themes popup khulta hai
+     * (Default / Dark / 5 naye themes); select foran lagu hota hai.
+     */
     public static LinearLayout themeButton(final Activity a) {
         int res = isLight(a) ? R.drawable.ic_bulk_moon : R.drawable.ic_bulk_sun;
-        return circleButton(a, res, 34, v -> {
-            toggle(a);
-            a.recreate();
-        });
+        return circleButton(a, res, 34, v -> showThemesPopup(a));
+    }
+
+    /**
+     * v133 — Themes popup (design style): har theme ek row —
+     * palette ke mini swatches (bg / surface / accent) + naam +
+     * mojooda theme par ✓. Tap = persist + foran apply (activity
+     * recreate, purane toggle wala hi rasta).
+     */
+    public static void showThemesPopup(final Activity a) {
+        final Dialog dialog = new Dialog(a);
+        LinearLayout panel = modalPanel(a, BulkStrings.t(a, BulkStrings.THEMES), dialog);
+        String currentId = currentPalette(a).id;
+        for (final BulkPalettes.Palette p : BulkPalettes.all()) {
+            panel.addView(themeRow(a, p, p.id.equals(currentId), v -> {
+                dialog.dismiss();
+                if (!p.id.equals(currentPalette(a).id)) {
+                    setTheme(a, p.id);
+                    a.recreate();
+                }
+            }));
+        }
+        showPanelDialog(a, panel);
+    }
+
+    private static View themeRow(Context c, BulkPalettes.Palette p, boolean selected,
+                                 View.OnClickListener click) {
+        LinearLayout row = new LinearLayout(c);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(selected ? glassPanelStrong(c) : glassPanel(c));
+        row.setPadding(dp(c, 12), dp(c, 11), dp(c, 12), dp(c, 11));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(c, 8);
+        row.setLayoutParams(rlp);
+
+        // Mini swatches: bg / surface / accent ke chhote gol rang
+        int[] swatches = {p.bg, p.surface, p.accent};
+        for (int color : swatches) {
+            View dot = new View(c);
+            GradientDrawable g = new GradientDrawable();
+            g.setShape(GradientDrawable.OVAL);
+            g.setColor(color);
+            g.setStroke(dp(c, 1), accentBorder(c));
+            dot.setBackground(g);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(dp(c, 16), dp(c, 16));
+            dlp.rightMargin = dp(c, 5);
+            dot.setLayoutParams(dlp);
+            row.addView(dot);
+        }
+
+        TextView name = new TextView(c);
+        name.setText(p.name);
+        name.setTextSize(13.5f);
+        name.setTextColor(textMain(c));
+        if (selected) name.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        nlp.leftMargin = dp(c, 6);
+        name.setLayoutParams(nlp);
+        row.addView(name);
+
+        if (selected) {
+            TextView check = new TextView(c);
+            check.setText("✓");
+            check.setTextSize(14);
+            check.setTypeface(Typeface.DEFAULT_BOLD);
+            check.setTextColor(accent(c));
+            row.addView(check);
+        }
+        row.setClickable(true);
+        row.setOnClickListener(click);
+        return row;
     }
 
     /** Sub-screens ka mushtarika header: back gol button + title/subtitle + theme button, neeche border line. */
@@ -357,20 +450,159 @@ public final class BulkTheme {
 
     // ------------------------------------------------------------ window
 
+    /**
+     * v133 — Edge Blend (owner ka approved design): window ab
+     * edge-to-edge hai — status/navigation bars transparent, app ka
+     * background un ke peeche tak jata hai. Bar icons ka tint palette
+     * ke hisab se (light theme = gehre icons, dark = roshan).
+     * Asal content bilkul waisa hi rehta hai: installEdgeBlend asal
+     * root ko utni hi padding deta hai jitni system pehle deta tha,
+     * aur SIRF bar zones me mist gradient lagata hai (BulkEdgeBlend).
+     */
     public static void applyWindow(Activity a) {
         try {
             Window w = a.getWindow();
-            w.setStatusBarColor(appBg(a));
-            w.setNavigationBarColor(appBg(a));
+            w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            w.setStatusBarColor(Color.TRANSPARENT);
+            w.setNavigationBarColor(Color.TRANSPARENT);
             View decor = w.getDecorView();
             int flags = decor.getSystemUiVisibility();
+            flags |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
             if (isLight(a)) {
                 flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                flags |= SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
             } else {
                 flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                flags &= ~SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
             }
             decor.setSystemUiVisibility(flags);
+            installEdgeBlend(a);
         } catch (Exception ignored) {}
+    }
+
+    /** SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR (API 26+) — purane Android
+     *  par ye bit khamoshi se ignore ho jata hai. */
+    private static final int SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR = 0x10;
+
+    private static final String EDGE_ROOT_TAG = "bulk_edge_root";
+
+    /**
+     * Content ke asal root ko ek full-window FrameLayout (edge root)
+     * me lapet ta hai: edge root ka background = appBg (poori window,
+     * bar zones samet), asal root ko insets jitni padding milti hai
+     * (content ki jagah/size bilkul pehle jesi), aur uper/neeche
+     * mist overlays lagte hain. Activities jo setContentView badalti
+     * hain (Stage/Gallery/AddProject) un ke naye root ko bhi yehi
+     * listener khud lapet deta hai; toast jese baad ke adds par
+     * edge root pehle se mojood hota hai, is liye kuch nahi hota.
+     */
+    private static void installEdgeBlend(final Activity a) {
+        try {
+            View decor = a.getWindow().getDecorView();
+            decor.post(() -> {
+                try {
+                    final ViewGroup content = a.findViewById(android.R.id.content);
+                    if (content == null) return;
+                    content.setOnHierarchyChangeListener(new ViewGroup.OnHierarchyChangeListener() {
+                        @Override
+                        public void onChildViewAdded(View parent, View child) {
+                            wrapEdgeChild(a, content);
+                        }
+
+                        @Override
+                        public void onChildViewRemoved(View parent, View child) {}
+                    });
+                    wrapEdgeChild(a, content);
+                } catch (Exception ignored) {}
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private static void wrapEdgeChild(final Activity a, final ViewGroup content) {
+        try {
+            for (int i = 0; i < content.getChildCount(); i++) {
+                if (EDGE_ROOT_TAG.equals(content.getChildAt(i).getTag())) return;
+            }
+            if (content.getChildCount() == 0) return;
+            final View root = content.getChildAt(0);
+            if (root == null) return;
+
+            final FrameLayout edge = new FrameLayout(a);
+            edge.setTag(EDGE_ROOT_TAG);
+            edge.setBackgroundColor(appBg(a));
+            content.removeView(root);
+            edge.addView(root, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            final View topMist = new View(a);
+            topMist.setBackground(mistDrawable(a, true));
+            topMist.setClickable(false);
+            topMist.setFocusable(false);
+            FrameLayout.LayoutParams topLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                BulkEdgeBlend.topZonePx(systemDimenPx(a, "status_bar_height"),
+                    dp(a, BulkEdgeBlend.TOP_EXTENSION_DP)), Gravity.TOP);
+            edge.addView(topMist, topLp);
+
+            final View bottomMist = new View(a);
+            bottomMist.setBackground(mistDrawable(a, false));
+            bottomMist.setClickable(false);
+            bottomMist.setFocusable(false);
+            FrameLayout.LayoutParams bottomLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                BulkEdgeBlend.bottomZonePx(systemDimenPx(a, "navigation_bar_height"),
+                    dp(a, BulkEdgeBlend.BOTTOM_EXTENSION_DP)), Gravity.BOTTOM);
+            edge.addView(bottomMist, bottomLp);
+
+            content.addView(edge, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            final int baseL = root.getPaddingLeft();
+            final int baseT = root.getPaddingTop();
+            final int baseR = root.getPaddingRight();
+            final int baseB = root.getPaddingBottom();
+            edge.setOnApplyWindowInsetsListener((v, insets) -> {
+                try {
+                    root.setPadding(baseL + insets.getSystemWindowInsetLeft(),
+                        baseT + insets.getSystemWindowInsetTop(),
+                        baseR + insets.getSystemWindowInsetRight(),
+                        baseB + insets.getSystemWindowInsetBottom());
+                    FrameLayout.LayoutParams tlp = (FrameLayout.LayoutParams) topMist.getLayoutParams();
+                    tlp.height = BulkEdgeBlend.topZonePx(insets.getSystemWindowInsetTop(),
+                        dp(a, BulkEdgeBlend.TOP_EXTENSION_DP));
+                    topMist.setLayoutParams(tlp);
+                    FrameLayout.LayoutParams blp = (FrameLayout.LayoutParams) bottomMist.getLayoutParams();
+                    blp.height = BulkEdgeBlend.bottomZonePx(insets.getSystemWindowInsetBottom(),
+                        dp(a, BulkEdgeBlend.BOTTOM_EXTENSION_DP));
+                    bottomMist.setLayoutParams(blp);
+                } catch (Exception ignored) {}
+                return insets;
+            });
+            edge.requestApplyInsets();
+        } catch (Exception ignored) {}
+    }
+
+    /** Mist gradient: edge par gehra, andar ki taraf ghulta hua —
+     *  koi hard line nahi (stops BulkEdgeBlend se, orientation se
+     *  edge ki taraf tay hoti hai). */
+    private static GradientDrawable mistDrawable(Activity a, boolean top) {
+        GradientDrawable g = new GradientDrawable(
+            top ? GradientDrawable.Orientation.TOP_BOTTOM
+                : GradientDrawable.Orientation.BOTTOM_TOP,
+            BulkEdgeBlend.edgeStops(currentPalette(a)));
+        g.setGradientType(GradientDrawable.LINEAR_GRADIENT);
+        return g;
+    }
+
+    private static int systemDimenPx(Activity a, String name) {
+        try {
+            int id = a.getResources().getIdentifier(name, "dimen", "android");
+            return id > 0 ? a.getResources().getDimensionPixelSize(id) : 0;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     // ------------------------------------------------------------ toast banner (design style)

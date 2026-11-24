@@ -204,6 +204,18 @@ public final class BulkStrings {
     public static final String SYSTEM_PICKER = "system_picker";
     public static final String GALLERY_EMPTY = "gallery_empty";
 
+    // v133 — Themes popup, System Picker subtitle, Drop Box compact tile,
+    // gallery gear sections, folder-shift (migration) summary
+    public static final String THEMES = "themes";
+    public static final String SYSTEM_PICKER_SUB = "system_picker_sub";
+    public static final String VIEW_ALL = "view_all";
+    public static final String TAP_TO_VIEW = "tap_to_view";
+    public static final String SORT_SECTION = "sort_section";
+    public static final String GRID_SECTION = "grid_section";
+    public static final String MIGRATED_TITLE = "migrated_title";
+    public static final String MIGRATED_MSG = "migrated_msg";
+    public static final String STAGED_DROP_SUB = "staged_drop_sub";
+
     // v129 — Drop Wallpapers (Ready Assets ke andar), Home live logs, permission popup
     public static final String DROP_WALLPAPERS = "drop_wallpapers";
     public static final String DROP_WALLPAPERS_SUB = "drop_wallpapers_sub";
@@ -492,6 +504,21 @@ public final class BulkStrings {
         put(ALL_IMAGES, "All Images", "Tamam Images");
         put(SYSTEM_PICKER, "System Picker", "System Picker");
         put(GALLERY_EMPTY, "No images found on this device", "Is device par koi image nahi mili");
+
+        // v133
+        put(THEMES, "Themes", "Themes");
+        put(SYSTEM_PICKER_SUB, "Pick images from Gallery / File Manager",
+            "Gallery / File Manager se images chuno");
+        put(VIEW_ALL, "View all", "Sab dekho");
+        put(TAP_TO_VIEW, "tap to view", "tap karo");
+        put(SORT_SECTION, "Sort", "Sort");
+        put(GRID_SECTION, "Grid", "Grid");
+        put(MIGRATED_TITLE, "Project Folders Updated", "Project Folders Update Ho Gaye");
+        put(MIGRATED_MSG,
+            "%d project(s) moved into the TermuxMod folder, so storage now shows only one folder. %d project(s) stayed in the old place — they keep working exactly the same.",
+            "%d project(s) TermuxMod folder ke andar shift ho gaye — ab storage me sirf ek hi folder dikhega. %d project(s) purani jagah par hi rahe — wo bilkul pehle ki tarah chalte rahenge.");
+        put(STAGED_DROP_SUB, "Staged images — not added to a project yet",
+            "Staged images — abhi kisi project me add nahi hue");
 
         // v129
         put(DROP_WALLPAPERS, "Drop Wallpapers", "Drop Wallpapers");

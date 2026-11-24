@@ -57,9 +57,26 @@ public class BulkPreviewActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
+        // v133: Sort/Grid shared persisted prefs (gallery wali hi keys)
+        android.content.SharedPreferences gp = getSharedPreferences(
+            BulkGalleryState.PREFS_NAME, MODE_PRIVATE);
+        mSortMode = BulkGalleryState.resolveSortPref(
+            gp.getInt(BulkGalleryState.KEY_SORT, BulkGalleryState.PREF_ABSENT));
+        mCols = BulkGalleryState.resolveGridPref(
+            gp.getInt(BulkGalleryState.KEY_GRID, BulkGalleryState.PREF_ABSENT));
         mProjects = loadProjects();
         setContentView(buildUi());
         BulkFonts.apply(this);
+    }
+
+    private void saveSortPref() {
+        getSharedPreferences(BulkGalleryState.PREFS_NAME, MODE_PRIVATE).edit()
+            .putInt(BulkGalleryState.KEY_SORT, mSortMode).apply();
+    }
+
+    private void saveGridPref() {
+        getSharedPreferences(BulkGalleryState.PREFS_NAME, MODE_PRIVATE).edit()
+            .putInt(BulkGalleryState.KEY_GRID, mCols).apply();
     }
 
     @Override
@@ -246,12 +263,14 @@ public class BulkPreviewActivity extends Activity {
                 : BulkStrings.SORT_NEWEST));
         sortPill.setOnClickListener(v -> {
             mSortMode = BulkGalleryState.nextSort(mSortMode);
+            saveSortPref();
             refreshList();
         });
         row2.addView(sortPill);
         LinearLayout gridPill = pillIcon(R.drawable.ic_bulk_grid, mCols + "x");
         gridPill.setOnClickListener(v -> {
             mCols = BulkGalleryState.nextColumns(mCols);
+            saveGridPref();
             refreshList();
         });
         LinearLayout.LayoutParams gp2 = new LinearLayout.LayoutParams(

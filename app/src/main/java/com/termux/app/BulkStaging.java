@@ -19,6 +19,10 @@ import java.util.List;
  */
 public final class BulkStaging {
 
+    /** Staging persistence ki jagah (BulkStageActivity ke sath shared). */
+    public static final String PREFS_NAME = "bulk_wallpapers_stage";
+    public static final String KEY_ITEMS = "items";
+
     public static final int SORT_NAME_ASC = 0;
     public static final int SORT_NAME_DESC = 1;
     public static final int SORT_DATE_ASC = 2;

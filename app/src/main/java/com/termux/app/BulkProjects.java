@@ -64,8 +64,38 @@ public final class BulkProjects {
         return "mockup_project_" + n;
     }
 
-    public static File projectDir(int n) {
+    /** v133: app-managed projects ki NAYI jagah — TermuxMod folder ke andar. */
+    public static File newProjectDir(int n) {
+        return new File(new File(STORAGE_ROOT, "TermuxMod"), projectDirName(n));
+    }
+
+    /** Purani jagah — storage root par seedha mockup_project_<N>. */
+    public static File oldProjectDir(int n) {
         return new File(STORAGE_ROOT, projectDirName(n));
+    }
+
+    /**
+     * Location ka faisla (pure): nayi jagah ka folder ho to wahi;
+     * warna purani jagah ka ho to wahi; dono na hon to NAYI jagah
+     * (fresh install wahin banta hai).
+     */
+    public static File pickProjectDir(File newDir, File oldDir,
+                                      boolean newExists, boolean oldExists) {
+        if (newExists) return newDir;
+        if (oldExists) return oldDir;
+        return newDir;
+    }
+
+    /**
+     * v133: project ka ASAL folder — resolution upar wale usool se.
+     * App ka har kaam (counts, run, batch, delete, staging commit,
+     * Ready Assets, drop-fetch) isi ko istemal karta hai, is liye
+     * project chahe jahan ho, sab kuch chalta rehta hai.
+     */
+    public static File projectDir(int n) {
+        File newDir = newProjectDir(n);
+        File oldDir = oldProjectDir(n);
+        return pickProjectDir(newDir, oldDir, newDir.isDirectory(), oldDir.isDirectory());
     }
 
     public static File wallpapersDir(int n) {
@@ -164,9 +194,17 @@ public final class BulkProjects {
 
     // ------------------------------------------------------------ commands
 
-    /** Poori command line (alias par bharosa kiye baghair): cd + python <script> <action> <N>. */
+    /**
+     * Poori command line (alias par bharosa kiye baghair):
+     * cd (resolved dir) + MOCKUP_BASE=<resolved dir> + python.
+     * v133: MOCKUP_BASE har app-issued command me jata hai taake
+     * env-aware runners hamesha asal folder par kaam karen — project
+     * nayi jagah ho ya purani.
+     */
     public static String fullCommand(int n, String script, String action) {
-        return "cd " + STORAGE_ROOT + "/" + projectDirName(n) + " && python " + script + " " + action + " " + n;
+        String dir = projectDir(n).getAbsolutePath();
+        return "cd " + dir + " && MOCKUP_BASE=" + dir
+            + " python " + script + " " + action + " " + n;
     }
 
     /** Alias ka harf → script ka action: w = process, b = batch, d = del. */
@@ -389,17 +427,23 @@ public final class BulkProjects {
 
     // ------------------------------------------------------------ disk IO helpers
 
-    /** /storage/emulated/0 me jitne mockup_project_<N> folders hain, un ke numbers + scripts. */
+    /**
+     * Disk par jitne mockup_project_<N> folders hain — DONO jagah
+     * (purani root + nayi TermuxMod ke andar), un ke numbers + scripts.
+     * Script hamesha RESOLVED folder se parhi jati hai.
+     */
     public static Map<Integer, String> scanDiskProjects() {
         Map<Integer, String> map = new LinkedHashMap<>();
-        File root = new File(STORAGE_ROOT);
-        File[] kids = root.listFiles();
-        if (kids == null) return map;
         List<Integer> numbers = new ArrayList<>();
-        for (File k : kids) {
-            if (!k.isDirectory()) continue;
-            int n = parseFolderNumber(k.getName());
-            if (n > 0) numbers.add(n);
+        File[] roots = {new File(STORAGE_ROOT), new File(STORAGE_ROOT, "TermuxMod")};
+        for (File root : roots) {
+            File[] kids = root.listFiles();
+            if (kids == null) continue;
+            for (File k : kids) {
+                if (!k.isDirectory()) continue;
+                int n = parseFolderNumber(k.getName());
+                if (n > 0 && !numbers.contains(n)) numbers.add(n);
+            }
         }
         Collections.sort(numbers);
         for (int n : numbers) {

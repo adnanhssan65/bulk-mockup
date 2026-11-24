@@ -139,6 +139,11 @@ public class BulkStageActivity extends Activity {
     private LinearLayout mProgressBar;
     private TextView mUnlockHint;
     private TextView mDropEmpty;
+    // v133: Drop Box compact halat — header + pehli 3 thumbs + "+N"
+    // tile; tap par poora (purana) grid khulta hai. Expanded halat
+    // sirf is screen ki zindagi tak (default har dafa compact).
+    private LinearLayout mDropPreviewRow;
+    private boolean mDropExpanded = false;
     // v130: khaali staging par ye sab GONE — sirf pick pill row rehti hai
     private View mLinkView;
     private View mStep1View;
@@ -989,7 +994,31 @@ public class BulkStageActivity extends Activity {
         mStagedCount.setTextSize(11);
         mStagedCount.setTextColor(BulkTheme.textSub(this));
         mStagedCount.setTypeface(android.graphics.Typeface.MONOSPACE);
-        panel.addView(headerRow(BulkStrings.t(this, BulkStrings.DROP_BOX), mStagedCount));
+        LinearLayout dropHeader = headerRow(BulkStrings.t(this, BulkStrings.DROP_BOX), mStagedCount);
+        // v133: header par tap = compact <-> full grid toggle
+        dropHeader.setClickable(true);
+        dropHeader.setOnClickListener(v -> {
+            if (mStaged.isEmpty()) return;
+            mDropExpanded = !mDropExpanded;
+            refreshStagedViews();
+        });
+        panel.addView(dropHeader);
+
+        // v133: compact preview row — pehli 3 thumbs + "+N View all"
+        // tile; tap = poora grid (neeche wala, bilkul purana)
+        mDropPreviewRow = new LinearLayout(this);
+        mDropPreviewRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams prp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        prp.topMargin = BulkTheme.dp(this, 10);
+        mDropPreviewRow.setLayoutParams(prp);
+        mDropPreviewRow.setClickable(true);
+        mDropPreviewRow.setOnClickListener(v -> {
+            if (mStaged.isEmpty()) return;
+            mDropExpanded = true;
+            refreshStagedViews();
+        });
+        panel.addView(mDropPreviewRow);
 
         // Toolbar (v126, barqarar) — sirf jab staging khaali na ho
         mToolbarNormal = buildToolbarNormal();
@@ -1115,8 +1144,89 @@ public class BulkStageActivity extends Activity {
 
     private void setSelectMode(boolean on) {
         mSelectMode = on;
+        if (on) mDropExpanded = true; // select mode sirf full grid me hota hai
         if (!on) mChecked.clear();
         refreshStagedViews();
+    }
+
+    // ------------------------------------------------------------ v133 Drop Box compact
+
+    /** Compact preview row dobara banao: pehli 3 thumbs (+ "+N" tile jab baqi hon). */
+    private void rebuildDropPreview() {
+        if (mDropPreviewRow == null) return;
+        mDropPreviewRow.removeAllViews();
+        int show = Math.min(3, mStaged.size());
+        for (int i = 0; i < show; i++) {
+            View thumb = buildPreviewThumb(mStaged.get(i));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, BulkTheme.dp(this, 60), 1f);
+            if (i > 0) lp.leftMargin = BulkTheme.dp(this, 8);
+            thumb.setLayoutParams(lp);
+            mDropPreviewRow.addView(thumb);
+        }
+        int remaining = mStaged.size() - show;
+        if (remaining > 0) {
+            View tile = buildMoreTile(remaining);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, BulkTheme.dp(this, 60), 1f);
+            lp.leftMargin = BulkTheme.dp(this, 8);
+            tile.setLayoutParams(lp);
+            mDropPreviewRow.addView(tile);
+        }
+        BulkFonts.applyToTree(this, mDropPreviewRow);
+    }
+
+    /** Compact row ki ek thumbnail (sirf image — naam/badge full grid me hi hain). */
+    private View buildPreviewThumb(final BulkStaging.Item item) {
+        FrameLayout box = new FrameLayout(this);
+        box.setBackground(BulkTheme.tileBg(this));
+        Bitmap bmp = mThumbs.get(item.uri);
+        if (bmp != null) {
+            ImageView iv = new ImageView(this);
+            iv.setImageBitmap(bmp);
+            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            iv.setPadding(BulkTheme.dp(this, 3), BulkTheme.dp(this, 3),
+                BulkTheme.dp(this, 3), BulkTheme.dp(this, 3));
+            box.addView(iv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_image, BulkTheme.textMuted(this), 18);
+            FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
+                BulkTheme.dp(this, 18), BulkTheme.dp(this, 18));
+            ip.gravity = Gravity.CENTER;
+            iv.setLayoutParams(ip);
+            box.addView(iv);
+        }
+        return box;
+    }
+
+    /** "+N / View all / tap karo" tile — tap par poora grid khulta hai (row ka hi listener). */
+    private View buildMoreTile(int remaining) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setBackground(BulkTheme.tileBg(this));
+        TextView plus = new TextView(this);
+        plus.setText("+" + remaining);
+        plus.setTextSize(15);
+        plus.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        plus.setTextColor(BulkTheme.accent(this));
+        plus.setGravity(Gravity.CENTER);
+        tile.addView(plus);
+        TextView viewAll = new TextView(this);
+        viewAll.setText(BulkStrings.t(this, BulkStrings.VIEW_ALL));
+        viewAll.setTextSize(11);
+        viewAll.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        viewAll.setTextColor(BulkTheme.textMain(this));
+        viewAll.setGravity(Gravity.CENTER);
+        tile.addView(viewAll);
+        TextView tap = new TextView(this);
+        tap.setText(BulkStrings.t(this, BulkStrings.TAP_TO_VIEW));
+        tap.setTextSize(9.5f);
+        tap.setTextColor(BulkTheme.textMuted(this));
+        tap.setGravity(Gravity.CENTER);
+        tile.addView(tap);
+        return tile;
     }
 
     private void confirmClearAll() {
@@ -1175,9 +1285,16 @@ public class BulkStageActivity extends Activity {
     private void refreshStagedViews() {
         if (mStagedGrid == null) return;
         boolean has = !mStaged.isEmpty();
-        mToolbarNormal.setVisibility(has && !mSelectMode ? View.VISIBLE : View.GONE);
-        mToolbarSelect.setVisibility(has && mSelectMode ? View.VISIBLE : View.GONE);
-        mStagedGrid.setVisibility(has ? View.VISIBLE : View.GONE);
+        // v133: compact halat me sirf header + preview row; toolbars
+        // or poora grid sirf expanded halat me (bilkul purane jese)
+        boolean compact = has && !mDropExpanded;
+        mToolbarNormal.setVisibility(has && !compact && !mSelectMode ? View.VISIBLE : View.GONE);
+        mToolbarSelect.setVisibility(has && !compact && mSelectMode ? View.VISIBLE : View.GONE);
+        mStagedGrid.setVisibility(has && !compact ? View.VISIBLE : View.GONE);
+        if (mDropPreviewRow != null) {
+            mDropPreviewRow.setVisibility(compact ? View.VISIBLE : View.GONE);
+            if (compact) rebuildDropPreview();
+        }
         if (mDropEmpty != null) mDropEmpty.setVisibility(has ? View.GONE : View.VISIBLE);
         if (mSelectMode) {
             mSelectCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mChecked.size()));
@@ -1672,7 +1789,78 @@ public class BulkStageActivity extends Activity {
         deleteOriginals(uris);
     }
 
+    /**
+     * v133: pehle SEEDHA delete (All Files Access ho to) — har
+     * original ka asal path (MediaStore DATA) nikaal kar File.delete;
+     * jo seedha na hate (path na mile / delete fail) sirf wohi purane
+     * MediaStore raste (system dialog) par jata hai.
+     */
     private void deleteOriginals(final List<Uri> uris) {
+        if (!BulkStorageAccess.hasAccess(this)) {
+            deleteOriginalsLegacy(uris);
+            return;
+        }
+        new Thread(() -> {
+            int deleted = 0;
+            List<Uri> remaining = new ArrayList<>();
+            for (Uri u : uris) {
+                if (tryDirectDelete(u)) deleted++;
+                else remaining.add(u);
+            }
+            final int fDeleted = deleted;
+            final List<Uri> fRemaining = remaining;
+            runOnUiThread(() -> {
+                mDeletedSoFar = fDeleted;
+                if (fRemaining.isEmpty()) {
+                    finishDeleteOriginals(fDeleted);
+                } else {
+                    deleteOriginalsLegacy(fRemaining);
+                }
+            });
+        }).start();
+    }
+
+    /** Seedha File.delete — kamyabi tab hi jab file asal me gayab ho jaye. */
+    private boolean tryDirectDelete(Uri uri) {
+        String path = resolveMediaPath(uri);
+        if (!BulkStorageAccess.shouldDeleteDirectly(true, path)) return false;
+        try {
+            File f = new File(path);
+            if (!f.exists()) {
+                // Asal file pehle se gayab — original khatam hi hai;
+                // MediaStore ki purani entry rescan se saaf ho jayegi
+                android.media.MediaScannerConnection.scanFile(this,
+                    new String[]{path}, null, null);
+                return true;
+            }
+            if (!f.delete() || f.exists()) return false;
+            android.media.MediaScannerConnection.scanFile(this,
+                new String[]{path}, null, null);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** MediaStore DATA column se asal file path (na mile to null). */
+    private String resolveMediaPath(Uri uri) {
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(uri,
+                new String[]{MediaStore.Images.Media.DATA}, null, null, null);
+            if (c == null || !c.moveToFirst()) return null;
+            String path = c.getString(0);
+            return (path == null || path.isEmpty()) ? null : path;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
+    /** Purana rasta (v132 tak ka): API 30+ par EK system dialog, warna per-item delete/consent. */
+    private void deleteOriginalsLegacy(final List<Uri> uris) {
+        final int baseDeleted = mDeletedSoFar;
         if (Build.VERSION.SDK_INT >= 30) {
             try {
                 // Poore batch ke liye EK system confirmation dialog
@@ -1703,12 +1891,12 @@ public class BulkStageActivity extends Activity {
             final int fDeleted = deleted;
             final List<ConsentItem> fConsent = consent;
             runOnUiThread(() -> {
-                mDeletedSoFar = fDeleted;
+                mDeletedSoFar = baseDeleted + fDeleted;
                 if (!fConsent.isEmpty()) {
                     mConsentQueue = new ArrayList<>(fConsent);
                     launchNextConsent();
                 } else {
-                    finishDeleteOriginals(fDeleted);
+                    finishDeleteOriginals(baseDeleted + fDeleted);
                 }
             });
         }).start();

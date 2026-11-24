@@ -57,9 +57,9 @@ public class BulkRunSettingsTest {
     public void pipedCommandWrapsAliasAndCompound() {
         assertEquals("printf '%s\\n' '1' '2' | (w1)",
             BulkRunSettings.buildPipedCommand("w1", Arrays.asList("1", "2")));
-        assertEquals("printf '%s\\n' '1' '1' | (cd /storage/emulated/0/mockup_project_3 && python adnan_core.py process 3)",
+        assertEquals("printf '%s\\n' '1' '1' | (cd /storage/emulated/0/TermuxMod/mockup_project_3 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_3 python adnan_core.py process 3)",
             BulkRunSettings.buildPipedCommand(
-                "cd /storage/emulated/0/mockup_project_3 && python adnan_core.py process 3",
+                "cd /storage/emulated/0/TermuxMod/mockup_project_3 && MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_3 python adnan_core.py process 3",
                 Arrays.asList("1", "1")));
     }
 

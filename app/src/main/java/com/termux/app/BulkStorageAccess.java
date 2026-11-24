@@ -37,6 +37,17 @@ public final class BulkStorageAccess {
         return allFilesAccess || legacyWriteGranted || legacyReadGranted || probeOk;
     }
 
+    /**
+     * v133 — Move ke originals ka delete faisla (pure): All Files
+     * Access (hasAccess) ho or asal path maloom ho to original
+     * seedha java.io.File se delete hoga — system ka "Allow delete"
+     * dialog NAHI ayega. Warna purana MediaStore wala rasta
+     * (createDeleteRequest) fallback hai.
+     */
+    public static boolean shouldDeleteDirectly(boolean hasAccess, String path) {
+        return hasAccess && path != null && !path.isEmpty();
+    }
+
     /** Device par asal check: pehle flags, akhir me asal file probe. */
     public static boolean hasAccess(Context context) {
         boolean allFiles = false;

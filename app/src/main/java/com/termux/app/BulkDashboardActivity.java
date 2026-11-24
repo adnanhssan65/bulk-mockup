@@ -7,7 +7,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Spannable;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -48,7 +50,10 @@ public class BulkDashboardActivity extends Activity {
     private boolean mDrawerOpen = false;
 
     // v129: Home ke hero card par live logs (BulkLog) — har second taaza
-    private TextView mLogView;
+    private LinearLayout mLogBox;
+    private String mLogCache;
+    private View mProgressFill;
+    private android.animation.ObjectAnimator mLogPulse;
     private final android.os.Handler mLogHandler =
         new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable mLogTicker = new Runnable() {
@@ -130,26 +135,325 @@ public class BulkDashboardActivity extends Activity {
                 if (!isFinishing() && !mDrawerOpen) buildUi();
             });
         }).start();
+        // v133: project folders ki SAFE shift (TermuxMod ke andar) —
+        // storage access ho to peeche ek pass (har project sirf ek
+        // dafa check hota hai); pehli dafa kuch shift/stay ho to
+        // EK design-style summary dialog
+        new Thread(() -> {
+            if (!BulkStorageAccess.hasAccess(this)) return;
+            BulkMigration.Result r = BulkMigration.migrateAll(this);
+            if (r.moved > 0) runOnUiThread(() -> {
+                if (!isFinishing() && !mDrawerOpen) buildUi();
+            });
+            if (r.evaluated > 0 && !BulkMigration.isSummaryShown(this)) {
+                BulkMigration.markSummaryShown(this);
+                final int fMoved = r.moved;
+                final int fStayed = r.stayed;
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    BulkTheme.showConfirm(this,
+                        BulkStrings.t(this, BulkStrings.MIGRATED_TITLE),
+                        BulkStrings.format(this, BulkStrings.MIGRATED_MSG, fMoved, fStayed),
+                        BulkStrings.t(this, BulkStrings.OK), false, null);
+                });
+            }
+        }).start();
     }
 
     @Override
     protected void onPause() {
         mLogHandler.removeCallbacks(mLogTicker);
+        stopLogPulse();
         super.onPause();
     }
 
     /** Hero card ki log lines taaza karo (BulkLog ki aakhri ~6 lines). */
     private void refreshLogCard() {
-        if (mLogView == null) return;
-        // v131 (Item 3): run chal rahi ho to Home ticker UI kaam NA
-        // kare — run ka apna console poster hi live display sambhalta
-        // hai. Run khatam hote hi (flag saaf) ticker khud taaza kar
-        // dega, final line (progress + kul waqt) samet.
-        if (BulkRunHelper.isRunActive()) return;
+        if (mLogBox == null) return;
+        // v133: run ke dauraan bhi taaza hota hai — status line ki
+        // progress bar card me live tick hoti rehti hai (console
+        // loader wala asar, neeche renderLogEntries). Rebuild sirf
+        // tab jab text badla ho (ticker har second ata hai).
         String text = BulkLog.tailText(6, BulkStrings.t(this, BulkStrings.LOG_IDLE));
-        if (!text.equals(mLogView.getText().toString())) {
-            mLogView.setText(text);
+        if (!text.equals(mLogCache)) {
+            renderLogEntries();
         }
+    }
+
+    /**
+     * v133 — Log card ki styled entries banao: aakhri 6 buffer lines
+     * + status line, har line BulkLogStyle.parse se apni shakal
+     * (rang / pill / progress bar) leti hai. Entries neeche anchor
+     * hoti hain (spacer uper); card ki unchai se barh jayen to sab
+     * se purani entry uper se trim ho jati hai — nayi line hamesha
+     * neeche dikhti hai, koi line chhupti nahi jab tak jagah ho.
+     */
+    private void renderLogEntries() {
+        if (mLogBox == null) return;
+        stopLogPulse();
+        mLogCache = BulkLog.tailText(6, BulkStrings.t(this, BulkStrings.LOG_IDLE));
+        mLogBox.removeAllViews();
+        java.util.List<String> lines = BulkLog.lines();
+        java.util.List<String> tail = new java.util.ArrayList<>();
+        for (int i = Math.max(0, lines.size() - 6); i < lines.size(); i++) tail.add(lines.get(i));
+        String status = BulkLog.status();
+        if (status != null) tail.add(status);
+        if (tail.isEmpty()) tail.add(BulkStrings.t(this, BulkStrings.LOG_IDLE));
+
+        View spacer = new View(this);
+        mLogBox.addView(spacer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        java.util.List<View> blocks = new java.util.ArrayList<>();
+        for (int i = 0; i < tail.size(); i++) {
+            View block = buildLogEntry(BulkLogStyle.parse(tail.get(i)), i > 0);
+            blocks.add(block);
+            mLogBox.addView(block, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        trimLogEntries(blocks);
+        if (mProgressFill != null) startLogPulse();
+    }
+
+    /** Card ki unchai se zyada ho to purani entries uper se hatao. */
+    private void trimLogEntries(java.util.List<View> blocks) {
+        int width = mLogBox.getWidth() > 0 ? mLogBox.getWidth() : BulkTheme.dp(this, 100);
+        int avail = mLogBox.getHeight() > 0 ? mLogBox.getHeight() : BulkTheme.dp(this, 84);
+        int wSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.AT_MOST);
+        int hSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int total = 0;
+        for (View b : blocks) {
+            b.measure(wSpec, hSpec);
+            total += b.getMeasuredHeight();
+        }
+        while (total > avail && blocks.size() > 1) {
+            View old = blocks.remove(0);
+            total -= old.getMeasuredHeight();
+            mLogBox.removeView(old);
+        }
+        // sab se pehle block ki divider (uper wali) ab zaroori nahi
+        if (!blocks.isEmpty()) {
+            View div = blocks.get(0).findViewWithTag("logdiv");
+            if (div != null) div.setVisibility(View.GONE);
+        }
+    }
+
+    private void stopLogPulse() {
+        if (mLogPulse != null) {
+            mLogPulse.cancel();
+            mLogPulse = null;
+        }
+        mProgressFill = null;
+    }
+
+    /** Chalti run ki bar par console-loader pulse (halki, sirf alpha). */
+    private void startLogPulse() {
+        if (mProgressFill == null) return;
+        mLogPulse = android.animation.ObjectAnimator.ofFloat(mProgressFill, "alpha", 0.35f, 1f);
+        mLogPulse.setDuration(620);
+        mLogPulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        mLogPulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        mLogPulse.start();
+    }
+
+    // ------------------------------------------------------------ log entry builders
+
+    private TextView logTv(float sp, boolean mono) {
+        TextView t = new TextView(this);
+        t.setTextSize(sp);
+        if (mono) t.setTypeface(Typeface.MONOSPACE);
+        t.setLineSpacing(0, 1.15f);
+        return t;
+    }
+
+    private void span(SpannableStringBuilder sb, String s, int color, boolean bold) {
+        if (s == null || s.isEmpty()) return;
+        int start = sb.length();
+        sb.append(s);
+        sb.setSpan(new ForegroundColorSpan(color), start, sb.length(),
+            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        if (bold) {
+            sb.setSpan(new StyleSpan(Typeface.BOLD), start, sb.length(),
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+    }
+
+    private TextView pillTv(String text, int bg, int fg) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextSize(6);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(fg);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.RECTANGLE);
+        g.setColor(bg);
+        g.setCornerRadius(BulkTheme.dp(this, 999));
+        t.setBackground(g);
+        t.setPadding(BulkTheme.dp(this, 5), BulkTheme.dp(this, 1),
+            BulkTheme.dp(this, 5), BulkTheme.dp(this, 1));
+        return t;
+    }
+
+    /** Slim gradient progress bar + dayein taraf bold green count. */
+    private LinearLayout logBarRow(BulkLogStyle.Parsed p, boolean liveEntry) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.setMargins(0, BulkTheme.dp(this, 2), 0, 0);
+        row.setLayoutParams(rowLp);
+
+        LinearLayout track = new LinearLayout(this);
+        track.setOrientation(LinearLayout.HORIZONTAL);
+        GradientDrawable trackBg = new GradientDrawable();
+        trackBg.setShape(GradientDrawable.RECTANGLE);
+        trackBg.setColor(BulkLogStyle.BAR_TRACK);
+        trackBg.setCornerRadius(BulkTheme.dp(this, 999));
+        track.setBackground(trackBg);
+        row.addView(track, new LinearLayout.LayoutParams(0, BulkTheme.dp(this, 3), 1));
+
+        View fill = new View(this);
+        GradientDrawable fillBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{BulkLogStyle.BAR_START, BulkLogStyle.BAR_END});
+        fillBg.setCornerRadius(BulkTheme.dp(this, 999));
+        fill.setBackground(fillBg);
+        int cur = Math.max(0, p.cur);
+        int tot = Math.max(1, p.total);
+        if (cur > tot) cur = tot;
+        track.addView(fill, new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.MATCH_PARENT, cur <= 0 ? 0.001f : cur));
+        View rest = new View(this);
+        track.addView(rest, new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(0.001f, tot - cur)));
+        if (liveEntry) mProgressFill = fill;
+
+        TextView count = logTv(8, false);
+        count.setText(p.countText);
+        count.setTypeface(Typeface.DEFAULT_BOLD);
+        count.setTextColor(BulkLogStyle.COLOR_GREEN);
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cLp.setMargins(BulkTheme.dp(this, 5), 0, 0, 0);
+        count.setLayoutParams(cLp);
+        row.addView(count);
+
+        if (p.timeText != null) {
+            TextView tm = logTv(8, true);
+            tm.setText(" • " + p.timeText);
+            tm.setTextColor(BulkLogStyle.COLOR_SUB);
+            row.addView(tm);
+        }
+        return row;
+    }
+
+    /** Ek parsed line ki poori entry (block) — uper hairline divider
+     *  ke sath jab ye pehli entry na ho. */
+    private View buildLogEntry(BulkLogStyle.Parsed p, boolean withDivider) {
+        LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        if (withDivider) {
+            View div = new View(this);
+            div.setTag("logdiv");
+            div.setBackgroundColor(BulkLogStyle.COLOR_DIVIDER);
+            LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f)));
+            dLp.setMargins(0, BulkTheme.dp(this, 3), 0, BulkTheme.dp(this, 3));
+            div.setLayoutParams(dLp);
+            block.addView(div);
+        }
+        switch (p.kind) {
+            case RUN_DONE:
+            case RUN_FAIL: {
+                boolean done = p.kind == BulkLogStyle.Kind.RUN_DONE;
+                LinearLayout head = new LinearLayout(this);
+                head.setOrientation(LinearLayout.HORIZONTAL);
+                head.setGravity(Gravity.CENTER_VERTICAL);
+                if (p.stamp != null) {
+                    TextView st = logTv(8.5f, true);
+                    st.setText(p.stamp + "  ");
+                    st.setTextColor(BulkLogStyle.COLOR_STAMP);
+                    head.addView(st);
+                }
+                TextView mark = logTv(8.5f, false);
+                mark.setText(done ? "✔ " : "✖ ");
+                mark.setTypeface(Typeface.DEFAULT_BOLD);
+                mark.setTextColor(done ? BulkLogStyle.COLOR_GREEN : BulkLogStyle.COLOR_RED);
+                head.addView(mark);
+                TextView proj = logTv(8.5f, false);
+                proj.setText(p.project);
+                proj.setTypeface(Typeface.DEFAULT_BOLD);
+                proj.setTextColor(BulkLogStyle.COLOR_PROJECT);
+                head.addView(proj);
+                head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+                head.addView(pillTv(p.pill,
+                    done ? BulkLogStyle.COLOR_DONE_BG : BulkLogStyle.COLOR_FAIL_BG,
+                    BulkLogStyle.COLOR_PILL_TEXT));
+                block.addView(head);
+                if (p.hasProgress()) block.addView(logBarRow(p, false));
+                TextView sub = logTv(8.5f, true);
+                sub.setText(p.mainText + (p.timeText != null ? " • " + p.timeText : ""));
+                sub.setTextColor(BulkLogStyle.COLOR_SUB);
+                block.addView(sub);
+                break;
+            }
+            case RUN_PROGRESS: {
+                TextView proj = logTv(8.5f, false);
+                proj.setText(p.project);
+                proj.setTypeface(Typeface.DEFAULT_BOLD);
+                proj.setTextColor(BulkLogStyle.COLOR_PROJECT);
+                block.addView(proj);
+                if (p.hasProgress()) block.addView(logBarRow(p, true));
+                break;
+            }
+            case RUN_START: {
+                TextView t = logTv(8.5f, true);
+                SpannableStringBuilder sb = new SpannableStringBuilder();
+                if (p.stamp != null) span(sb, p.stamp + "  ", BulkLogStyle.COLOR_STAMP, false);
+                span(sb, "▶ ", BulkLogStyle.COLOR_GREEN, true);
+                span(sb, p.project, BulkLogStyle.COLOR_PROJECT, true);
+                span(sb, " — " + p.mainText, BulkLogStyle.COLOR_TEXT, false);
+                t.setText(sb);
+                block.addView(t);
+                break;
+            }
+            case MOVED: {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.TOP);
+                if (p.stamp != null) {
+                    TextView st = logTv(8.5f, true);
+                    st.setText(p.stamp + "  ");
+                    st.setTextColor(BulkLogStyle.COLOR_STAMP);
+                    row.addView(st);
+                }
+                TextView body = logTv(8.5f, true);
+                SpannableStringBuilder sb = new SpannableStringBuilder();
+                span(sb, p.countText, BulkLogStyle.COLOR_GREEN, true);
+                span(sb, " " + p.mainText, BulkLogStyle.COLOR_TEXT, false);
+                body.setText(sb);
+                row.addView(body, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                TextView pill = pillTv(p.pill, BulkLogStyle.COLOR_MOVED_BG,
+                    BulkLogStyle.COLOR_MOVED_TEXT);
+                LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                pLp.setMargins(BulkTheme.dp(this, 5), BulkTheme.dp(this, 1), 0, 0);
+                pill.setLayoutParams(pLp);
+                row.addView(pill);
+                block.addView(row);
+                break;
+            }
+            default: { // PLAIN — poori line default gehri rang me
+                TextView t = logTv(8.5f, true);
+                SpannableStringBuilder sb = new SpannableStringBuilder();
+                if (p.stamp != null) span(sb, p.stamp + "  ", BulkLogStyle.COLOR_STAMP, false);
+                span(sb, p.mainText, BulkLogStyle.COLOR_TEXT, false);
+                t.setText(sb);
+                block.addView(t);
+                break;
+            }
+        }
+        return block;
     }
 
     /**
@@ -245,8 +549,8 @@ public class BulkDashboardActivity extends Activity {
         topBar.addView(langGap);
         int themeIcon = BulkTheme.isLight(this) ? R.drawable.ic_bulk_moon : R.drawable.ic_bulk_sun;
         topBar.addView(BulkTheme.circleButton(this, themeIcon, 34, v -> {
-            BulkTheme.toggle(this);
-            buildUi();
+            // v133: toggle ki jagah Themes popup (baqi screens jesa)
+            BulkTheme.showThemesPopup(this);
         }));
         column.addView(topBar);
 
@@ -322,19 +626,17 @@ public class BulkDashboardActivity extends Activity {
         // BulkLog ki aakhri ~6 lines, nayi line sab se neeche (gravity
         // BOTTOM = auto-scroll wali shakal). Card ka size/position
         // design wala hi hai; ticker onResume me har second taaza karta hai.
-        mLogView = new TextView(this);
-        mLogView.setText(BulkLog.tailText(6, BulkStrings.t(this, BulkStrings.LOG_IDLE)));
-        mLogView.setTextSize(8.5f);
-        mLogView.setTypeface(Typeface.MONOSPACE);
-        mLogView.setTextColor(BulkTheme.textSub(this));
-        mLogView.setGravity(Gravity.BOTTOM);
-        mLogView.setMaxLines(6);
-        mLogView.setLineSpacing(0, 1.15f);
+        // v133: styled entries wala box — card ka design/size/border
+        // bilkul waisa hi; lines renderLogEntries() se banti hain.
+        mLogBox = new LinearLayout(this);
+        mLogBox.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams logLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
         logLp.setMargins(0, BulkTheme.dp(this, 6), 0, BulkTheme.dp(this, 6));
-        mLogView.setLayoutParams(logLp);
-        card.addView(mLogView);
+        mLogBox.setLayoutParams(logLp);
+        card.addView(mLogBox);
+        mLogCache = null;
+        renderLogEntries();
         View cardBar = new View(this);
         GradientDrawable cardBarBg = new GradientDrawable();
         cardBarBg.setColor(BulkTheme.accentSoft(this));
@@ -640,7 +942,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v132");
+        version.setText("Termux Mod v133");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -653,8 +955,8 @@ public class BulkDashboardActivity extends Activity {
         switchTheme.setPadding(BulkTheme.dp(this, 10), BulkTheme.dp(this, 4), BulkTheme.dp(this, 10), BulkTheme.dp(this, 4));
         switchTheme.setClickable(true);
         switchTheme.setOnClickListener(v -> {
-            BulkTheme.toggle(this);
-            buildUi();
+            // v133: toggle ki jagah Themes popup
+            BulkTheme.showThemesPopup(this);
         });
         footer.addView(switchTheme);
         drawer.addView(footer);

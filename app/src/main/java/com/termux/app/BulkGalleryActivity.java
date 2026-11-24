@@ -112,7 +112,7 @@ public class BulkGalleryActivity extends Activity {
     private final Set<Long> mSelectedIds = new HashSet<>();
     private GridView mGrid;
     private GalleryAdapter mAdapter;
-    private int mCols = BulkGalleryState.MIN_COLUMNS;
+    private int mCols = BulkGalleryState.DEFAULT_GRID;
     private int mSortMode = BulkGalleryState.SORT_NEWEST;
     // v132 redesign: Add Mode setting (persisted) — factory default
     // Auto–Move; gear icon se badalti hai (header, theme ki jagah)
@@ -162,6 +162,13 @@ public class BulkGalleryActivity extends Activity {
         mAddChoice = BulkGalleryState.clampChoice(getSharedPreferences(
             PREFS_GALLERY, MODE_PRIVATE).getInt(KEY_ADD_CHOICE,
                 BulkGalleryState.CHOICE_AUTO_MOVE));
+        // v133: Sort + Grid bhi persisted (factory: Newest / Grid 3) —
+        // Preview surfaces bhi yahi keys parhte hain
+        android.content.SharedPreferences gp = getSharedPreferences(PREFS_GALLERY, MODE_PRIVATE);
+        mSortMode = BulkGalleryState.resolveSortPref(
+            gp.getInt(BulkGalleryState.KEY_SORT, BulkGalleryState.PREF_ABSENT));
+        mCols = BulkGalleryState.resolveGridPref(
+            gp.getInt(BulkGalleryState.KEY_GRID, BulkGalleryState.PREF_ABSENT));
         new Thread(() -> {
             boolean ok = loadBuckets();
             runOnUiThread(() -> {
@@ -355,10 +362,16 @@ public class BulkGalleryActivity extends Activity {
         scroll.addView(body);
         root.addView(scroll);
 
+        // v133: System Picker sab se PEHLI row (highlight) — owner ki
+        // hidayat: picker-source option front par saaf dikhe
+        body.addView(systemPickerRow());
         // v132: All Images ka cover ab gallery ki pehli image hai
         // (pehle khaali box ata tha — coverId -1 pass ho raha tha)
+        LinearLayout.LayoutParams allLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        allLp.topMargin = BulkTheme.dp(this, 10);
         body.addView(folderRow(null, BulkStrings.t(this, BulkStrings.ALL_IMAGES),
-            mTotalCount, mAllCoverId));
+            mTotalCount, mAllCoverId), allLp);
         for (Bucket b : mBuckets) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -377,22 +390,21 @@ public class BulkGalleryActivity extends Activity {
             empty.setLayoutParams(ep);
             body.addView(empty);
         }
-        // v132: Picker-source option — isi screen par saaf dikhta
-        // hua chhota row: system Gallery / File Manager se chunna
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sp.topMargin = BulkTheme.dp(this, 16);
-        body.addView(systemPickerRow(), sp);
         setContentView(root);
         BulkFonts.apply(this);
     }
 
-    /** Chhota option row: system picker (Gallery / File Manager) — natija wohi staging flow me jata hai. */
+    /**
+     * Chhota option row: system picker (Gallery / File Manager) —
+     * natija wohi staging flow me jata hai. v133: list ki PEHLI row,
+     * highlight (halki sabz tint + sabz border) ke sath.
+     */
     private View systemPickerRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(BulkTheme.pillBg(this));
+        row.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 14,
+            BulkTheme.accentStrong(this), 1));
         row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
             BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
         FrameLayout iconBox = new FrameLayout(this);
@@ -406,15 +418,23 @@ public class BulkGalleryActivity extends Activity {
         iv.setLayoutParams(ip);
         iconBox.addView(iv);
         row.addView(iconBox);
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tp.leftMargin = BulkTheme.dp(this, 11);
+        texts.setLayoutParams(tp);
         TextView label = new TextView(this);
         label.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER));
         label.setTextColor(BulkTheme.textMain(this));
         label.setTextSize(14);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        lp.leftMargin = BulkTheme.dp(this, 11);
-        label.setLayoutParams(lp);
-        row.addView(label);
+        texts.addView(label);
+        TextView sub = new TextView(this);
+        sub.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER_SUB));
+        sub.setTextColor(BulkTheme.textMuted(this));
+        sub.setTextSize(11);
+        texts.addView(sub);
+        row.addView(texts);
         ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 14);
         chev.setLayoutParams(new LinearLayout.LayoutParams(
             BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
@@ -774,6 +794,7 @@ public class BulkGalleryActivity extends Activity {
         mSortLabel = (TextView) sortPill.getChildAt(1);
         sortPill.setOnClickListener(v -> {
             mSortMode = BulkGalleryState.nextSort(mSortMode);
+            saveSortPref();
             if (mSortMode == BulkGalleryState.SORT_NAME && mNames == null) {
                 fetchNamesAsync(); // naam ate hi order khud taaza hoga
             }
@@ -786,6 +807,7 @@ public class BulkGalleryActivity extends Activity {
         mGridLabel = (TextView) gridPill.getChildAt(1);
         gridPill.setOnClickListener(v -> {
             mCols = BulkGalleryState.nextColumns(mCols);
+            saveGridPref();
             if (mGrid != null) mGrid.setNumColumns(mCols);
             refreshGridState();
         });
@@ -1061,10 +1083,24 @@ public class BulkGalleryActivity extends Activity {
         BulkFonts.applyToTree(this, panel);
     }
 
+    /** v133: Sort choice persist (Preview surfaces bhi yahi key parhte hain). */
+    private void saveSortPref() {
+        getSharedPreferences(PREFS_GALLERY, MODE_PRIVATE).edit()
+            .putInt(BulkGalleryState.KEY_SORT, mSortMode).apply();
+    }
+
+    /** v133: Grid choice persist (Preview surfaces bhi yahi key parhte hain). */
+    private void saveGridPref() {
+        getSharedPreferences(PREFS_GALLERY, MODE_PRIVATE).edit()
+            .putInt(BulkGalleryState.KEY_GRID, mCols).apply();
+    }
+
     /**
      * Gear icon ka popup (v132 redesign): Add Mode ki teen choices —
      * Manual / Auto–Copy / Auto–Move; mojooda choice par ✓ + strong
      * background. Tap = save (persisted) + band.
+     * v133: neeche Sort (Newest/Oldest/Name) + Grid (2–6) sections —
+     * ye bhi persisted hain or grid khula ho to foran lagte hain.
      */
     private void showAddModeMenu() {
         android.app.Dialog dialog = new android.app.Dialog(this);
@@ -1076,8 +1112,74 @@ public class BulkGalleryActivity extends Activity {
             BulkStrings.t(this, BulkStrings.ADD_CHOICE_AUTO_COPY));
         addChoiceRow(panel, dialog, BulkGalleryState.CHOICE_AUTO_MOVE,
             BulkStrings.t(this, BulkStrings.ADD_CHOICE_AUTO_MOVE));
+
+        panel.addView(gearSectionLabel(BulkStrings.t(this, BulkStrings.SORT_SECTION)));
+        final int[] sorts = {BulkGalleryState.SORT_NEWEST, BulkGalleryState.SORT_OLDEST,
+            BulkGalleryState.SORT_NAME};
+        final String[] sortKeys = {BulkStrings.SORT_NEWEST, BulkStrings.SORT_OLDEST,
+            BulkStrings.SORT_BY_NAME};
+        for (int i = 0; i < sorts.length; i++) {
+            final int mode = sorts[i];
+            settingRow(panel, dialog, BulkStrings.t(this, sortKeys[i]),
+                mSortMode == mode, () -> {
+                    mSortMode = mode;
+                    saveSortPref();
+                    if (mInGrid) {
+                        if (mSortMode == BulkGalleryState.SORT_NAME && mNames == null) {
+                            fetchNamesAsync();
+                        }
+                        mIds = BulkGalleryState.orderIds(mLoadOrder, mSortMode, mNames);
+                        refreshGridState();
+                    }
+                });
+        }
+
+        panel.addView(gearSectionLabel(BulkStrings.t(this, BulkStrings.GRID_SECTION)));
+        for (int cols = BulkGalleryState.MIN_COLUMNS;
+             cols <= BulkGalleryState.MAX_COLUMNS; cols++) {
+            final int c = cols;
+            settingRow(panel, dialog, c + "x", mCols == c, () -> {
+                mCols = c;
+                saveGridPref();
+                if (mGrid != null) mGrid.setNumColumns(mCols);
+                if (mInGrid) refreshGridState();
+            });
+        }
         BulkTheme.showPanelDialog(this, panel);
         BulkFonts.applyToTree(this, panel);
+    }
+
+    private TextView gearSectionLabel(String text) {
+        TextView label = BulkTheme.stepLabel(this, text);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = BulkTheme.dp(this, 14);
+        label.setLayoutParams(lp);
+        return label;
+    }
+
+    /** Gear popup ki radio row (addChoiceRow wali hi shakal): tap = amal + persist + band. */
+    private void settingRow(LinearLayout panel, final android.app.Dialog dialog,
+                            String label, boolean selected, final Runnable action) {
+        TextView row = new TextView(this);
+        row.setText(selected ? label + "  ✓" : label);
+        row.setTextSize(14);
+        row.setTextColor(selected ? BulkTheme.accent(this) : BulkTheme.textMain(this));
+        if (selected) row.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        row.setBackground(selected ? BulkTheme.glassPanelStrong(this)
+            : BulkTheme.glassPanel(this));
+        row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        row.setClickable(true);
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rp.topMargin = BulkTheme.dp(this, 8);
+        row.setLayoutParams(rp);
+        row.setOnClickListener(v -> {
+            action.run();
+            dialog.dismiss();
+        });
+        panel.addView(row);
     }
 
     private void addChoiceRow(LinearLayout panel, final android.app.Dialog dialog,

@@ -56,6 +56,7 @@ public class BulkPermissionsActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        BulkTheme.applyWindow(this);
         mRoot = new LinearLayout(this);
         mRoot.setOrientation(LinearLayout.VERTICAL);
         mRoot.setBackgroundColor(BulkTheme.appBg(this));
