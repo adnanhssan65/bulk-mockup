@@ -53,6 +53,11 @@ public class BulkWallpapersActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshDupBadge();
+        // v132: manual-move drop folders ka auto-import (peeche)
+        new Thread(() -> {
+            int moved = BulkDropFolders.syncNow(this);
+            if (moved > 0) runOnUiThread(this::refreshDupBadge);
+        }).start();
     }
 
     private View buildPermissionUi() {

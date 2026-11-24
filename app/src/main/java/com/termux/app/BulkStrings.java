@@ -237,6 +237,12 @@ public final class BulkStrings {
     public static final String LOCK = "lock";
     public static final String LOCKED = "locked";
 
+    // v132 — manual-move drop folders + Recreate Folders
+    public static final String RECREATE_FOLDERS = "recreate_folders";
+    public static final String RECREATE_FOLDERS_HINT = "recreate_folders_hint";
+    public static final String RECREATE = "recreate";
+    public static final String RECREATE_RESULT = "recreate_result";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -511,6 +517,15 @@ public final class BulkStrings {
         put(FRAME_PREVIEW, "Frame Preview", "Frame Preview");
         put(LOCK, "Lock", "Lock");
         put(LOCKED, "Locked", "Lock Laga Hai");
+
+        // v132 — drop folders + Recreate Folders
+        put(RECREATE_FOLDERS, "Recreate Folders", "Folders Dobara Banao");
+        put(RECREATE_FOLDERS_HINT,
+            "Rebuilds the TermuxMod drop folders and any missing project subfolders. Nothing is ever deleted.",
+            "TermuxMod drop folders aur project ke ghayab subfolders dobara banata hai. Kuch bhi delete nahi hota.");
+        put(RECREATE, "Recreate", "Dobara Banao");
+        put(RECREATE_RESULT, "%1$d new folders created · %2$d already present",
+            "%1$d naye folders bane · %2$d pehle se mojood thay");
     }
 
     private BulkStrings() {}

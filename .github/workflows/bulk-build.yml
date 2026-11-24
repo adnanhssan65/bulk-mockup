@@ -205,7 +205,7 @@ jobs:
       - name: Unit tests (projects.conf parser + BulkProjects + BulkStaging)
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --tests "com.termux.app.BulkStringsTest" --tests "com.termux.app.BulkPermissionCommandsTest" --tests "com.termux.app.BulkFontsTest" --tests "com.termux.app.BulkRunSettingsTest" --tests "com.termux.app.BulkGallerySelectTest" --tests "com.termux.app.BulkFileManagerTest" --tests "com.termux.app.BulkStorageAccessTest" --tests "com.termux.app.BulkRunHelperTest" --tests "com.termux.app.BulkLogTest" --tests "com.termux.app.BulkGalleryStateTest" --tests "com.termux.app.BulkPreviewSourceTest" --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests "com.termux.app.ProjectsConfTest" --tests "com.termux.app.BulkProjectsTest" --tests "com.termux.app.BulkStagingTest" --tests "com.termux.app.BulkDuplicatesTest" --tests "com.termux.app.BulkStringsTest" --tests "com.termux.app.BulkPermissionCommandsTest" --tests "com.termux.app.BulkFontsTest" --tests "com.termux.app.BulkRunSettingsTest" --tests "com.termux.app.BulkGallerySelectTest" --tests "com.termux.app.BulkFileManagerTest" --tests "com.termux.app.BulkStorageAccessTest" --tests "com.termux.app.BulkRunHelperTest" --tests "com.termux.app.BulkLogTest" --tests "com.termux.app.BulkGalleryStateTest" --tests "com.termux.app.BulkPreviewSourceTest" --tests "com.termux.app.BulkDropFoldersTest" --stacktrace
 
       - name: APK build (release, signed)
         env:
@@ -322,10 +322,6 @@ jobs:
           if-no-files-found: error
 
       - name: Release (tag = v<versionCode>)
-        # v132: Adnan ki hidayat — abhi RELEASE NAHI banana (ek aur addition
-        # baqi hai). Ye "if" sirf is run ke liye hai; publish wali run se
-        # pehle ise hata dena.
-        if: ${{ false }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

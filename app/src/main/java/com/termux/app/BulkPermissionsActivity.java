@@ -390,6 +390,13 @@ public class BulkPermissionsActivity extends Activity {
                 } catch (Exception ignored) {}
             });
 
+        // v132: Recreate Folders — TermuxMod drop folders + project ke
+        // standard subfolders dobara banao (sirf create, delete kabhi nahi)
+        addNavRow(BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS),
+            BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS_HINT),
+            BulkStrings.t(this, BulkStrings.RECREATE),
+            this::recreateFolders);
+
         if (!mFirstRunMode) {
             // v127 (design): pehli-dafa wale popups dobara chalana —
             // flag reset karke yehi screen first-run mode me khulti hai
@@ -432,6 +439,35 @@ public class BulkPermissionsActivity extends Activity {
 
         // v128 restyle: muntakhab font har rebuild ke baad dobara lagao
         BulkFonts.applyToTree(this, mRoot);
+    }
+
+    /** v132: structural folders dobara banao; natija design dialog me. */
+    private void recreateFolders() {
+        new Thread(() -> {
+            int[] counts = BulkDropFolders.recreateAll(BulkDropFolders.knownNumbers());
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                android.app.Dialog dialog = new android.app.Dialog(this);
+                LinearLayout panel = BulkTheme.modalPanel(this,
+                    BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS), dialog);
+                TextView body = new TextView(this);
+                body.setText(BulkStrings.format(this, BulkStrings.RECREATE_RESULT,
+                    counts[0], counts[1]));
+                body.setTextColor(BulkTheme.textMain(this));
+                body.setTextSize(14.5f);
+                panel.addView(body);
+                TextView close = BulkTheme.primaryButton(this,
+                    BulkStrings.t(this, BulkStrings.CLOSE), v -> dialog.dismiss());
+                LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+                clp.topMargin = dp(14);
+                close.setLayoutParams(clp);
+                panel.addView(close);
+                BulkTheme.showPanelDialog(this, panel);
+                BulkFonts.applyToTree(this, panel);
+            });
+        }).start();
     }
 
     private void addRow(String name, String hint, boolean ok, String buttonText, Runnable fix) {

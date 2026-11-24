@@ -406,6 +406,9 @@ public class BulkAddProjectActivity extends Activity {
                 //    (target pehle se ho to installProject khud ruk jata hai)
                 BulkProjectInstaller.installProject(this, extractedProject, n, script);
 
+                // v132: naye project ka manual-move drop folder bhi banao
+                BulkDropFolders.ensureForProject(n);
+
                 addedNumber = n;
             } catch (Exception e) {
                 Logger.logError(LOG_TAG, "Project add fail: " + e.getMessage());

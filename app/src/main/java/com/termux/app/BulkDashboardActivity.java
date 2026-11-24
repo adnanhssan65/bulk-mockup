@@ -122,6 +122,14 @@ public class BulkDashboardActivity extends Activity {
         BulkProjectBundles.installInBackground(this, () -> runOnUiThread(() -> {
             if (!isFinishing() && !mDrawerOpen) buildUi();
         }));
+        // v132: manual-move drop folders — TermuxMod/Project N folders
+        // ensure + un se wallpapers auto-import (peeche, UI roke baghair)
+        new Thread(() -> {
+            int moved = BulkDropFolders.syncNow(this);
+            if (moved > 0) runOnUiThread(() -> {
+                if (!isFinishing() && !mDrawerOpen) buildUi();
+            });
+        }).start();
     }
 
     @Override

@@ -59,6 +59,12 @@ public class BulkProjectsActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshList(); // counts taaza
+        // v132: manual-move drop folders ka auto-import (peeche);
+        // kuch move ho to counts dobara taaza
+        new Thread(() -> {
+            int moved = BulkDropFolders.syncNow(this);
+            if (moved > 0) runOnUiThread(this::refreshList);
+        }).start();
     }
 
     /**
