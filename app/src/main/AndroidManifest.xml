@@ -243,7 +243,7 @@
         <!-- v124: Dashboard hi app ka front door hai (LAUNCHER) -->
         <!-- v135: LAUNCHER entry ab 4 activity-alias presets me hai
              (Control Panel -> Launcher Name & Icon). Har alias apna
-             label + icon rakhta hai; DEFAULT enabled = Termux Pro.
+             label + icon rakhta hai; DEFAULT enabled = Termux Mod (v139).
              Dashboard activity khud bina intent-filter ke rehti hai. -->
         <activity
             android:name=".app.BulkDashboardActivity"
@@ -252,7 +252,7 @@
 
         <activity-alias
             android:name=".app.BulkIconTermuxMod"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
@@ -297,7 +297,7 @@
 
         <activity-alias
             android:name=".app.BulkIconTermuxPro"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_pro"
             android:roundIcon="@mipmap/ic_launcher_pro_round"

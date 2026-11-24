@@ -305,6 +305,10 @@ public final class BulkRunHelper {
         final LinearLayout panel = cv.panel;
 
         final Dialog shown = BulkTheme.showPanelDialog(a, panel);
+        // v139: showPanelDialog ne UI font har TextView par laga diya
+        // hai — console ka apna font/rang us ke upar dobara lagao,
+        // warna banner art phir tofu blocks ban jayega.
+        styleConsoleOutput(a, cv.out);
         final boolean[] launchedOnce = {false};
         shown.setOnDismissListener(d -> {
             if (onLaunched != null && !launchedOnce[0]) {
@@ -493,6 +497,26 @@ public final class BulkRunHelper {
 
     // ------------------------------------------------------------ console popup (Item 4 ext)
 
+    /** v139: dark console panel ka rang (gehra sabz-siyah) — approved preview wala. */
+    public static final int CONSOLE_BG = 0xFF0A1A0C;
+
+    /** v139: console log ki halki sabz text. */
+    public static final int CONSOLE_TEXT = 0xFF9BE29B;
+
+    /**
+     * v139: log TextView par console style lagao — DejaVu Sans Mono
+     * (banner glyphs ke liye) + halki sabz text. Ye style
+     * showPanelDialog ke BAAD dobara lagana zaroori hai: wo dialog
+     * ki har TextView par UI font laga deta hai (BulkFonts.applyToTree),
+     * jo console font ko daba deta — yahi purana tofu-blocks masla tha.
+     */
+    static void styleConsoleOutput(Activity a, TextView out) {
+        if (out == null) return;
+        android.graphics.Typeface tf = BulkFonts.consoleTypeface(a);
+        out.setTypeface(tf != null ? tf : android.graphics.Typeface.MONOSPACE);
+        out.setTextColor(CONSOLE_TEXT);
+    }
+
     /** Console popup ke views — poster inhe taaza karta hai. */
     private static final class ConsoleViews {
         LinearLayout panel;
@@ -636,18 +660,20 @@ public final class BulkRunHelper {
         cv.counterBlock.setLayoutParams(cbp);
         panel.addView(cv.counterBlock);
 
-        // Log — gehra inset, monospace (asal terminal wali feeling)
+        // Log — v139: DARK console panel (gehra sabz-siyah) + halki
+        // sabz monospace text. Font DejaVu Sans Mono hai (BulkFonts)
+        // jis me block/box-drawing glyphs hain — runners ka ASCII
+        // banner art ab tofu blocks ki bajaye asal art dikhta hai.
         cv.scroll = new ScrollView(a);
-        cv.scroll.setBackground(BulkTheme.roundedBg(a, BulkTheme.appBg(a), 10,
+        cv.scroll.setBackground(BulkTheme.roundedBg(a, CONSOLE_BG, 10,
             BulkTheme.accentBorder(a), 1));
         LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(a, 230));
         scp.topMargin = BulkTheme.dp(a, 12);
         cv.scroll.setLayoutParams(scp);
         cv.out = new TextView(a);
-        cv.out.setTypeface(android.graphics.Typeface.MONOSPACE);
+        styleConsoleOutput(a, cv.out);
         cv.out.setTextSize(11);
-        cv.out.setTextColor(BulkTheme.textSub(a));
         cv.out.setPadding(BulkTheme.dp(a, 10), BulkTheme.dp(a, 8),
             BulkTheme.dp(a, 10), BulkTheme.dp(a, 8));
         cv.scroll.addView(cv.out);

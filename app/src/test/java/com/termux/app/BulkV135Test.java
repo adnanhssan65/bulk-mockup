@@ -68,9 +68,10 @@ public class BulkV135Test {
 
     @Test
     public void defaultNameIsTermuxPro() {
-        assertEquals("Termux Pro", BulkPanelSettings.DEFAULT_NAME);
-        assertEquals("Termux Pro", BulkPanelSettings.sanitizeName(null));
-        assertEquals("Termux Pro", BulkPanelSettings.sanitizeName("   "));
+        // v139: factory default naam ab "Termux Mod" hai (owner ki hidayat)
+        assertEquals("Termux Mod", BulkPanelSettings.DEFAULT_NAME);
+        assertEquals("Termux Mod", BulkPanelSettings.sanitizeName(null));
+        assertEquals("Termux Mod", BulkPanelSettings.sanitizeName("   "));
     }
 
     @Test
@@ -195,10 +196,11 @@ public class BulkV135Test {
 
     @Test
     public void defaultLauncherPresetIsTermuxPro() {
-        assertEquals("pro", BulkPanelSettings.DEFAULT_ICON);
-        assertEquals("pro", BulkPanelSettings.sanitizeIconId(null));
-        assertEquals("pro", BulkPanelSettings.sanitizeIconId("bogus"));
-        assertEquals("tile", BulkPanelSettings.sanitizeIconId("tile"));
+        // v139: factory default preset ab Termux Mod (tile) hai
+        assertEquals("tile", BulkPanelSettings.DEFAULT_ICON);
+        assertEquals("tile", BulkPanelSettings.sanitizeIconId(null));
+        assertEquals("tile", BulkPanelSettings.sanitizeIconId("bogus"));
+        assertEquals("pro", BulkPanelSettings.sanitizeIconId("pro"));
     }
 
     @Test
@@ -259,9 +261,9 @@ public class BulkV135Test {
     @Test
     public void factoryDefaultValuesAreTheSpecOnes() {
         Map<String, String> d = BulkPanelSettings.factoryDefaults();
-        assertEquals("s:Termux Pro", d.get("bulk_mockup|panel_app_name"));
+        assertEquals("s:Termux Mod", d.get("bulk_mockup|panel_app_name"));
         assertEquals("s:Powerful Terminal Experience", d.get("bulk_mockup|panel_slogan"));
-        assertEquals("s:pro", d.get("bulk_mockup|panel_icon"));
+        assertEquals("s:tile", d.get("bulk_mockup|panel_icon"));
         assertEquals("s:normal", d.get("bulk_mockup|panel_font_size"));
         assertEquals("i:0", d.get("bulk_mockup|panel_accent"));
         assertEquals("b:false", d.get("bulk_mockup|panel_app_lock"));

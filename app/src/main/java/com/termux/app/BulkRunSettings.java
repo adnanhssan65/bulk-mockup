@@ -105,8 +105,11 @@ public final class BulkRunSettings {
 
     /**
      * Project ka profile: bundled 1..14 ke prompts pehle se verified
-     * hain (sab ADNAN khandan ke main scripts) — baqi (ZIP-added)
-     * projects ka faisla un ki asal (persisted/detected) script se.
+     * hain (sab ADNAN khandan ke main scripts) — baqi projects ka
+     * faisla un ki asal (persisted/detected) script se. v139: 15–18
+     * bhi bundled hain; un ke profiles bhi script se hi bante hain
+     * (w15/w17/w18 = ADNAN, P16 ki system_core.py = SYSTEM) — dono
+     * khandan VM par asal runs se verify shuda hain.
      */
     public static PromptProfile profileFor(int projectNumber, String script) {
         if (hasVerifiedPrompts(projectNumber)) return PromptProfile.ADNAN;

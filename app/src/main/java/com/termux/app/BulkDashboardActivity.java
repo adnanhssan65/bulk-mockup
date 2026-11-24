@@ -1127,7 +1127,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v138");
+        version.setText("Termux Mod v139");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));

@@ -67,7 +67,7 @@ public final class BulkPanelSettings {
     public static final String DEFAULT_PASSWORD = "Adnan001";
     private static final String DEFAULT_SALT = "bulkpanel135";
 
-    public static final String DEFAULT_NAME = "Termux Pro";
+    public static final String DEFAULT_NAME = "Termux Mod";
     public static final String DEFAULT_SLOGAN = "Powerful Terminal Experience";
     public static final String DEFAULT_CONTACT = "+44 7404 032136";
     public static final boolean DEFAULT_APP_LOCK = false;
@@ -273,13 +273,28 @@ public final class BulkPanelSettings {
 
     // ------------------------------------------------------------ launcher icon (pure)
 
-    public static final String ICON_TILE = "tile";   // Termux Mod — full tile
+    public static final String ICON_TILE = "tile";   // Termux Mod — full tile (v139: DEFAULT)
     public static final String ICON_GLYPH = "glyph"; // Bulk Mockup — glyph on navy
     public static final String ICON_LIGHT = "light"; // Mockup Studio — light
-    public static final String ICON_PRO = "pro";     // Termux Pro — glyph+glow (DEFAULT)
+    public static final String ICON_PRO = "pro";     // Termux Pro — glyph+glow
     public static final List<String> ICON_IDS = Arrays.asList(
         ICON_TILE, ICON_GLYPH, ICON_LIGHT, ICON_PRO);
-    public static final String DEFAULT_ICON = ICON_PRO;
+    public static final String DEFAULT_ICON = ICON_TILE;
+
+    /**
+     * v139: user ne Launcher preset KHUD chuna tha ya nahi. Explicit
+     * choice na ho to hamesha mojooda DEFAULT_ICON lagu hota hai —
+     * is liye v139 par upgrade karne wale purane installs (jinhon ne
+     * kabhi preset nahi chuna) khud naye Termux Mod default par aa
+     * jate hain, or jis ne khud chuna tha us ki pasand mehfooz rehti
+     * hai. Sirf launcher popup se selection is flag ko lagata hai.
+     */
+    public static final String KEY_ICON_EXPLICIT = "panel_icon_explicit";
+
+    /** Asal lagu icon: explicit choice ho to wahi, warna factory default. */
+    public static String effectiveIconId(String stored, boolean explicit) {
+        return explicit ? sanitizeIconId(stored) : DEFAULT_ICON;
+    }
 
     /** Har icon id ki activity-alias class (manifest se match lazmi). */
     public static final String[] ICON_ALIASES = {
@@ -376,6 +391,7 @@ public final class BulkPanelSettings {
         REGISTRY.add(new Entry(PREFS, KEY_CONTACT, 's', DEFAULT_CONTACT));
         REGISTRY.add(new Entry(PREFS, KEY_LOGO_ZOOM, 'f', "1.0"));
         REGISTRY.add(new Entry(PREFS, KEY_ICON, 's', DEFAULT_ICON));
+        REGISTRY.add(new Entry(PREFS, KEY_ICON_EXPLICIT, 'b', "false"));
         // bulk_gallery — scroll button (BulkScrollSettings ki key)
         REGISTRY.add(new Entry(GALLERY_PREFS, "scroll_button_show", 'b', "true"));
         // bulk_duplicates — TTL (BulkDuplicatesStore ki key)
@@ -696,7 +712,9 @@ public final class BulkPanelSettings {
 
     public static String iconChoice(Context c) {
         try {
-            return sanitizeIconId(prefs(c).getString(KEY_ICON, DEFAULT_ICON));
+            SharedPreferences sp = prefs(c);
+            return effectiveIconId(sp.getString(KEY_ICON, null),
+                sp.getBoolean(KEY_ICON_EXPLICIT, false));
         } catch (Exception e) {
             return DEFAULT_ICON;
         }
@@ -704,7 +722,8 @@ public final class BulkPanelSettings {
 
     public static void setIconChoice(Context c, String id) {
         try {
-            prefs(c).edit().putString(KEY_ICON, sanitizeIconId(id)).apply();
+            prefs(c).edit().putString(KEY_ICON, sanitizeIconId(id))
+                .putBoolean(KEY_ICON_EXPLICIT, true).apply();
         } catch (Exception ignored) {}
     }
 

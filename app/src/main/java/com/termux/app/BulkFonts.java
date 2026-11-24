@@ -142,6 +142,38 @@ public final class BulkFonts {
         }
     }
 
+    // ------------------------------------------------------------ console font (v139)
+
+    /**
+     * v139: Run console popup ke log ke liye alag monospace font —
+     * DejaVu Sans Mono (assets/bulk/fonts/dejavu-sans-mono.ttf,
+     * license note usi folder me). Ye UI font catalog ka hissa NAHI
+     * hai (font picker me nahi ata): is ka kaam sirf ye hai ke is me
+     * block/box-drawing glyphs (█ ╔ ╗ ║ ═) mojood hain, taake
+     * runners ka ASCII banner art console me asal shakal me dikhe —
+     * UI fonts me ye glyphs na hone se banner tofu blocks ban jata
+     * tha.
+     */
+    public static final String CONSOLE_ASSET = ASSET_DIR + "dejavu-sans-mono.ttf";
+
+    private static Typeface sConsoleTypeface;
+    private static boolean sConsoleTried = false;
+
+    /** Console ka monospace Typeface; load fail par null (caller MONOSPACE par girta hai). */
+    public static Typeface consoleTypeface(Context c) {
+        synchronized (CACHE) {
+            if (!sConsoleTried) {
+                sConsoleTried = true;
+                try {
+                    sConsoleTypeface = Typeface.createFromAsset(c.getAssets(), CONSOLE_ASSET);
+                } catch (Exception e) {
+                    sConsoleTypeface = null;
+                }
+            }
+            return sConsoleTypeface;
+        }
+    }
+
     // ------------------------------------------------------------ apply
 
     /** v135: Control Panel ka font-size multiplier (1.0 = Normal). */

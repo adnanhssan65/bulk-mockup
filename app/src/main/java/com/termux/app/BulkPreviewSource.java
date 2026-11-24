@@ -25,8 +25,8 @@ public final class BulkPreviewSource {
     public static final int KIND_BUNDLED = 1;
     public static final int KIND_PLACEHOLDER = 2;
 
-    /** Bundled previews sirf projects 1..14 ke liye hain. */
-    public static final int LAST_BUNDLED_PROJECT = 14;
+    /** Bundled previews sirf projects 1..18 ke liye hain (v139: 15–18 bhi bundled). */
+    public static final int LAST_BUNDLED_PROJECT = 18;
 
     private BulkPreviewSource() {}
 
@@ -57,7 +57,7 @@ public final class BulkPreviewSource {
         return "bulk/previews/p" + projectNumber + ".jpg";
     }
 
-    /** Is number ke liye bundled preview mojood ho sakta hai? (1..14) */
+    /** Is number ke liye bundled preview mojood ho sakta hai? (1..18) */
     public static boolean hasBundledRange(int projectNumber) {
         return projectNumber >= 1 && projectNumber <= LAST_BUNDLED_PROJECT;
     }

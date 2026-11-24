@@ -67,10 +67,11 @@ public class BulkPreviewSourceTest {
 
     @Test
     public void emptyMockupsPlaceholderBeyondBundled() {
+        // v139: bundled range ab 1..18 hai — placeholder sirf us se aage
         assertEquals(BulkPreviewSource.KIND_PLACEHOLDER,
-            BulkPreviewSource.choose(new ArrayList<>(), 15, true).kind);
+            BulkPreviewSource.choose(new ArrayList<>(), 19, true).kind);
         assertEquals(BulkPreviewSource.KIND_PLACEHOLDER,
-            BulkPreviewSource.choose(new ArrayList<>(), 17, true).kind);
+            BulkPreviewSource.choose(new ArrayList<>(), 25, true).kind);
     }
 
     @Test
@@ -101,7 +102,9 @@ public class BulkPreviewSourceTest {
         assertEquals("bulk/previews/p14.jpg", BulkPreviewSource.bundledAssetPath(14));
         assertTrue(BulkPreviewSource.hasBundledRange(1));
         assertTrue(BulkPreviewSource.hasBundledRange(14));
-        assertFalse(BulkPreviewSource.hasBundledRange(15));
+        assertTrue(BulkPreviewSource.hasBundledRange(15));
+        assertTrue(BulkPreviewSource.hasBundledRange(18));
+        assertFalse(BulkPreviewSource.hasBundledRange(19));
         assertFalse(BulkPreviewSource.hasBundledRange(0));
     }
 
