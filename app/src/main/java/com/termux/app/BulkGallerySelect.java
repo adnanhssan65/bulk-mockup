@@ -32,4 +32,54 @@ public final class BulkGallerySelect {
         out.addAll(range(anchor, current));
         return out;
     }
+
+    // ------------------------------------------------------------ v132 paint + lock
+
+    /**
+     * v132 — PAINT (swipe) drag ka target state: drag jis cell se
+     * shuru hua, us ki TOGGLED halat (selected tha to paint ab
+     * UNSELECT karega, unselected tha to SELECT). LOCK on ho to
+     * removal kabhi nahi hota — paint hamesha select hi karta hai
+     * (owner ka rule: lock selection ko khud unselect hone se rokta
+     * hai; unselect ka wahid rasta Clear button hai).
+     */
+    public static boolean paintTargetState(boolean anchorSelected, boolean locked) {
+        if (locked) return true;
+        return !anchorSelected;
+    }
+
+    /**
+     * v132 — Paint drag ka result: base selection par range(anchor,
+     * current) ke tamam positions ko targetState par set karo. Har
+     * move par base se dobara hisaab hota hai — ungli peeche jaye to
+     * range ke bahar wale cells apni base halat par wapas aa jate
+     * hain. Base set mutate NAHI hota.
+     */
+    public static Set<Integer> paintSelection(Set<Integer> base, int anchor, int current,
+                                              boolean targetState) {
+        Set<Integer> out = new HashSet<>();
+        if (base != null) out.addAll(base);
+        for (int p : range(anchor, current)) {
+            if (targetState) out.add(p);
+            else out.remove(p);
+        }
+        return out;
+    }
+
+    /**
+     * v132 — Ek tap ke baad ki halat, LOCK ke sath: lock on ho or
+     * cell pehle se selected ho to koi tabdeeli nahi (selected hi
+     * rehta hai); warna aam toggle.
+     *
+     * @return tap ke baad cell selected hai ya nahi
+     */
+    public static boolean toggledState(boolean selected, boolean locked) {
+        if (locked && selected) return true;
+        return !selected;
+    }
+
+    /** v132 — Clear: selection hamesha poori khaali — lock ho ya na ho (yehi unselect ka asal rasta hai). */
+    public static Set<Integer> clearedSelection() {
+        return new HashSet<>();
+    }
 }

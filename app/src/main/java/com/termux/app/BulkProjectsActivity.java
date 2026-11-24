@@ -40,50 +40,46 @@ public class BulkProjectsActivity extends Activity {
     /** Theme toggle (recreate) ke baad bhi wahi project khula rahe. */
     private static int sExpandedNumber = Integer.MIN_VALUE;
 
+    // v132: header search ki halat (recreate ke baad bhi mehfooz)
+    private static String sQuery = "";
+    private static boolean sSearchOpen = false;
+
+    private LinearLayout mBody;
+    private LinearLayout mSearchRow;
+    private android.widget.EditText mSearchField;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setTitle("Projects");
-        buildUi();
+        buildShell();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        buildUi(); // counts taaza
+        refreshList(); // counts taaza
     }
 
-    private void buildUi() {
+    /**
+     * v132: shell ek dafa banta hai (header + search row + scroll +
+     * bottom bar); list sirf refreshList se badalti hai — search
+     * field ka focus/text rebuild par mehfooz rehta hai.
+     */
+    private void buildShell() {
         BulkTheme.applyWindow(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BulkTheme.appBg(this));
-        root.addView(BulkTheme.subHeader(this, BulkStrings.t(this, BulkStrings.PROJECTS),
-            BulkStrings.t(this, BulkStrings.PROJECTS_SUBTITLE)));
+        root.addView(buildHeader());
+        root.addView(buildSearchRow());
 
         ScrollView scroll = new ScrollView(this);
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8), BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
-
-        List<BulkProjects.ProjectInfo> projects = loadProjects();
-        if (projects.isEmpty()) {
-            body.addView(emptyState());
-        } else {
-            if (sExpandedNumber == Integer.MIN_VALUE && projects.get(0).number > 0) {
-                sExpandedNumber = projects.get(0).number; // design: pehla project khula hua
-            }
-            for (BulkProjects.ProjectInfo p : projects) {
-                LinearLayout panel = projectPanel(p);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                lp.setMargins(0, 0, 0, BulkTheme.dp(this, 12));
-                panel.setLayoutParams(lp);
-                body.addView(panel);
-            }
-        }
-        scroll.addView(body);
+        mBody = new LinearLayout(this);
+        mBody.setOrientation(LinearLayout.VERTICAL);
+        mBody.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8), BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
+        scroll.addView(mBody);
         root.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
@@ -132,7 +128,139 @@ public class BulkProjectsActivity extends Activity {
         root.addView(bottom);
 
         setContentView(root);
+        refreshList();
         BulkFonts.apply(this);
+    }
+
+    /**
+     * Header: back (bayein) + title/subtitle + SEARCH icon + theme
+     * icon (dayein) — subHeader jesa hi layout, search ke izafe ke
+     * sath (owner ki hidayat, v132).
+     */
+    private LinearLayout buildHeader() {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 14),
+            BulkTheme.dp(this, 20), BulkTheme.dp(this, 10));
+        bar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_back, 34, v -> finish()));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        tlp.setMargins(BulkTheme.dp(this, 10), 0, BulkTheme.dp(this, 8), 0);
+        titles.setLayoutParams(tlp);
+        TextView t = new TextView(this);
+        t.setText(BulkStrings.t(this, BulkStrings.PROJECTS));
+        t.setTextSize(16);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(BulkTheme.textMain(this));
+        titles.addView(t);
+        TextView s = new TextView(this);
+        s.setText(BulkStrings.t(this, BulkStrings.PROJECTS_SUBTITLE));
+        s.setTextSize(11);
+        s.setTextColor(BulkTheme.textMuted(this));
+        titles.addView(s);
+        bar.addView(titles);
+        bar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_search, 34,
+            v -> toggleSearch()));
+        LinearLayout.LayoutParams thp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34));
+        thp.leftMargin = BulkTheme.dp(this, 8);
+        View themeBtn = BulkTheme.themeButton(this);
+        themeBtn.setLayoutParams(thp);
+        bar.addView(themeBtn);
+        wrap.addView(bar);
+        View line = new View(this);
+        line.setBackground(BulkTheme.hLine(this));
+        wrap.addView(line, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f))));
+        return wrap;
+    }
+
+    /** Search field wali row — icon se khulti/band hoti hai; likhte hi list live filter hoti hai. */
+    private LinearLayout buildSearchRow() {
+        mSearchRow = new LinearLayout(this);
+        mSearchRow.setOrientation(LinearLayout.HORIZONTAL);
+        mSearchRow.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 18), 0);
+        mSearchRow.setVisibility(sSearchOpen ? View.VISIBLE : View.GONE);
+        mSearchField = new android.widget.EditText(this);
+        mSearchField.setHint(BulkStrings.t(this, BulkStrings.SEARCH_PROJECT));
+        mSearchField.setSingleLine(true);
+        mSearchField.setTextSize(13);
+        mSearchField.setTextColor(BulkTheme.textMain(this));
+        mSearchField.setHintTextColor(BulkTheme.textMuted(this));
+        mSearchField.setBackground(BulkTheme.pillBg(this));
+        mSearchField.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 9),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 9));
+        mSearchRow.addView(mSearchField, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (!sQuery.isEmpty()) mSearchField.setText(sQuery);
+        mSearchField.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                sQuery = s == null ? "" : s.toString();
+                refreshList();
+            }
+            @Override public void afterTextChanged(android.text.Editable s) {}
+        });
+        return mSearchRow;
+    }
+
+    private void toggleSearch() {
+        sSearchOpen = !sSearchOpen;
+        if (mSearchRow == null) return;
+        mSearchRow.setVisibility(sSearchOpen ? View.VISIBLE : View.GONE);
+        if (sSearchOpen) {
+            if (mSearchField != null) mSearchField.requestFocus();
+        } else {
+            // Band karne par filter saaf — poori list wapas
+            sQuery = "";
+            if (mSearchField != null) mSearchField.setText("");
+            refreshList();
+        }
+    }
+
+    /** Sirf list dobara banti hai (counts + search filter fresh). */
+    private void refreshList() {
+        if (mBody == null) return;
+        mBody.removeAllViews();
+        List<BulkProjects.ProjectInfo> projects = loadProjects();
+        if (projects.isEmpty()) {
+            mBody.addView(emptyState());
+            BulkFonts.applyToTree(this, mBody);
+            return;
+        }
+        java.util.List<BulkProjects.ProjectInfo> shown = new java.util.ArrayList<>();
+        for (BulkProjects.ProjectInfo p : projects) {
+            if (BulkPreviewSource.matchesQuery(p.name, p.number, sQuery)) shown.add(p);
+        }
+        if (shown.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText(BulkStrings.t(this, BulkStrings.NO_MATCHING));
+            none.setTextColor(BulkTheme.textMuted(this));
+            none.setTextSize(12.5f);
+            none.setGravity(Gravity.CENTER);
+            none.setPadding(0, BulkTheme.dp(this, 18), 0, 0);
+            mBody.addView(none);
+            BulkFonts.applyToTree(this, mBody);
+            return;
+        }
+        if (sExpandedNumber == Integer.MIN_VALUE && shown.get(0).number > 0) {
+            sExpandedNumber = shown.get(0).number; // design: pehla project khula hua
+        }
+        for (BulkProjects.ProjectInfo p : shown) {
+            LinearLayout panel = projectPanel(p);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, 0, BulkTheme.dp(this, 12));
+            panel.setLayoutParams(lp);
+            mBody.addView(panel);
+        }
+        BulkFonts.applyToTree(this, mBody);
     }
 
     private LinearLayout emptyState() {
@@ -176,8 +304,22 @@ public class BulkProjectsActivity extends Activity {
         head.setClickable(true);
         head.setOnClickListener(v -> {
             sExpandedNumber = expanded ? 0 : p.number; // 0 = koi khula nahi
-            buildUi();
+            refreshList();
         });
+
+        // v132: DP — project ke asal frame ki chhoti preview.
+        // SIRF DP par tap se bara preview popup khulta hai; baqi
+        // row ka tap purana hi hai (expand / actions)
+        if (p.number > 0) {
+            View dp = BulkPreviewUi.dpView(this, p.number, 44);
+            dp.setClickable(true);
+            dp.setOnClickListener(v -> BulkPreviewUi.showPopup(this, p, false, null));
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                BulkTheme.dp(this, 44), BulkTheme.dp(this, 44));
+            dlp.rightMargin = BulkTheme.dp(this, 11);
+            dp.setLayoutParams(dlp);
+            head.addView(dp);
+        }
 
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);

@@ -232,6 +232,11 @@ public final class BulkStrings {
     public static final String DELETE_DROPPED_MSG = "delete_dropped_msg";
     public static final String DELETED_TOAST = "deleted_toast";
 
+    // v132 — frame preview (DP) + gallery Lock/Clear
+    public static final String FRAME_PREVIEW = "frame_preview";
+    public static final String LOCK = "lock";
+    public static final String LOCKED = "locked";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -501,6 +506,11 @@ public final class BulkStrings {
             "Delete %d dropped wallpaper(s) from this project? The files will be removed from the project folder. This cannot be undone.",
             "Is project se %d dropped wallpaper delete kar dun? Files project folder se hat jayengi. Ye wapas nahi hoga.");
         put(DELETED_TOAST, "%d wallpaper(s) deleted", "%d wallpaper delete ho gaye");
+
+        // v132 — frame preview + gallery Lock/Clear
+        put(FRAME_PREVIEW, "Frame Preview", "Frame Preview");
+        put(LOCK, "Lock", "Lock");
+        put(LOCKED, "Locked", "Lock Laga Hai");
     }
 
     private BulkStrings() {}

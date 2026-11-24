@@ -46,12 +46,15 @@ import java.util.Set;
  * har row ki height pakki (46/42/30dp).
  *
  * TOOLBAR (owner ke apne HTML design — All Images Gallery
- * Manager — ke mutabiq, 2 rows + hint bar):
+ * Manager — ke mutabiq, 3 rows + hint bar):
  *   Row 1: "N selected" | Select All / Unselect All | Add/Move CTA
  *          (0 select par disabled; Copy mode me "Add (n)", Move mode
  *          me "Move (n)")
  *   Row 2: Sort (Newest -> Oldest -> Name cycle) | Grid (ek line me
  *          2 -> 3 -> 4 -> 5 -> 6 images cycle) | Copy / Move toggle
+ *   Row 3 (v132): Lock toggle (on ho to selection se kuch hataya
+ *          nahi ja sakta) | Clear (poori selection khaali — lock
+ *          on ho tab bhi; yehi unselect ka asal rasta hai)
  *   Hint bar: swipe tip + kul items count.
  * Selection IMAGE ID par hoti hai (sort badalne se selection nahi
  * tutti). Move mode confirm par EXTRA_MOVE=true jata hai — asal
@@ -88,6 +91,10 @@ public class BulkGalleryActivity extends Activity {
 
     private final List<Bucket> mBuckets = new ArrayList<>();
     private int mTotalCount = 0;
+    // v132: "All Images" row ka cover — gallery ki sab se pehli
+    // (sab se nayi) image; buckets query DATE_ADDED DESC hai, is
+    // liye pehli row hi asal cover hai
+    private long mAllCoverId = -1;
 
     // Grid state — v131 (Defect 2 fix): ids LOAD order me (Newest
     // pehle) + DISPLAY order ki alag list; selection image ID par.
@@ -118,6 +125,10 @@ public class BulkGalleryActivity extends Activity {
     private TextView mCopyLabel;
     private TextView mMoveLabel;
     private TextView mTotalLabel;
+    // v132: Lock / Clear (toolbar row 3)
+    private LinearLayout mLockPill;
+    private ImageView mLockIcon;
+    private TextView mLockLabel;
 
     // Drag-select state (positions — display order par hisaab)
     private boolean mDragging = false;
@@ -128,6 +139,16 @@ public class BulkGalleryActivity extends Activity {
     private int mDownPos = -1;
     private float mDownX = -1;
     private float mDownY = -1;
+    // v132: paint (swipe) drag hai ya long-press wala range drag;
+    // paint ka target state (anchor ki toggled halat, lock-aware);
+    // or ye gesture scroll-qarar paya (is me paint kabhi nahi banta)
+    private boolean mDragPaint = false;
+    private boolean mDragPaintState = true;
+    private boolean mGestureScroll = false;
+    // v132: LOCK — on ho to selection se kuch hataya nahi ja sakta
+    // (tap/drag/Select-All sab par); Clear hi wahid unselect rasta
+    // hai. Screen ki had tak — persist nahi hota, default OFF.
+    private boolean mLocked = false;
 
     private final LruCache<Long, Bitmap> mThumbCache = new LruCache<>(240);
 
@@ -138,11 +159,14 @@ public class BulkGalleryActivity extends Activity {
         new Thread(() -> {
             boolean ok = loadBuckets();
             runOnUiThread(() -> {
-                if (!ok || (mBuckets.isEmpty() && mTotalCount == 0)) {
+                if (!ok) {
                     BulkTheme.showToast(this, BulkStrings.t(this, BulkStrings.GALLERY_EMPTY));
                     finish();
                     return;
                 }
+                // v132: gallery khaali ho tab bhi folder screen
+                // dikhti hai — System Picker wala rasta wahan bhi
+                // mojood rehta hai (pehle screen band ho jati thi)
                 showFolders();
             });
         }).start();
@@ -157,6 +181,25 @@ public class BulkGalleryActivity extends Activity {
             return;
         }
         super.onBackPressed();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // v132: gesture beech me ruk jaye (notification shade, call,
+        // focus change) to painting state atka na rahe — agli dafa
+        // screen par aane par drag saaf halat se shuru hota hai.
+        resetDrag();
+    }
+
+    /** Har drag/paint state ko saaf karo — stuck "painting" mumkin hi nahi rehta. */
+    private void resetDrag() {
+        mDragging = false;
+        mDragPaint = false;
+        mDragAnchor = -1;
+        mDragCurrent = -1;
+        mDownPos = -1;
+        mGestureScroll = false;
     }
 
     // ------------------------------------------------------------ MediaStore
@@ -174,6 +217,9 @@ public class BulkGalleryActivity extends Activity {
             Map<String, Bucket> map = new LinkedHashMap<>();
             while (c.moveToNext()) {
                 long id = c.getLong(0);
+                // v132: sab se pehli row (DATE_ADDED DESC = sab se
+                // nayi image) hi "All Images" ka cover hai
+                if (mAllCoverId < 0) mAllCoverId = id;
                 String bid = c.getString(1);
                 String name = c.getString(2);
                 if (bid == null) bid = "";
@@ -303,18 +349,118 @@ public class BulkGalleryActivity extends Activity {
         scroll.addView(body);
         root.addView(scroll);
 
-        body.addView(folderRow(null, BulkStrings.t(this, BulkStrings.ALL_IMAGES), mTotalCount, -1L));
+        // v132: All Images ka cover ab gallery ki pehli image hai
+        // (pehle khaali box ata tha — coverId -1 pass ho raha tha)
+        body.addView(folderRow(null, BulkStrings.t(this, BulkStrings.ALL_IMAGES),
+            mTotalCount, mAllCoverId));
         for (Bucket b : mBuckets) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lp.topMargin = BulkTheme.dp(this, 10);
             body.addView(folderRow(b.id, b.name, b.count, b.coverId), lp);
         }
+        if (mTotalCount == 0) {
+            TextView empty = new TextView(this);
+            empty.setText(BulkStrings.t(this, BulkStrings.GALLERY_EMPTY));
+            empty.setTextColor(BulkTheme.textMuted(this));
+            empty.setTextSize(12);
+            empty.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams ep = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ep.topMargin = BulkTheme.dp(this, 16);
+            empty.setLayoutParams(ep);
+            body.addView(empty);
+        }
+        // v132: Picker-source option — isi screen par saaf dikhta
+        // hua chhota row: system Gallery / File Manager se chunna
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sp.topMargin = BulkTheme.dp(this, 16);
+        body.addView(systemPickerRow(), sp);
         setContentView(root);
         BulkFonts.apply(this);
     }
 
-    private View folderRow(final String bucketId, String name, int count, long coverId) {
+    /** Chhota option row: system picker (Gallery / File Manager) — natija wohi staging flow me jata hai. */
+    private View systemPickerRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setBackground(BulkTheme.iconBoxBg(this));
+        iconBox.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34)));
+        ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_folder, BulkTheme.accent(this), 17);
+        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 17), BulkTheme.dp(this, 17));
+        ip.gravity = Gravity.CENTER;
+        iv.setLayoutParams(ip);
+        iconBox.addView(iv);
+        row.addView(iconBox);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER));
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(14);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = BulkTheme.dp(this, 11);
+        label.setLayoutParams(lp);
+        row.addView(label);
+        ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+        row.setOnClickListener(v -> launchSystemPicker());
+        return row;
+    }
+
+    private static final int REQ_SYS_PICK = 47;
+
+    /** System picker (ACTION_OPEN_DOCUMENT) — v127 wala secondary route, ab folder screen se bhi. */
+    private void launchSystemPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_SYS_PICK);
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "System picker nahi khula: " + e);
+            BulkTheme.showToast(this, BulkStrings.t(this, BulkStrings.GALLERY_EMPTY));
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_SYS_PICK || resultCode != RESULT_OK || data == null) return;
+        ArrayList<Uri> uris = new ArrayList<>();
+        android.content.ClipData clip = data.getClipData();
+        if (clip != null) {
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                Uri u = clip.getItemAt(i).getUri();
+                if (u != null) uris.add(u);
+            }
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if (uris.isEmpty()) return;
+        // Wohi result rasta jo gallery selection ka hai — Stage par
+        // ja kar ye picks bhi staging + Duplicates hash flow se
+        // guzarte hain (Copy mode; system picker par Move nahi hota)
+        Intent out = new Intent();
+        out.putParcelableArrayListExtra(EXTRA_URIS, uris);
+        out.putExtra(EXTRA_MOVE, false);
+        setResult(RESULT_OK, out);
+        finish();
+    }
+
+    private View folderRow(final String bucketId, final String name, int count, long coverId) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -322,11 +468,22 @@ public class BulkGalleryActivity extends Activity {
         row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
             BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
 
+        // v132 restyle: asal cover thumbnail GOL konay ke sath
+        // (pehle bitmap ke konay chaukor the — bg ka radius nazar
+        // hi nahi ata tha); size baqi v131 rows se ham-ahang 48dp
         final ImageView cover = new ImageView(this);
         cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
         cover.setBackground(BulkTheme.iconBoxBg(this));
+        cover.setClipToOutline(true);
+        cover.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
+                    BulkTheme.dp(BulkGalleryActivity.this, 10));
+            }
+        });
         cover.setLayoutParams(new LinearLayout.LayoutParams(
-            BulkTheme.dp(this, 44), BulkTheme.dp(this, 44)));
+            BulkTheme.dp(this, 48), BulkTheme.dp(this, 48)));
         row.addView(cover);
         if (coverId >= 0) loadThumb(coverId, cover);
 
@@ -340,6 +497,8 @@ public class BulkGalleryActivity extends Activity {
         tv.setText(name);
         tv.setTextColor(BulkTheme.textMain(this));
         tv.setTextSize(14);
+        tv.setSingleLine(true);
+        tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
         texts.addView(tv);
         TextView cnt = new TextView(this);
         cnt.setText(BulkStrings.format(this, BulkStrings.WALLPAPERS_COUNT, count));
@@ -348,6 +507,19 @@ public class BulkGalleryActivity extends Activity {
         texts.addView(cnt);
         row.addView(texts);
 
+        // v132: poora folder ek tap me select — grid khul jata hai
+        // jahan tamam images selected dikhti hain (count ke sath);
+        // confirm wohi purana rasta (staging + duplicates + Copy/Move)
+        if (count > 0) {
+            TextView selAll = toolPillText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
+            LinearLayout.LayoutParams sap = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            sap.leftMargin = BulkTheme.dp(this, 8);
+            selAll.setLayoutParams(sap);
+            selAll.setOnClickListener(v -> openGrid(bucketId, name, true));
+            row.addView(selAll);
+        }
+
         row.setOnClickListener(v -> openGrid(bucketId, name));
         return row;
     }
@@ -355,6 +527,16 @@ public class BulkGalleryActivity extends Activity {
     // ------------------------------------------------------------ grid
 
     private void openGrid(final String bucketId, final String title) {
+        openGrid(bucketId, title, false);
+    }
+
+    /**
+     * @param selectAll true ho to folder ki TAMAM images pehle se
+     *                  selected aati hain (v132 whole-folder select) —
+     *                  baqi flow (grid, toolbar, confirm → staging)
+     *                  bilkul wohi hai
+     */
+    private void openGrid(final String bucketId, final String title, final boolean selectAll) {
         mInGrid = true;
         mGridTitle = title;
         mBucketId = bucketId;
@@ -365,6 +547,7 @@ public class BulkGalleryActivity extends Activity {
             runOnUiThread(() -> {
                 mLoadOrder = ids;
                 mIds = BulkGalleryState.orderIds(mLoadOrder, mSortMode, mNames);
+                if (selectAll) mSelectedIds.addAll(mIds);
                 buildGridUi();
             });
         }).start();
@@ -382,9 +565,10 @@ public class BulkGalleryActivity extends Activity {
         // ANDAR nahi; har row ki height pakki (fixed dp), hub (v129)
         // wala hi usool jo owner ke phone par proven hai. Block ki
         // kul height bhi explicit hai: padding 6 + row1 46 + 4 +
-        // row2 42 + 6 + hint 30 + padding 6 = 140dp.
+        // row2 42 + 4 + row3 42 (v132 Lock/Clear) + 6 + hint 30 +
+        // padding 6 = 186dp.
         root.addView(buildToolbarBlock(), new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 140)));
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 186)));
 
         mGrid = new GridView(this);
         mGrid.setNumColumns(mCols);
@@ -401,7 +585,10 @@ public class BulkGalleryActivity extends Activity {
             toggle(position);
         });
         mGrid.setOnItemLongClickListener((parent, view, position, id) -> {
+            // Long-press wala range drag — hamesha SELECT karta hai
+            // (v129 wala proven rawaiya, barqarar)
             mDragging = true;
+            mDragPaint = false;
             mDragAnchor = position;
             mDragCurrent = position;
             mDragBase = selectedPositions();
@@ -409,10 +596,13 @@ public class BulkGalleryActivity extends Activity {
             return true;
         });
         mGrid.setOnTouchListener((v, e) -> {
-            int action = e.getAction();
+            int action = e.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 // Paint-select ki tayyari: kahan se ungli chali — tap
-                // abhi bhi aam click hi rehta hai (false wapas)
+                // abhi bhi aam click hi rehta hai (false wapas).
+                // v132: pichli gesture ka atka hua drag state pehle
+                // saaf — stuck "painting" ka koi rasta nahi rehta.
+                resetDrag();
                 mDownPos = mGrid.pointToPosition((int) e.getX(), (int) e.getY());
                 mDownX = e.getX();
                 mDownY = e.getY();
@@ -420,22 +610,39 @@ public class BulkGalleryActivity extends Activity {
             }
             if (action == MotionEvent.ACTION_MOVE) {
                 if (!mDragging) {
-                    // PAINT SELECT (v129, barqarar): baghair long-press
-                    // ke, ungli ghaseette hi selection shuru — jis image
-                    // par se ungli guzre wo select hoti jati hai.
-                    // Seedha neeche scroll selection NAHI banata (owner
-                    // ke HTML wala usool: horizontal swipe = select,
-                    // vertical = scroll).
-                    if (mDownPos < 0) return false;
+                    // PAINT SELECT (v129 rawaiya, v132 me pakka):
+                    // baghair long-press ke, ungli ghaseette hi
+                    // selection shuru — jis image par se ungli guzre
+                    // wo paint hoti jati hai. Seedha neeche scroll
+                    // selection NAHI banata (owner ke HTML wala
+                    // usool: horizontal swipe = select, vertical =
+                    // scroll).
+                    if (mDownPos < 0 || mGestureScroll) return false;
                     float dx = Math.abs(e.getX() - mDownX);
                     float dy = Math.abs(e.getY() - mDownY);
                     int slop = BulkTheme.dp(this, 10);
                     if (dx * dx + dy * dy < slop * slop) return false;
-                    if (dx < dy * 0.9f) return false;
+                    if (dx < dy * 0.9f) {
+                        // v132 FIX: vertical-dominant gesture ab
+                        // SCROLL qarar paya — is poori gesture me
+                        // paint phir kabhi shuru nahi hoga. Pehle:
+                        // scroll ke baad side par ghaseetne se paint
+                        // achanak SHURU ho jata tha, or anchor wo
+                        // purani (scroll ho chuki) position hoti thi
+                        // — bilkul ghalat cells select ho jate thay.
+                        mGestureScroll = true;
+                        return false;
+                    }
                     mDragging = true;
+                    mDragPaint = true;
                     mDragAnchor = mDownPos;
                     mDragCurrent = mDownPos;
                     mDragBase = selectedPositions();
+                    // Paint ka target: anchor cell ki TOGGLED halat
+                    // (selected par shuru -> unselect paint; lock on
+                    // ho to hamesha select — BulkGallerySelect)
+                    mDragPaintState = BulkGallerySelect.paintTargetState(
+                        mDragBase.contains(mDragAnchor), mLocked);
                     applyDrag();
                     return true;
                 }
@@ -454,12 +661,15 @@ public class BulkGalleryActivity extends Activity {
             }
             if (action == MotionEvent.ACTION_UP
                 || action == MotionEvent.ACTION_CANCEL) {
-                mDownPos = -1;
-                if (mDragging) {
-                    mDragging = false;
-                    return true; // drag ke baad click fire na ho
-                }
-                return false;
+                boolean wasDragging = mDragging;
+                resetDrag();
+                // Drag ke baad click fire na ho; aam tap par false
+                // taake click listener apna kaam kare
+                return wasDragging;
+            }
+            if (action == MotionEvent.ACTION_POINTER_DOWN) {
+                // Dusri ungli chal rahe drag ko kharab na kare
+                return mDragging;
             }
             return mDragging;
         });
@@ -499,7 +709,9 @@ public class BulkGalleryActivity extends Activity {
 
         mSelectAllBtn = toolPillText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
         mSelectAllBtn.setOnClickListener(v -> {
-            if (BulkGalleryState.isAllSelected(mSelectedIds.size(), mIds.size())) {
+            // v132: LOCK on ho to Select All sirf ADD karta hai —
+            // unselect ka wahid rasta Clear hai
+            if (!mLocked && BulkGalleryState.isAllSelected(mSelectedIds.size(), mIds.size())) {
                 mSelectedIds.clear();
             } else {
                 mSelectedIds.addAll(mIds);
@@ -586,6 +798,44 @@ public class BulkGalleryActivity extends Activity {
         mMovePill.setLayoutParams(mp);
         row2.addView(mMovePill);
         bar.addView(row2);
+
+        // Row 3 — pakki height 42dp (v132: Lock + Clear)
+        // LOCK (owner ka rule): on ho to selection se kuch hataya
+        // nahi ja sakta — tap, drag, Select All sab sirf ADD karte
+        // hain. CLEAR: poori selection ek tap me khaali — lock on
+        // ho tab bhi chalta hai, yehi unselect ka asal rasta hai.
+        LinearLayout row3 = new LinearLayout(this);
+        row3.setOrientation(LinearLayout.HORIZONTAL);
+        row3.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams r3p = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 42));
+        r3p.topMargin = BulkTheme.dp(this, 4);
+        row3.setLayoutParams(r3p);
+
+        mLockPill = toolPill(R.drawable.ic_bulk_lock);
+        mLockIcon = (ImageView) mLockPill.getChildAt(0);
+        mLockLabel = (TextView) mLockPill.getChildAt(1);
+        mLockPill.setOnClickListener(v -> {
+            mLocked = !mLocked;
+            refreshGridState();
+        });
+        row3.addView(mLockPill);
+
+        LinearLayout clearPill = toolPill(R.drawable.ic_bulk_trash);
+        TextView clearLabel = (TextView) clearPill.getChildAt(1);
+        clearLabel.setText(BulkStrings.t(this, BulkStrings.CLEAR));
+        clearPill.setOnClickListener(v -> {
+            // Clear hamesha chalta hai — lock on ho tab bhi
+            mSelectedIds.clear();
+            refreshGridState();
+        });
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.leftMargin = BulkTheme.dp(this, 6);
+        clearPill.setLayoutParams(clp);
+        row3.addView(clearPill);
+        bar.addView(row3);
+
         bar.addView(buildHintBar());
         return bar;
     }
@@ -683,19 +933,31 @@ public class BulkGalleryActivity extends Activity {
     }
 
     private void applyDrag() {
-        Set<Integer> pos = BulkGallerySelect.dragSelection(mDragBase, mDragAnchor, mDragCurrent);
-        mSelectedIds.clear();
+        // Paint (swipe) drag: anchor ki toggled halat poore swept
+        // range par; long-press drag: purana union-select rawaiya.
+        Set<Integer> pos = mDragPaint
+            ? BulkGallerySelect.paintSelection(mDragBase, mDragAnchor, mDragCurrent,
+                mDragPaintState)
+            : BulkGallerySelect.dragSelection(mDragBase, mDragAnchor, mDragCurrent);
+        Set<Long> next = new HashSet<>();
         for (int p : pos) {
-            if (p >= 0 && p < mIds.size()) mSelectedIds.add(mIds.get(p));
+            if (p >= 0 && p < mIds.size()) next.add(mIds.get(p));
         }
+        // Koi tabdeeli nahi to grid dobara mat bandho — har MOVE par
+        // full rebind drag ko bhari or jumpy banata tha
+        if (next.equals(mSelectedIds)) return;
+        mSelectedIds.clear();
+        mSelectedIds.addAll(next);
         refreshGridState();
     }
 
     private void toggle(int position) {
         if (position < 0 || position >= mIds.size()) return;
         long id = mIds.get(position);
-        if (mSelectedIds.contains(id)) mSelectedIds.remove(id);
-        else mSelectedIds.add(id);
+        // v132: LOCK on ho to selected cell tap se unselect nahi hota
+        boolean now = BulkGallerySelect.toggledState(mSelectedIds.contains(id), mLocked);
+        if (now) mSelectedIds.add(id);
+        else mSelectedIds.remove(id);
         refreshGridState();
     }
 
@@ -705,8 +967,10 @@ public class BulkGalleryActivity extends Activity {
             mCountLabel.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, n));
         }
         if (mSelectAllBtn != null) {
+            // v132: lock on ho to button hamesha "Select All" hi
+            // kehlata hai (uska click bhi sirf add karta hai)
             mSelectAllBtn.setText(BulkStrings.t(this,
-                BulkGalleryState.isAllSelected(n, mIds.size())
+                !mLocked && BulkGalleryState.isAllSelected(n, mIds.size())
                     ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL));
         }
         if (mConfirmBtn != null) {
@@ -732,6 +996,12 @@ public class BulkGalleryActivity extends Activity {
         }
         styleModePill(mCopyPill, mCopyIcon, mCopyLabel, mMode == BulkGalleryState.MODE_COPY);
         styleModePill(mMovePill, mMoveIcon, mMoveLabel, mMode == BulkGalleryState.MODE_MOVE);
+        // v132: Lock pill — on ho to accent style + "Locked" label
+        if (mLockPill != null && mLockLabel != null) {
+            mLockLabel.setText(BulkStrings.t(this,
+                mLocked ? BulkStrings.LOCKED : BulkStrings.LOCK));
+            styleModePill(mLockPill, mLockIcon, mLockLabel, mLocked);
+        }
         if (mTotalLabel != null) {
             mTotalLabel.setText(BulkStrings.format(this, BulkStrings.ITEMS_COUNT, mIds.size()));
         }

@@ -21,13 +21,11 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.termux.R;
@@ -126,7 +124,6 @@ public class BulkStageActivity extends Activity {
     }
 
     // View refs (refresh ke liye)
-    private Spinner mSpinner;
     private TextView mStep1Status;
     private TextView mStagedCount;
     private LinearLayout mToolbarNormal;
@@ -147,6 +144,19 @@ public class BulkStageActivity extends Activity {
     private View mStep1View;
     private View mDropBoxView;
     private View mBottomBarView;
+
+    // v132: Step 1 ki project select row (DP + naam + count) — spinner
+    // ki jagah; tap par full-screen Select Project picker khulta hai
+    private LinearLayout mProjectRow;
+    private FrameLayout mProjectDpSlot;
+    private TextView mProjectRowName;
+    private TextView mProjectRowCount;
+    // v132: Select Project picker (Add flow ke andar hi rehta hai)
+    private boolean mInPicker = false;
+    private String mPickerQuery = "";
+    private LinearLayout mPickerList;
+    private android.widget.EditText mPickerSearch;
+    private LinearLayout mPickerSearchRow;
 
     // ------------------------------------------------------------ lifecycle
 
@@ -169,22 +179,30 @@ public class BulkStageActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // v129: project list + spinner ke Ready counts bhi FRESH —
-        // bahar (ya pichli screen) se folders badle hon to purane
-        // number na rahen. Selection mehfooz rehti hai.
+        // v129: project list + counts bhi FRESH — bahar (ya pichli
+        // screen) se folders badle hon to purane number na rahen.
+        // Selection mehfooz rehti hai. v132: spinner ki jagah select
+        // row / picker list refresh hoti hai.
         mProjects = loadProjects();
-        if (mSpinner != null) {
-            mSpinner.setAdapter(buildSpinnerAdapter());
-            int sel = 0;
-            for (int i = 0; i < mProjects.size(); i++) {
-                if (mProjects.get(i).number == mSelectedNumber) { sel = i + 1; break; }
-            }
-            mSpinner.setSelection(sel);
+        if (mInPicker) {
+            refreshPickerList();
+        } else {
+            refreshProjectRow();
         }
         refreshStates();
         // v130: pichle commit ke reh gaye move-deletes (masalan Run ke
         // baad activity band ho gayi thi) — Stage khulte hi mukammal karo
         processPendingDeletes();
+    }
+
+    @Override
+    public void onBackPressed() {
+        // v132: picker khula ho to back sirf picker band karta hai
+        if (mInPicker) {
+            closeProjectPicker();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private List<BulkProjects.ProjectInfo> loadProjects() {
@@ -669,86 +687,297 @@ public class BulkStageActivity extends Activity {
         mStep1Status.setTextSize(11);
         panel.addView(headerRow(BulkStrings.t(this, BulkStrings.STEP1_SELECT_PROJECT), mStep1Status));
 
-        FrameLayout wrap = new FrameLayout(this);
-        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(
+        // v132: spinner KHATAM — us ki jagah DP wali select row
+        // (owner ka approved design): tap par Select Project picker.
+        mProjectRow = buildProjectSelectRow();
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        wp.topMargin = BulkTheme.dp(this, 8);
-        wrap.setLayoutParams(wp);
-
-        mSpinner = new Spinner(this);
-        mSpinner.setBackground(BulkTheme.spinnerBg(this, false));
-        mSpinner.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
-            BulkTheme.dp(this, 34), BulkTheme.dp(this, 11));
-        wrap.addView(mSpinner, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 16);
-        FrameLayout.LayoutParams chp = new FrameLayout.LayoutParams(
-            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16));
-        chp.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
-        chp.rightMargin = BulkTheme.dp(this, 10);
-        chev.setLayoutParams(chp);
-        wrap.addView(chev);
-        panel.addView(wrap);
-
-        mSpinner.setAdapter(buildSpinnerAdapter());
-
-        int initial = 0;
-        for (int i = 0; i < mProjects.size(); i++) {
-            if (mProjects.get(i).number == mSelectedNumber) { initial = i + 1; break; }
-        }
-        mSpinner.setSelection(initial);
-        mSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view,
-                                       int position, long id) {
-                mSelectedNumber = position == 0 ? -1 : mProjects.get(position - 1).number;
-                persistStage();
-                refreshStates();
-            }
-            @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        });
+        rp.topMargin = BulkTheme.dp(this, 8);
+        mProjectRow.setLayoutParams(rp);
+        panel.addView(mProjectRow);
+        refreshProjectRow();
         return panel;
     }
 
-    /** Spinner ke labels (Ready counts har dafa FRESH) + design wala adapter. */
-    private ArrayAdapter<String> buildSpinnerAdapter() {
-        List<String> labels = new ArrayList<>();
-        labels.add(BulkStrings.t(this, BulkStrings.CHOOSE_PROJECT));
-        for (BulkProjects.ProjectInfo p : mProjects) {
-            int ready = p.number > 0
-                ? BulkProjects.countFiles(BulkProjects.readyDir(p.number)) : 0;
-            labels.add(p.name + " (Ready: " + ready + ")");
+    /** Select row: DP (asal frame preview) + naam + wallpapers count + chevron. */
+    private LinearLayout buildProjectSelectRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.spinnerBg(this, false));
+        row.setPadding(BulkTheme.dp(this, 10), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        row.setClickable(true);
+
+        mProjectDpSlot = new FrameLayout(this);
+        mProjectDpSlot.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 48), BulkTheme.dp(this, 48)));
+        row.addView(mProjectDpSlot);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tp.leftMargin = BulkTheme.dp(this, 11);
+        texts.setLayoutParams(tp);
+        mProjectRowName = new TextView(this);
+        mProjectRowName.setTextSize(14);
+        mProjectRowName.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        mProjectRowName.setSingleLine(true);
+        mProjectRowName.setEllipsize(TextUtils.TruncateAt.END);
+        texts.addView(mProjectRowName);
+        mProjectRowCount = new TextView(this);
+        mProjectRowCount.setTextSize(11);
+        mProjectRowCount.setTextColor(BulkTheme.textMuted(this));
+        texts.addView(mProjectRowCount);
+        row.addView(texts);
+
+        ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 16);
+        LinearLayout.LayoutParams chp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16));
+        chev.setLayoutParams(chp);
+        row.addView(chev);
+
+        row.setOnClickListener(v -> showProjectPicker());
+        return row;
+    }
+
+    /** Select row ki halat mojooda selection se taaza karo (DP dobara banti hai). */
+    private void refreshProjectRow() {
+        if (mProjectRow == null) return;
+        BulkProjects.ProjectInfo sel = selectedProject();
+        boolean has = sel != null;
+        mProjectRow.setBackground(BulkTheme.spinnerBg(this, has));
+        if (mProjectDpSlot != null) {
+            mProjectDpSlot.removeAllViews();
+            if (has) {
+                mProjectDpSlot.addView(BulkPreviewUi.dpView(this, sel.number, 48));
+            }
         }
-        return new ArrayAdapter<String>(this, 0, labels) {
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                return spinnerText(position, convertView, false);
+        if (mProjectRowName != null) {
+            mProjectRowName.setText(has ? sel.name
+                : BulkStrings.t(this, BulkStrings.CHOOSE_PROJECT));
+            mProjectRowName.setTextColor(has
+                ? BulkTheme.textMain(this) : BulkTheme.textMuted(this));
+        }
+        if (mProjectRowCount != null) {
+            mProjectRowCount.setText(has
+                ? BulkStrings.format(this, BulkStrings.WALLPAPERS_COUNT,
+                    BulkProjects.countFiles(BulkProjects.wallpapersDir(sel.number)))
+                : "");
+            mProjectRowCount.setVisibility(has ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    // ------------------------------------------------------------ v132 Select Project picker
+
+    private void showProjectPicker() {
+        mInPicker = true;
+        mPickerQuery = "";
+        setContentView(buildPickerUi());
+        BulkFonts.apply(this);
+    }
+
+    private void closeProjectPicker() {
+        mInPicker = false;
+        setContentView(buildUi());
+        BulkFonts.apply(this);
+        loadStagedThumbs();
+    }
+
+    /** Picker se select = purana spinner wala hi asar: number set + persist + Stage par wapas. */
+    private void selectProjectFromPicker(BulkProjects.ProjectInfo p) {
+        mSelectedNumber = p.number;
+        persistStage();
+        closeProjectPicker();
+    }
+
+    private View buildPickerUi() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BulkTheme.appBg(this));
+
+        // Header: back + title/subtitle + SEARCH icon + theme
+        // (subHeader jesa hi, lekin back yahan picker band karta hai
+        // or dayein search bhi hai — owner ka approved design)
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 14),
+            BulkTheme.dp(this, 20), BulkTheme.dp(this, 10));
+        bar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_back, 34,
+            v -> closeProjectPicker()));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tlp.setMargins(BulkTheme.dp(this, 10), 0, BulkTheme.dp(this, 8), 0);
+        titles.setLayoutParams(tlp);
+        TextView t = new TextView(this);
+        t.setText(BulkStrings.t(this, BulkStrings.SELECT_PROJECT));
+        t.setTextSize(16);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        t.setTextColor(BulkTheme.textMain(this));
+        titles.addView(t);
+        TextView s = new TextView(this);
+        s.setText(BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE));
+        s.setTextSize(11);
+        s.setTextColor(BulkTheme.textMuted(this));
+        titles.addView(s);
+        bar.addView(titles);
+        bar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_search, 34,
+            v -> togglePickerSearch()));
+        LinearLayout.LayoutParams thp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34));
+        thp.leftMargin = BulkTheme.dp(this, 8);
+        View themeBtn = BulkTheme.themeButton(this);
+        themeBtn.setLayoutParams(thp);
+        bar.addView(themeBtn);
+        header.addView(bar);
+        View line = new View(this);
+        line.setBackground(BulkTheme.hLine(this));
+        header.addView(line, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f))));
+        root.addView(header);
+
+        // Search field — search icon se khulta/band hota hai
+        mPickerSearchRow = new LinearLayout(this);
+        mPickerSearchRow.setOrientation(LinearLayout.HORIZONTAL);
+        mPickerSearchRow.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 18), 0);
+        mPickerSearchRow.setVisibility(View.GONE);
+        mPickerSearch = new android.widget.EditText(this);
+        mPickerSearch.setHint(BulkStrings.t(this, BulkStrings.SEARCH_PROJECT));
+        mPickerSearch.setSingleLine(true);
+        mPickerSearch.setTextSize(13);
+        mPickerSearch.setTextColor(BulkTheme.textMain(this));
+        mPickerSearch.setHintTextColor(BulkTheme.textMuted(this));
+        mPickerSearch.setBackground(BulkTheme.pillBg(this));
+        mPickerSearch.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 9),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 9));
+        mPickerSearchRow.addView(mPickerSearch, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mPickerSearch.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                mPickerQuery = s == null ? "" : s.toString();
+                refreshPickerList();
             }
-            @Override
-            public View getDropDownView(int position, View convertView, ViewGroup parent) {
-                return spinnerText(position, convertView, true);
-            }
-            private View spinnerText(int position, View convertView, boolean dropDown) {
-                TextView t = convertView instanceof TextView
-                    ? (TextView) convertView : new TextView(BulkStageActivity.this);
-                t.setText(getItem(position));
-                t.setTextSize(13.5f);
-                t.setTextColor(dropDown || position > 0
-                    ? BulkTheme.textMain(BulkStageActivity.this)
-                    : BulkTheme.textMuted(BulkStageActivity.this));
-                t.setBackgroundColor(dropDown
-                    ? BulkTheme.modalColor(BulkStageActivity.this) : Color.TRANSPARENT);
-                t.setPadding(BulkTheme.dp(BulkStageActivity.this, 10),
-                    BulkTheme.dp(BulkStageActivity.this, 10),
-                    BulkTheme.dp(BulkStageActivity.this, 10),
-                    BulkTheme.dp(BulkStageActivity.this, 10));
-                t.setSingleLine(true);
-                t.setEllipsize(TextUtils.TruncateAt.END);
-                return t;
-            }
-        };
+            @Override public void afterTextChanged(android.text.Editable s) {}
+        });
+        root.addView(mPickerSearchRow);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.setFillViewport(false);
+        mPickerList = new LinearLayout(this);
+        mPickerList.setOrientation(LinearLayout.VERTICAL);
+        mPickerList.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
+        scroll.addView(mPickerList);
+        root.addView(scroll);
+
+        refreshPickerList();
+        return root;
+    }
+
+    private void togglePickerSearch() {
+        if (mPickerSearchRow == null) return;
+        if (mPickerSearchRow.getVisibility() == View.VISIBLE) {
+            mPickerSearchRow.setVisibility(View.GONE);
+            if (mPickerSearch != null) mPickerSearch.setText("");
+            mPickerQuery = "";
+            refreshPickerList();
+        } else {
+            mPickerSearchRow.setVisibility(View.VISIBLE);
+            if (mPickerSearch != null) mPickerSearch.requestFocus();
+        }
+    }
+
+    private void refreshPickerList() {
+        if (mPickerList == null) return;
+        mPickerList.removeAllViews();
+        boolean any = false;
+        boolean first = true;
+        for (BulkProjects.ProjectInfo p : mProjects) {
+            if (p.number <= 0) continue;
+            if (!BulkPreviewSource.matchesQuery(p.name, p.number, mPickerQuery)) continue;
+            any = true;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = first ? 0 : BulkTheme.dp(this, 10);
+            first = false;
+            mPickerList.addView(pickerRow(p), lp);
+        }
+        if (!any) {
+            TextView none = new TextView(this);
+            none.setText(BulkStrings.t(this, BulkStrings.NO_MATCHING));
+            none.setTextColor(BulkTheme.textMuted(this));
+            none.setTextSize(12.5f);
+            none.setGravity(Gravity.CENTER);
+            none.setPadding(0, BulkTheme.dp(this, 18), 0, 0);
+            mPickerList.addView(none);
+        }
+        BulkFonts.applyToTree(this, mPickerList);
+    }
+
+    /** Picker ki ek row: DP + naam + count; row tap = select; image icon = bara preview popup. */
+    private View pickerRow(final BulkProjects.ProjectInfo p) {
+        final boolean isSel = p.number == mSelectedNumber;
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(isSel ? BulkTheme.glassPanelStrong(this) : BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        row.setClickable(true);
+
+        row.addView(BulkPreviewUi.dpView(this, p.number, 52));
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tp.leftMargin = BulkTheme.dp(this, 11);
+        texts.setLayoutParams(tp);
+        TextView name = new TextView(this);
+        name.setText(p.name);
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(14);
+        name.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        texts.addView(name);
+        TextView count = new TextView(this);
+        count.setText(BulkStrings.format(this, BulkStrings.WALLPAPERS_COUNT,
+            BulkProjects.countFiles(BulkProjects.wallpapersDir(p.number))));
+        count.setTextColor(BulkTheme.textMuted(this));
+        count.setTextSize(11);
+        texts.addView(count);
+        row.addView(texts);
+
+        // Image icon (gol) — SIRF is par tap se bara preview khulta hai
+        FrameLayout iconCircle = new FrameLayout(this);
+        iconCircle.setBackground(BulkTheme.circleBg(this));
+        LinearLayout.LayoutParams icp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 38), BulkTheme.dp(this, 38));
+        iconCircle.setLayoutParams(icp);
+        ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_image, BulkTheme.accent(this), 18);
+        FrameLayout.LayoutParams ivp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 18), BulkTheme.dp(this, 18));
+        ivp.gravity = Gravity.CENTER;
+        iv.setLayoutParams(ivp);
+        iconCircle.addView(iv);
+        iconCircle.setClickable(true);
+        iconCircle.setOnClickListener(v -> BulkPreviewUi.showPopup(this, p, true,
+            () -> selectProjectFromPicker(p)));
+        row.addView(iconCircle);
+
+        row.setOnClickListener(v -> selectProjectFromPicker(p));
+        return row;
     }
 
     // ------------------------------------------------------------ Drop Box (staging)
@@ -1182,9 +1411,9 @@ public class BulkStageActivity extends Activity {
             mStep1Status.setTypeface(android.graphics.Typeface.DEFAULT,
                 hasProject ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
         }
-        if (mSpinner != null) {
-            mSpinner.setBackground(BulkTheme.spinnerBg(this, hasProject));
-        }
+        // v132: spinner ki jagah select row ka background selection
+        // ke hisab se (strong border = project select hai)
+        refreshProjectRow();
         if (mStagedCount != null) {
             mStagedCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mStaged.size()));
         }
