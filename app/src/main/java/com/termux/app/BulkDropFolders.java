@@ -425,15 +425,24 @@ public final class BulkDropFolders {
     }
 
     /**
-     * Ek pass: drop folders ensure + fetch. Dashboard / Add / Projects
-     * ke khulne par background thread se chalaya jata hai.
+     * Ek pass: (auto ON ho to) drop folders ensure + preview
+     * videos, phir fetch. Dashboard / Add / Projects ke khulne par
+     * background thread se chalaya jata hai.
+     * v134: DEFAULT MANUAL hai — auto toggles OFF hon to missing
+     * folders/videos khud NAHI bante (owner jo delete kare wo
+     * delete hi rehta hai); fetch sirf mojooda folders par chalta
+     * hai. Toggles Permissions -> Recreate Folders ki settings me.
      * @return project me move hui kul files
      */
     public static int syncNow(Context ctx) {
         Set<Integer> known = knownNumbers();
         if (known.isEmpty()) return 0;
-        ensureDropFolders(known);
-        ensurePreviewVideos(ctx, known);
+        if (BulkRecreateSettings.mayCreateFolders(BulkRecreateSettings.foldersAuto(ctx))) {
+            ensureDropFolders(known);
+        }
+        if (BulkRecreateSettings.mayCopyVideos(BulkRecreateSettings.videosAuto(ctx))) {
+            ensurePreviewVideos(ctx, known);
+        }
         return fetchAll(ctx, known);
     }
 }

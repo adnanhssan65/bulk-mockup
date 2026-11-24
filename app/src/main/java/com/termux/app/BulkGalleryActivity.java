@@ -6,14 +6,21 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.GridView;
@@ -112,6 +119,9 @@ public class BulkGalleryActivity extends Activity {
     private final Set<Long> mSelectedIds = new HashSet<>();
     private GridView mGrid;
     private GalleryAdapter mAdapter;
+    // v134: scroll handle (right edge, scroll fraction ke sath
+    // chalti hui, drag = scrub) — BulkScrollHandle khud sambhalta hai
+    private BulkScrollHandle mScrollHandle;
     private int mCols = BulkGalleryState.DEFAULT_GRID;
     private int mSortMode = BulkGalleryState.SORT_NEWEST;
     // v132 redesign: Add Mode setting (persisted) — factory default
@@ -362,8 +372,8 @@ public class BulkGalleryActivity extends Activity {
         scroll.addView(body);
         root.addView(scroll);
 
-        // v133: System Picker sab se PEHLI row (highlight) — owner ki
-        // hidayat: picker-source option front par saaf dikhe
+        // v134: System Picker sab se PEHLI row — folder rows jesi
+        // ek chhoti row (preview pv_picker4, owner ki pasand)
         body.addView(systemPickerRow());
         // v132: All Images ka cover ab gallery ki pehli image hai
         // (pehle khaali box ata tha — coverId -1 pass ho raha tha)
@@ -396,45 +406,38 @@ public class BulkGalleryActivity extends Activity {
 
     /**
      * Chhota option row: system picker (Gallery / File Manager) —
-     * natija wohi staging flow me jata hai. v133: list ki PEHLI row,
-     * highlight (halki sabz tint + sabz border) ke sath.
+     * natija wohi staging flow me jata hai. v134 (owner ki pasand,
+     * preview pv_picker4): folder rows JAISI ek chhoti row — pillBg,
+     * tinted square me folder icon, sirf "System Picker" label,
+     * right chevron. v133 wali bari highlight card khatam.
      */
     private View systemPickerRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(BulkTheme.roundedBg(this, BulkTheme.accentSoft(this), 14,
-            BulkTheme.accentStrong(this), 1));
-        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 11),
-            BulkTheme.dp(this, 12), BulkTheme.dp(this, 11));
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
         FrameLayout iconBox = new FrameLayout(this);
         iconBox.setBackground(BulkTheme.iconBoxBg(this));
         iconBox.setLayoutParams(new LinearLayout.LayoutParams(
-            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34)));
-        ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_folder, BulkTheme.accent(this), 17);
+            BulkTheme.dp(this, 48), BulkTheme.dp(this, 48)));
+        ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_folder, BulkTheme.accent(this), 20);
         FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
-            BulkTheme.dp(this, 17), BulkTheme.dp(this, 17));
+            BulkTheme.dp(this, 20), BulkTheme.dp(this, 20));
         ip.gravity = Gravity.CENTER;
         iv.setLayoutParams(ip);
         iconBox.addView(iv);
         row.addView(iconBox);
-        LinearLayout texts = new LinearLayout(this);
-        texts.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        tp.leftMargin = BulkTheme.dp(this, 11);
-        texts.setLayoutParams(tp);
         TextView label = new TextView(this);
         label.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER));
         label.setTextColor(BulkTheme.textMain(this));
         label.setTextSize(14);
-        texts.addView(label);
-        TextView sub = new TextView(this);
-        sub.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER_SUB));
-        sub.setTextColor(BulkTheme.textMuted(this));
-        sub.setTextSize(11);
-        texts.addView(sub);
-        row.addView(texts);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = BulkTheme.dp(this, 11);
+        label.setLayoutParams(lp);
+        row.addView(label);
         ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 14);
         chev.setLayoutParams(new LinearLayout.LayoutParams(
             BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
@@ -533,19 +536,10 @@ public class BulkGalleryActivity extends Activity {
         texts.addView(cnt);
         row.addView(texts);
 
-        // v132: poora folder ek tap me select — grid khul jata hai
-        // jahan tamam images selected dikhti hain (count ke sath);
-        // confirm wohi purana rasta (staging + duplicates + Copy/Move)
-        if (count > 0) {
-            TextView selAll = toolPillText(BulkStrings.t(this, BulkStrings.SELECT_ALL));
-            LinearLayout.LayoutParams sap = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            sap.leftMargin = BulkTheme.dp(this, 8);
-            selAll.setLayoutParams(sap);
-            selAll.setOnClickListener(v -> openGrid(bucketId, name, true));
-            row.addView(selAll);
-        }
-
+        // v134 (owner ki pasand, preview pv_picker4): folder row par
+        // Select All control BILKUL nahi — na pill, na icon. Folder
+        // select karne ka wahid rasta grid toolbar ka Select All
+        // button hai (har folder type par wohi chalta hai).
         row.setOnClickListener(v -> openGrid(bucketId, name));
         return row;
     }
@@ -701,7 +695,21 @@ public class BulkGalleryActivity extends Activity {
             }
             return mDragging;
         });
-        root.addView(mGrid);
+        // v134: grid ek FrameLayout me — right edge par scroll
+        // HANDLE (BulkScrollHandle): list ki fraction ke sath khud
+        // uper/neeche chalti hai, ghaseetne par fast-scroll (scrub),
+        // chevron tap par bilkul top/bottom. Handle sirf apni jagah
+        // par touchable hai; grid ke taps/drag-select neeche bilkul
+        // wese hi chalte hain. Gear popup ki "Scroll Button" setting
+        // (Show/Hide) se band bhi ho sakti hai.
+        FrameLayout gridWrap = new FrameLayout(this);
+        gridWrap.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        mGrid.setLayoutParams(new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        gridWrap.addView(mGrid);
+        mScrollHandle = BulkScrollHandle.forAbsList(this, gridWrap, mGrid);
+        root.addView(gridWrap);
 
         setContentView(root);
         BulkFonts.apply(this);
@@ -1145,6 +1153,20 @@ public class BulkGalleryActivity extends Activity {
                 if (mInGrid) refreshGridState();
             });
         }
+
+        // v134: Scroll Button (scroll handle) Show/Hide — persisted,
+        // har surface par yahi setting chalti hai
+        panel.addView(gearSectionLabel(BulkStrings.t(this, BulkStrings.SCROLL_BUTTON)));
+        settingRow(panel, dialog, BulkStrings.t(this, BulkStrings.SHOW),
+            BulkScrollSettings.isShown(this), () -> {
+                BulkScrollSettings.setShown(this, true);
+                if (mScrollHandle != null) mScrollHandle.refreshGate();
+            });
+        settingRow(panel, dialog, BulkStrings.t(this, BulkStrings.HIDE),
+            !BulkScrollSettings.isShown(this), () -> {
+                BulkScrollSettings.setShown(this, false);
+                if (mScrollHandle != null) mScrollHandle.refreshGate();
+            });
         BulkTheme.showPanelDialog(this, panel);
         BulkFonts.applyToTree(this, panel);
     }

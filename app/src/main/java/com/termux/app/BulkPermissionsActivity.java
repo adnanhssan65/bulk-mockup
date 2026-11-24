@@ -14,6 +14,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import com.termux.shared.android.PermissionUtils;
@@ -393,10 +394,8 @@ public class BulkPermissionsActivity extends Activity {
 
         // v132: Recreate Folders — TermuxMod drop folders + project ke
         // standard subfolders dobara banao (sirf create, delete kabhi nahi)
-        addNavRow(BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS),
-            BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS_HINT),
-            BulkStrings.t(this, BulkStrings.RECREATE),
-            this::recreateFolders);
+        // v134: row ke top-right par gear — auto/manual settings popup
+        addRecreateRow();
 
         if (!mFirstRunMode) {
             // v127 (design): pehli-dafa wale popups dobara chalana —
@@ -440,6 +439,132 @@ public class BulkPermissionsActivity extends Activity {
 
         // v128 restyle: muntakhab font har rebuild ke baad dobara lagao
         BulkFonts.applyToTree(this, mRoot);
+    }
+
+    /**
+     * v134: Recreate Folders wali row — addNavRow jesi hi shakal,
+     * lekin top-right par chhota gear button bhi: us se auto/manual
+     * wali settings ka popup khulta hai. Row ki baqi design bilkul
+     * baqi rows jesi hi hai (koi bara block nahi).
+     */
+    private void addRecreateRow() {
+        LinearLayout row = permCard();
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView status = new TextView(this);
+        status.setText("› ");
+        status.setTextColor(BulkTheme.accent(this));
+        status.setTextSize(17);
+        top.addView(status);
+
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS));
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(15);
+        label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        top.addView(label);
+
+        TextView btn = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.RECREATE), v -> recreateFolders());
+        btn.setTextSize(12.5f);
+        top.addView(btn);
+
+        LinearLayout gear = BulkTheme.circleButton(this, com.termux.R.drawable.ic_bulk_gear, 30,
+            v -> showRecreateSettings());
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        glp.leftMargin = dp(8);
+        gear.setLayoutParams(glp);
+        top.addView(gear);
+        row.addView(top);
+
+        TextView hintView = new TextView(this);
+        hintView.setText(BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS_HINT));
+        hintView.setTextColor(BulkTheme.textMuted(this));
+        hintView.setTextSize(12);
+        hintView.setPadding(dp(26), dp(2), 0, 0);
+        row.addView(hintView);
+
+        mRoot.addView(row);
+    }
+
+    /**
+     * v134: Recreate ki settings — do chhote switch rows (Folders /
+     * Preview Videos ka Auto Recreate). Toggle dabate hi setting
+     * save ho jati hai. DEFAULT dono OFF (manual): OFF ho to folders
+     * or videos sirf Recreate Folders dabane se dobara bante hain,
+     * khud kabhi wapas nahi ate.
+     */
+    private void showRecreateSettings() {
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.RECREATE_SETTINGS), dialog);
+        panel.addView(recreateSwitchRow(
+            BulkStrings.t(this, BulkStrings.RECREATE_FOLDERS_AUTO),
+            BulkRecreateSettings.foldersAuto(this),
+            on -> BulkRecreateSettings.setFoldersAuto(this, on)));
+        panel.addView(recreateSwitchRow(
+            BulkStrings.t(this, BulkStrings.RECREATE_VIDEOS_AUTO),
+            BulkRecreateSettings.videosAuto(this),
+            on -> BulkRecreateSettings.setVideosAuto(this, on)));
+        TextView close = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.CLOSE), v -> dialog.dismiss());
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = dp(14);
+        close.setLayoutParams(clp);
+        panel.addView(close);
+        BulkTheme.showPanelDialog(this, panel);
+        BulkFonts.applyToTree(this, panel);
+    }
+
+    private interface RecreateToggle {
+        void onChanged(boolean on);
+    }
+
+    /** Ek switch row: label + OFF wali note (left), Switch (right). */
+    private LinearLayout recreateSwitchRow(String labelText, boolean initial,
+                                           RecreateToggle toggle) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = dp(10);
+        row.setLayoutParams(rlp);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.setLayoutParams(new LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        TextView label = new TextView(this);
+        label.setText(labelText);
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(14.5f);
+        texts.addView(label);
+        TextView note = new TextView(this);
+        note.setText(BulkStrings.t(this, BulkStrings.RECREATE_AUTO_OFF_NOTE));
+        note.setTextColor(BulkTheme.textMuted(this));
+        note.setTextSize(11.5f);
+        texts.addView(note);
+        row.addView(texts);
+
+        Switch sw = new Switch(this);
+        sw.setChecked(initial);
+        try {
+            android.content.res.ColorStateList tint =
+                android.content.res.ColorStateList.valueOf(BulkTheme.accent(this));
+            sw.setThumbTintList(tint);
+            sw.setTrackTintList(tint);
+        } catch (Exception ignored) {}
+        sw.setOnCheckedChangeListener((buttonView, isChecked) -> toggle.onChanged(isChecked));
+        row.addView(sw);
+        return row;
     }
 
     /** v132: structural folders dobara banao; natija design dialog me. */

@@ -212,9 +212,24 @@ public final class BulkStrings {
     public static final String TAP_TO_VIEW = "tap_to_view";
     public static final String SORT_SECTION = "sort_section";
     public static final String GRID_SECTION = "grid_section";
+    public static final String SCROLL_BUTTON = "scroll_button";
+    public static final String SHOW = "show";
+    public static final String HIDE = "hide";
     public static final String MIGRATED_TITLE = "migrated_title";
     public static final String MIGRATED_MSG = "migrated_msg";
     public static final String STAGED_DROP_SUB = "staged_drop_sub";
+
+    // v134 — move-back summary + Recreate auto/manual settings
+    public static final String MOVEDBACK_TITLE = "movedback_title";
+    public static final String MOVEDBACK_MSG = "movedback_msg";
+    public static final String RECREATE_SETTINGS = "recreate_settings";
+    public static final String RECREATE_FOLDERS_AUTO = "recreate_folders_auto";
+    public static final String RECREATE_VIDEOS_AUTO = "recreate_videos_auto";
+    public static final String RECREATE_AUTO_OFF_NOTE = "recreate_auto_off_note";
+    public static final String VIEW_LESS = "view_less";
+    public static final String LOG_MOVEBACK_STAY_ROOT = "log_moveback_stay_root";
+    public static final String LOG_MOVEBACK_STAY_RUNNER = "log_moveback_stay_runner";
+    public static final String LOG_MOVEBACK_MOVED = "log_moveback_moved";
 
     // v129 — Drop Wallpapers (Ready Assets ke andar), Home live logs, permission popup
     public static final String DROP_WALLPAPERS = "drop_wallpapers";
@@ -465,8 +480,8 @@ public final class BulkStrings {
             "Abhi koi mockup tayyar nahi hai. Pehle project run karein.");
         put(TAP_TO_INSPECT, "Tap any item to inspect full preview",
             "Full preview dekhne ke liye kisi bhi image par tap karein");
-        put(MOCKUPS_TAB, "Mockups/", "Mockups/");
-        put(WALLPAPERS_TAB, "Wallpapers/", "Wallpapers/");
+        put(MOCKUPS_TAB, "Mockups", "Mockups");
+        put(WALLPAPERS_TAB, "Wallpapers", "Wallpapers");
         put(OUTPUT_FOLDER, "Output Folder", "Output Folder");
         put(STORAGE_LOCATION, "Storage Location", "Storage Location");
         put(MAIN_FOLDER, "Main Folder Name", "Main Folder Name");
@@ -513,10 +528,32 @@ public final class BulkStrings {
         put(TAP_TO_VIEW, "tap to view", "tap karo");
         put(SORT_SECTION, "Sort", "Sort");
         put(GRID_SECTION, "Grid", "Grid");
+        put(SCROLL_BUTTON, "Scroll Button", "Scroll Button");
+        put(SHOW, "Show", "Dikhao");
+        put(HIDE, "Hide", "Chhupao");
         put(MIGRATED_TITLE, "Project Folders Updated", "Project Folders Update Ho Gaye");
         put(MIGRATED_MSG,
             "%d project(s) moved into the TermuxMod folder, so storage now shows only one folder. %d project(s) stayed in the old place — they keep working exactly the same.",
             "%d project(s) TermuxMod folder ke andar shift ho gaye — ab storage me sirf ek hi folder dikhega. %d project(s) purani jagah par hi rahe — wo bilkul pehle ki tarah chalte rahenge.");
+        // v134
+        put(MOVEDBACK_TITLE, "Project Folders Moved Back", "Project Folders Wapas Aa Gaye");
+        put(MOVEDBACK_MSG,
+            "%d project(s) moved back to the main storage. %d project(s) stayed inside TermuxMod (already present in the main storage, or an old runner) — they keep working exactly the same. Nothing was deleted.",
+            "%d project(s) wapas main storage par shift ho gaye. %d project(s) TermuxMod ke andar hi rahe (main storage par pehle se mojood, ya purana runner) — wo bilkul pehle ki tarah chalte rahenge. Kuch bhi delete nahi hua.");
+        put(RECREATE_SETTINGS, "Recreate Settings", "Recreate ki Settings");
+        put(RECREATE_FOLDERS_AUTO, "Folders — Auto Recreate", "Folders — Auto Recreate");
+        put(RECREATE_VIDEOS_AUTO, "Preview Videos — Auto Recreate", "Preview Videos — Auto Recreate");
+        put(RECREATE_AUTO_OFF_NOTE, "OFF = only from Recreate Folders", "OFF = sirf Recreate Folders se banenge");
+        put(VIEW_LESS, "View less", "Kam dekho");
+        put(LOG_MOVEBACK_STAY_ROOT,
+            "Project %d stays in TermuxMod (a folder already exists in the main storage — folders are never merged)",
+            "Project %d TermuxMod me hi rahega (root par pehle se folder hai — merge nahi hota)");
+        put(LOG_MOVEBACK_STAY_RUNNER,
+            "Project %d stays in TermuxMod (old runner — it keeps working exactly as before)",
+            "Project %d TermuxMod me hi rahega (runner purana hai — bilkul pehle ki tarah chalega)");
+        put(LOG_MOVEBACK_MOVED,
+            "Project %d moved back to the main storage (root)",
+            "Project %d wapas main storage (root) par shift ho gaya");
         put(STAGED_DROP_SUB, "Staged images — not added to a project yet",
             "Staged images — abhi kisi project me add nahi hue");
 
@@ -524,13 +561,13 @@ public final class BulkStrings {
         put(DROP_WALLPAPERS, "Drop Wallpapers", "Drop Wallpapers");
         put(DROP_WALLPAPERS_SUB, "Wallpapers dropped into each project",
             "Har project me drop kiye hue wallpapers");
-        put(LOG_IDLE, "Ready — logs yahan live ayenge", "Ready — logs yahan live ayenge");
-        put(LOG_RUN_START, "▶ %s — run shuru", "▶ %s — run shuru");
-        put(LOG_RUN_DONE, "✔ %s — run mukammal", "✔ %s — run mukammal");
-        put(LOG_RUN_FAIL, "✖ %s — run fail", "✖ %s — run fail");
-        put(PERM_POPUP_TITLE, "Permission Chahiye", "Permission Chahiye");
+        put(LOG_IDLE, "Ready — logs will appear here live", "Ready — logs yahan live ayenge");
+        put(LOG_RUN_START, "▶ %s — run started", "▶ %s — run shuru");
+        put(LOG_RUN_DONE, "✔ %s — run complete", "✔ %s — run mukammal");
+        put(LOG_RUN_FAIL, "✖ %s — run failed", "✖ %s — run fail");
+        put(PERM_POPUP_TITLE, "Permission Needed", "Permission Chahiye");
         put(PERM_POPUP_MSG,
-            "Storage permission ke baghair wallpapers add/run nahi ho sakte. Permissions screen se allow kar dein.",
+            "Without storage permission, wallpapers cannot be added or run. Please allow it from the Permissions screen.",
             "Storage permission ke baghair wallpapers add/run nahi ho sakte. Permissions screen se allow kar dein.");
         put(PERM_MANUAL_TAG, "Manual", "Manual");
 

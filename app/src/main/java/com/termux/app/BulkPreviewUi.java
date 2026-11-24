@@ -263,6 +263,19 @@ public final class BulkPreviewUi {
             a.runOnUiThread(() -> {
                 if (dialog.isShowing()) {
                     placeholder.setVisibility(View.GONE);
+                    // v134 fit rule (preview pvB2_popup): image
+                    // POORI asal aspect par — box ki unchai image
+                    // ke hisab se badalti hai, crop kabhi nahi
+                    // (screen ke 78% par cap).
+                    iv.setAdjustViewBounds(true);
+                    iv.setMaxHeight((int) (a.getResources().getDisplayMetrics().heightPixels * 0.78f));
+                    iv.setLayoutParams(new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+                    LinearLayout.LayoutParams blp =
+                        (LinearLayout.LayoutParams) box.getLayoutParams();
+                    blp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    box.setLayoutParams(blp);
                     iv.setImageBitmap(bmp);
                 }
             });

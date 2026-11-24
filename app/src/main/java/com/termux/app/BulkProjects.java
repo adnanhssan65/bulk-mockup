@@ -75,15 +75,17 @@ public final class BulkProjects {
     }
 
     /**
-     * Location ka faisla (pure): nayi jagah ka folder ho to wahi;
-     * warna purani jagah ka ho to wahi; dono na hon to NAYI jagah
-     * (fresh install wahin banta hai).
+     * Location ka faisla (pure) — v134: ROOT (purani jagah) ko
+     * tarjeeh: root par folder ho to wahi; warna TermuxMod ke andar
+     * wala ho to wahi (jo project wahan reh gaya ho wo chalta rahe);
+     * dono na hon to ROOT (fresh install / extraction wahin banta
+     * hai — TermuxMod ke andar project folder ab kabhi nahi banta).
      */
     public static File pickProjectDir(File newDir, File oldDir,
                                       boolean newExists, boolean oldExists) {
-        if (newExists) return newDir;
         if (oldExists) return oldDir;
-        return newDir;
+        if (newExists) return newDir;
+        return oldDir;
     }
 
     /**

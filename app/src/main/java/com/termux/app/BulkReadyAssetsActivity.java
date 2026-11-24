@@ -168,14 +168,20 @@ public class BulkReadyAssetsActivity extends Activity {
             BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE)));
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         mBody = new LinearLayout(this);
         mBody.setOrientation(LinearLayout.VERTICAL);
         mBody.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 12),
             BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
         scroll.addView(mBody);
-        root.addView(scroll);
+        // v134: scroll handle (right edge) — page-scroll par track
+        android.widget.FrameLayout scrollWrap = new android.widget.FrameLayout(this);
+        scrollWrap.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        scrollWrap.addView(scroll);
+        BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
+        root.addView(scrollWrap);
         return root;
     }
 
@@ -1039,6 +1045,9 @@ public class BulkReadyAssetsActivity extends Activity {
         TextView t = active
             ? BulkTheme.primaryButton(this, text, null)
             : BulkTheme.secondaryButton(this, text, null);
+        // v134: tab label kabhi darmiyan se na tute — ek hi line
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
         return t;
     }
@@ -1050,10 +1059,14 @@ public class BulkReadyAssetsActivity extends Activity {
         LinearLayout panel = BulkTheme.modalPanel(this, f.getName(), dialog);
 
         final ImageView big = new ImageView(this);
+        // v134 fit rule (preview pvB2_popup): poori image asal
+        // aspect par, fit-center, kabhi crop nahi — card image ke
+        // hisab se barhta hai, unchai screen ke 78% tak capped.
         big.setScaleType(ImageView.ScaleType.FIT_CENTER);
         big.setAdjustViewBounds(true);
+        big.setMaxHeight((int) (getResources().getDisplayMetrics().heightPixels * 0.78f));
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 380));
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         big.setLayoutParams(bp);
         panel.addView(big);
 

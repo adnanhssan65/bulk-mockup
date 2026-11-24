@@ -180,6 +180,29 @@ public final class BulkStaging {
 
     // ------------------------------------------------------------ grid columns
 
+    /**
+     * v134 — Select Project screen har dafa BINA selection ke khulti
+     * hai (owner ki hidayat): persisted last-selection kabhi restore
+     * nahi hoti, user khud tap karke select karta hai. Isi liye ye
+     * function hamesha -1 (koi selection nahi) deta hai — persisted
+     * value sirf purani halat ki nishani hai, istemal nahi hoti.
+     */
+    public static int restoredSelection(int persistedNumber) {
+        return -1;
+    }
+
+    /**
+     * v134 — Drop Box compact row ke khaali slots: row hamesha 4
+     * slots ki hoti hai (max 3 thumbs + View-all tile); staged kam
+     * hon to baqi spacer slots taake ek image bhi poori chaudi
+     * jagah na le. n<=0 par 0.
+     */
+    public static int compactSpacerCount(int stagedCount) {
+        if (stagedCount <= 0) return 0;
+        int thumbs = Math.min(3, stagedCount);
+        return Math.max(0, 3 - thumbs);
+    }
+
     /** Grid columns sirf 2 / 3 / 4 — is ke ilawa jo bhi ho, 2 par wapas. */
     public static int clampColumns(int cols) {
         return (cols == 3 || cols == 4) ? cols : 2;

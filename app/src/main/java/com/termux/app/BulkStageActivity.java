@@ -143,6 +143,8 @@ public class BulkStageActivity extends Activity {
     // tile; tap par poora (purana) grid khulta hai. Expanded halat
     // sirf is screen ki zindagi tak (default har dafa compact).
     private LinearLayout mDropPreviewRow;
+    private LinearLayout mDropCollapseRow;
+    private BulkScrollHandle mScrollHandle;
     private boolean mDropExpanded = false;
     // v130: khaali staging par ye sab GONE — sirf pick pill row rehti hai
     private View mLinkView;
@@ -236,9 +238,10 @@ public class BulkStageActivity extends Activity {
     private void restoreStage() {
         SharedPreferences sp = stagePrefs();
         mStaged = BulkStaging.decode(sp.getString(KEY_ITEMS, ""));
-        mSelectedNumber = sp.getInt(KEY_PROJECT, -1);
+        // v134: project selection restore NAHI hoti — screen har dafa
+        // bina selection ke khulti hai (staged items barqarar rehte hain)
+        mSelectedNumber = BulkStaging.restoredSelection(sp.getInt(KEY_PROJECT, -1));
         mCols = BulkStaging.clampColumns(sp.getInt(KEY_COLS, 2));
-        if (selectedProject() == null) mSelectedNumber = -1;
         mMoveUris.clear();
         mMoveUris.addAll(decodeUriSet(sp.getString(KEY_MOVE_URIS, "")));
         pruneMoveUris();
@@ -547,8 +550,8 @@ public class BulkStageActivity extends Activity {
             BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE)));
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // v134: unchai wala weight ab wrap (FrameLayout) par hai —
+        // scroll handle usi wrap ke right edge par rehta hai
         // v131 (Defect 1): fillViewport KHATAM — ye body ko viewport ki
         // poori height par phaila deta tha; khaali halat me akeli bachi
         // hui pick row usi phaili hui jagah me devaar-dar "giant box"
@@ -560,7 +563,17 @@ public class BulkStageActivity extends Activity {
         body.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8),
             BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
         scroll.addView(body);
-        root.addView(scroll);
+        android.widget.FrameLayout scrollWrap = new android.widget.FrameLayout(this);
+        scrollWrap.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        scrollWrap.addView(scroll);
+        // v134: scroll handle — is screen par sirf Drop Box ki
+        // expanded halat me (gate refreshStagedViews se lagta hai)
+        mScrollHandle = BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
+        mScrollHandle.setGateOpen(false);
+        root.addView(scrollWrap);
 
         // Naya design: pick pill row pehle, phir project, phir Drop Box
         // v131 (Defect 1): pick row ki height PAKKI 56dp — hub (v129)
@@ -875,15 +888,21 @@ public class BulkStageActivity extends Activity {
         root.addView(mPickerSearchRow);
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         scroll.setFillViewport(false);
         mPickerList = new LinearLayout(this);
         mPickerList.setOrientation(LinearLayout.VERTICAL);
         mPickerList.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 12),
             BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
         scroll.addView(mPickerList);
-        root.addView(scroll);
+        // v134: scroll handle (right edge) — lambi project list par
+        android.widget.FrameLayout scrollWrap = new android.widget.FrameLayout(this);
+        scrollWrap.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        scrollWrap.addView(scroll);
+        BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
+        root.addView(scrollWrap);
 
         refreshPickerList();
         return root;
@@ -1048,13 +1067,46 @@ public class BulkStageActivity extends Activity {
         gp.topMargin = BulkTheme.dp(this, 10);
         mStagedGrid.setLayoutParams(gp);
         panel.addView(mStagedGrid);
+
+        // v134: expanded halat me saaf "View less" control — grid ke
+        // neeche, tap par compact halat wapas (header tap bhi toggle
+        // karta hai, ye sirf zyada wazeh rasta hai)
+        mDropCollapseRow = new LinearLayout(this);
+        mDropCollapseRow.setOrientation(LinearLayout.HORIZONTAL);
+        mDropCollapseRow.setGravity(Gravity.CENTER);
+        mDropCollapseRow.setBackground(BulkTheme.pillBg(this));
+        mDropCollapseRow.setPadding(BulkTheme.dp(this, 10), BulkTheme.dp(this, 8),
+            BulkTheme.dp(this, 10), BulkTheme.dp(this, 8));
+        LinearLayout.LayoutParams crp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        crp.topMargin = BulkTheme.dp(this, 10);
+        mDropCollapseRow.setLayoutParams(crp);
+        ImageView upIcon = BulkTheme.icon(this, R.drawable.ic_bulk_chevron_up, BulkTheme.accent(this), 13);
+        mDropCollapseRow.addView(upIcon);
+        TextView lessText = new TextView(this);
+        lessText.setText(BulkStrings.t(this, BulkStrings.VIEW_LESS));
+        lessText.setTextSize(12);
+        lessText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        lessText.setTextColor(BulkTheme.accent(this));
+        LinearLayout.LayoutParams ltp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ltp.leftMargin = BulkTheme.dp(this, 5);
+        lessText.setLayoutParams(ltp);
+        mDropCollapseRow.addView(lessText);
+        mDropCollapseRow.setClickable(true);
+        mDropCollapseRow.setOnClickListener(v -> {
+            mDropExpanded = false;
+            refreshStagedViews();
+        });
+        mDropCollapseRow.setVisibility(View.GONE);
+        panel.addView(mDropCollapseRow);
         return panel;
     }
 
     private LinearLayout toolbarRowBase() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        row.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = BulkTheme.dp(this, 10);
@@ -1063,6 +1115,7 @@ public class BulkStageActivity extends Activity {
     }
 
     private LinearLayout buildToolbarNormal() {
+        // v134: 2+2 split — sort + grid LEFT, select + delete RIGHT
         LinearLayout row = toolbarRowBase();
         ImageView sort = toolbarButton(R.drawable.ic_bulk_sort, BulkTheme.textSub(this));
         sort.setOnClickListener(v -> showSortDialog());
@@ -1074,9 +1127,11 @@ public class BulkStageActivity extends Activity {
             refreshStagedViews();
         });
         row.addView(grid, toolbarBtnLp(8));
+        row.addView(new View(this), new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         ImageView select = toolbarButton(R.drawable.ic_bulk_select, BulkTheme.textSub(this));
         select.setOnClickListener(v -> setSelectMode(true));
-        row.addView(select, toolbarBtnLp(8));
+        row.addView(select);
         ImageView clear = toolbarButton(R.drawable.ic_bulk_trash, BulkTheme.danger(this));
         clear.setOnClickListener(v -> confirmClearAll());
         row.addView(clear, toolbarBtnLp(8));
@@ -1151,7 +1206,12 @@ public class BulkStageActivity extends Activity {
 
     // ------------------------------------------------------------ v133 Drop Box compact
 
-    /** Compact preview row dobara banao: pehli 3 thumbs (+ "+N" tile jab baqi hon). */
+    /**
+     * Compact preview row dobara banao — v134: hamesha EK hi shakal:
+     * chhoti thumbnails (max 3) + "View all" tile, kul 4 slots;
+     * staged kam hon to baqi slots khaali (spacer) rehte hain taake
+     * 1 image bhi full-width banner na bane (v133 ki ghalati).
+     */
     private void rebuildDropPreview() {
         if (mDropPreviewRow == null) return;
         mDropPreviewRow.removeAllViews();
@@ -1165,18 +1225,25 @@ public class BulkStageActivity extends Activity {
             mDropPreviewRow.addView(thumb);
         }
         int remaining = mStaged.size() - show;
-        if (remaining > 0) {
-            View tile = buildMoreTile(remaining);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+        View tile = buildMoreTile(remaining);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+            0, BulkTheme.dp(this, 60), 1f);
+        tp.leftMargin = BulkTheme.dp(this, 8);
+        tile.setLayoutParams(tp);
+        mDropPreviewRow.addView(tile);
+        for (int s = 0; s < BulkStaging.compactSpacerCount(mStaged.size()); s++) {
+            View spacer = new View(this);
+            LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
                 0, BulkTheme.dp(this, 60), 1f);
-            lp.leftMargin = BulkTheme.dp(this, 8);
-            tile.setLayoutParams(lp);
-            mDropPreviewRow.addView(tile);
+            sp.leftMargin = BulkTheme.dp(this, 8);
+            spacer.setLayoutParams(sp);
+            mDropPreviewRow.addView(spacer);
         }
         BulkFonts.applyToTree(this, mDropPreviewRow);
     }
 
-    /** Compact row ki ek thumbnail (sirf image — naam/badge full grid me hi hain). */
+    /** Compact row ki ek thumbnail — v134: tap = bara preview popup
+     *  (row ka expand listener is par lagu nahi hota). */
     private View buildPreviewThumb(final BulkStaging.Item item) {
         FrameLayout box = new FrameLayout(this);
         box.setBackground(BulkTheme.tileBg(this));
@@ -1197,22 +1264,28 @@ public class BulkStageActivity extends Activity {
             iv.setLayoutParams(ip);
             box.addView(iv);
         }
+        box.setClickable(true);
+        box.setOnClickListener(v -> showStagedPreview(item));
         return box;
     }
 
-    /** "+N / View all / tap karo" tile — tap par poora grid khulta hai (row ka hi listener). */
+    /** "View all" tile — hamesha dikhta hai; "+N" line sirf jab
+     *  compact me na dikhne wali images baqi hon. Tap par poora grid
+     *  khulta hai (row ka hi listener). */
     private View buildMoreTile(int remaining) {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
         tile.setBackground(BulkTheme.tileBg(this));
-        TextView plus = new TextView(this);
-        plus.setText("+" + remaining);
-        plus.setTextSize(15);
-        plus.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        plus.setTextColor(BulkTheme.accent(this));
-        plus.setGravity(Gravity.CENTER);
-        tile.addView(plus);
+        if (remaining > 0) {
+            TextView plus = new TextView(this);
+            plus.setText("+" + remaining);
+            plus.setTextSize(15);
+            plus.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            plus.setTextColor(BulkTheme.accent(this));
+            plus.setGravity(Gravity.CENTER);
+            tile.addView(plus);
+        }
         TextView viewAll = new TextView(this);
         viewAll.setText(BulkStrings.t(this, BulkStrings.VIEW_ALL));
         viewAll.setTextSize(11);
@@ -1295,6 +1368,11 @@ public class BulkStageActivity extends Activity {
             mDropPreviewRow.setVisibility(compact ? View.VISIBLE : View.GONE);
             if (compact) rebuildDropPreview();
         }
+        if (mDropCollapseRow != null) {
+            mDropCollapseRow.setVisibility(has && !compact ? View.VISIBLE : View.GONE);
+        }
+        // v134: scroll handle ka gate — sirf expanded Drop Box par
+        if (mScrollHandle != null) mScrollHandle.setGateOpen(has && !compact);
         if (mDropEmpty != null) mDropEmpty.setVisibility(has ? View.GONE : View.VISIBLE);
         if (mSelectMode) {
             mSelectCount.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, mChecked.size()));
@@ -1401,8 +1479,49 @@ public class BulkStageActivity extends Activity {
             });
         } else {
             badge.setOnClickListener(v -> removeStaged(item));
+            // v134: thumbnail tap = bara preview popup (× remove
+            // badge apni jagah alag rehta hai)
+            thumbBox.setClickable(true);
+            thumbBox.setOnClickListener(v -> showStagedPreview(item));
         }
         return tile;
+    }
+
+    /**
+     * v134 — staged image ka bara preview popup: poori image +
+     * filename + Close. Select Project wale preview popup ki hi
+     * design zubaan (modalPanel), image URI se baray size par
+     * decode hoti hai.
+     */
+    private void showStagedPreview(final BulkStaging.Item item) {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this, item.name, dialog);
+        final ImageView big = new ImageView(this);
+        // v134 (owner ki pakki hidayat, preview pvB2_popup): image
+        // POORI asal aspect par — fit-center, KABHI crop nahi.
+        // Portrait (9:16) par card khud lamba ho jata hai; chaudi/
+        // square image width par fit hoti hai. Unchai screen ke
+        // 78% par capped hai taake popup screen se bahar na jaye.
+        big.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        big.setAdjustViewBounds(true);
+        big.setMaxHeight((int) (getResources().getDisplayMetrics().heightPixels * 0.78f));
+        big.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        Bitmap cached = mThumbs.get(item.uri);
+        if (cached != null) big.setImageBitmap(cached);
+        panel.addView(big);
+        TextView close = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.CLOSE),
+            v -> dialog.dismiss());
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cp.topMargin = BulkTheme.dp(this, 12);
+        close.setLayoutParams(cp);
+        panel.addView(close);
+        BulkTheme.showPanelDialog(this, panel);
+        new Thread(() -> {
+            Bitmap bmp = decodeUriThumb(Uri.parse(item.uri), 1024);
+            if (bmp != null) runOnUiThread(() -> big.setImageBitmap(bmp));
+        }).start();
     }
 
     private void loadStagedThumbs() {

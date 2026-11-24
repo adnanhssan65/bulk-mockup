@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
  * Known formats (BulkStrings / BulkRunHelper / BulkStageActivity):
  *   "✔ Project 13 — run mukammal — 18/18 • 00:15"   (RUN_DONE)
  *   "✔ Project 13 — run mukammal • 00:15"           (RUN_DONE, count nahi)
+ *   "✔ Project 13 — run complete — 18/18 • 00:15"   (RUN_DONE, English)
  *   "✖ Project 13 — run fail — 3/18 • 00:07"        (RUN_FAIL)
  *   "▶ Project 13 — run shuru"                      (RUN_START)
  *   "Project 13 — 37/100 • 02:15"                   (RUN_PROGRESS, status line)
@@ -57,9 +58,12 @@ public final class BulkLogStyle {
     private static final String DONE_MARK = "✔ ";
     private static final String FAIL_MARK = "✖ ";
     private static final String START_MARK = "▶ ";
-    private static final String DONE_WORD = "run mukammal";
-    private static final String FAIL_WORD = "run fail";
-    private static final String START_WORD = "run shuru";
+    // v134: parser DONO zubanoon ke alfaaz pehchanta hai — line jis
+    // language setting me bani thi, usi ki styling milegi (Home par
+    // English select ho to "run complete", warna "run mukammal").
+    private static final String[] DONE_WORDS = {"run mukammal", "run complete"};
+    private static final String[] FAIL_WORDS = {"run failed", "run fail"};
+    private static final String[] START_WORDS = {"run shuru", "run started"};
 
     private BulkLogStyle() {}
 
@@ -98,6 +102,25 @@ public final class BulkLogStyle {
             int pct = (int) Math.round(100.0 * cur / total);
             return Math.max(0, Math.min(100, pct));
         }
+    }
+
+    /**
+     * v134 — RUN_DONE / RUN_FAIL entry ki line tartib (PURE model,
+     * renderer isi par chalta hai): progress bar PEHLI line par,
+     * head (stamp + nishan + project) us ke baad, aur DONE/FAIL pill
+     * wali sub line SAB SE AAKHIR me. Baqi kinds ke liye khaali list
+     * (un ka layout is model se nahi banta).
+     */
+    public enum LinePart { BAR, HEAD, SUB_WITH_PILL }
+
+    public static java.util.List<LinePart> entryLayout(Parsed p) {
+        java.util.List<LinePart> out = new java.util.ArrayList<>();
+        if (p == null) return out;
+        if (p.kind != Kind.RUN_DONE && p.kind != Kind.RUN_FAIL) return out;
+        if (p.hasProgress()) out.add(LinePart.BAR);
+        out.add(LinePart.HEAD);
+        out.add(LinePart.SUB_WITH_PILL);
+        return out;
     }
 
     private static Parsed plain(String stamp, String body) {
@@ -140,23 +163,28 @@ public final class BulkLogStyle {
     /** ✔/✖/▶ wali run lines; pattern na mile to null (caller PLAIN bana dega). */
     private static Parsed parseRun(String stamp, String body) {
         Kind kind;
-        String word;
+        String[] words;
         String pill;
         String rest;
         if (body.startsWith(DONE_MARK)) {
-            kind = Kind.RUN_DONE; word = DONE_WORD; pill = "DONE";
+            kind = Kind.RUN_DONE; words = DONE_WORDS; pill = "DONE";
             rest = body.substring(DONE_MARK.length());
         } else if (body.startsWith(FAIL_MARK)) {
-            kind = Kind.RUN_FAIL; word = FAIL_WORD; pill = "FAIL";
+            kind = Kind.RUN_FAIL; words = FAIL_WORDS; pill = "FAIL";
             rest = body.substring(FAIL_MARK.length());
         } else if (body.startsWith(START_MARK)) {
-            kind = Kind.RUN_START; word = START_WORD; pill = null;
+            kind = Kind.RUN_START; words = START_WORDS; pill = null;
             rest = body.substring(START_MARK.length());
         } else {
             return null;
         }
-        int idx = rest.indexOf(DASH + word);
-        if (idx <= 0) return null;
+        String word = null;
+        int idx = -1;
+        for (String w : words) {
+            int i = rest.indexOf(DASH + w);
+            if (i > 0) { word = w; idx = i; break; }
+        }
+        if (word == null) return null;
         String project = rest.substring(0, idx);
         String tail = rest.substring(idx + DASH.length() + word.length());
         if (kind == Kind.RUN_START) {

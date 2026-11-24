@@ -87,7 +87,13 @@ public class BulkProjectsActivity extends Activity {
         mBody.setOrientation(LinearLayout.VERTICAL);
         mBody.setPadding(BulkTheme.dp(this, 18), BulkTheme.dp(this, 8), BulkTheme.dp(this, 18), BulkTheme.dp(this, 14));
         scroll.addView(mBody);
-        root.addView(scroll, new LinearLayout.LayoutParams(
+        // v134: scroll handle (right edge) — page-scroll par track
+        android.widget.FrameLayout scrollWrap = new android.widget.FrameLayout(this);
+        scroll.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        scrollWrap.addView(scroll);
+        BulkScrollHandle.forScrollView(this, scrollWrap, scroll);
+        root.addView(scrollWrap, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
         // Bottom fixed bar: Add New Project (ZIP)

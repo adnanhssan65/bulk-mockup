@@ -178,9 +178,10 @@ public class BulkV133Test {
         File oldDir = new File("/x/mockup_project_5");
         assertEquals(newDir, BulkProjects.pickProjectDir(newDir, oldDir, true, false));
         assertEquals(oldDir, BulkProjects.pickProjectDir(newDir, oldDir, false, true));
-        assertEquals(newDir, BulkProjects.pickProjectDir(newDir, oldDir, true, true));
-        // Dono na hon to NAYI jagah (fresh install wahin banta hai)
-        assertEquals(newDir, BulkProjects.pickProjectDir(newDir, oldDir, false, false));
+        // v134: dono hon to ROOT (purani jagah) — projects wapas root par
+        assertEquals(oldDir, BulkProjects.pickProjectDir(newDir, oldDir, true, true));
+        // Dono na hon to bhi ROOT (fresh install / extraction wahin banta hai)
+        assertEquals(oldDir, BulkProjects.pickProjectDir(newDir, oldDir, false, false));
     }
 
     @Test
@@ -189,16 +190,16 @@ public class BulkV133Test {
             BulkProjects.newProjectDir(7).getPath());
         assertEquals("/storage/emulated/0/mockup_project_7",
             BulkProjects.oldProjectDir(7).getPath());
-        // Test machine par /storage nahi — resolution nayi jagah dega
-        assertEquals("/storage/emulated/0/TermuxMod/mockup_project_7",
+        // Test machine par /storage nahi — v134 resolution ROOT dega
+        assertEquals("/storage/emulated/0/mockup_project_7",
             BulkProjects.projectDir(7).getPath());
     }
 
     @Test
     public void fullCommandSetsMockupBase() {
         String cmd = BulkProjects.fullCommand(4, "adnan_core.py", "process");
-        assertTrue(cmd.startsWith("cd /storage/emulated/0/TermuxMod/mockup_project_4 && "));
-        assertTrue(cmd.contains("MOCKUP_BASE=/storage/emulated/0/TermuxMod/mockup_project_4 "));
+        assertTrue(cmd.startsWith("cd /storage/emulated/0/mockup_project_4 && "));
+        assertTrue(cmd.contains("MOCKUP_BASE=/storage/emulated/0/mockup_project_4 "));
         assertTrue(cmd.endsWith("python adnan_core.py process 4"));
     }
 

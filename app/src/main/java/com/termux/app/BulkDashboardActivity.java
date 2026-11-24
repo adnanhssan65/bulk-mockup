@@ -135,25 +135,27 @@ public class BulkDashboardActivity extends Activity {
                 if (!isFinishing() && !mDrawerOpen) buildUi();
             });
         }).start();
-        // v133: project folders ki SAFE shift (TermuxMod ke andar) —
-        // storage access ho to peeche ek pass (har project sirf ek
-        // dafa check hota hai); pehli dafa kuch shift/stay ho to
-        // EK design-style summary dialog
+        // v134: project folders ki WAPSI — TermuxMod ke andar se
+        // wapas storage root par (owner ka faisla: TermuxMod me sirf
+        // "Project N" drop folders rahen). Storage access ho to
+        // peeche ek pass (har project sirf ek dafa check hota hai);
+        // pehli dafa kuch wapas/stay ho to EK design-style summary.
+        // v133 wali andar-shift ab KABHI nahi chalti.
         new Thread(() -> {
             if (!BulkStorageAccess.hasAccess(this)) return;
-            BulkMigration.Result r = BulkMigration.migrateAll(this);
+            BulkMigrationBack.Result r = BulkMigrationBack.moveBackAll(this);
             if (r.moved > 0) runOnUiThread(() -> {
                 if (!isFinishing() && !mDrawerOpen) buildUi();
             });
-            if (r.evaluated > 0 && !BulkMigration.isSummaryShown(this)) {
-                BulkMigration.markSummaryShown(this);
+            if (r.evaluated > 0 && !BulkMigrationBack.isSummaryShown(this)) {
+                BulkMigrationBack.markSummaryShown(this);
                 final int fMoved = r.moved;
                 final int fStayed = r.stayed;
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     BulkTheme.showConfirm(this,
-                        BulkStrings.t(this, BulkStrings.MIGRATED_TITLE),
-                        BulkStrings.format(this, BulkStrings.MIGRATED_MSG, fMoved, fStayed),
+                        BulkStrings.t(this, BulkStrings.MOVEDBACK_TITLE),
+                        BulkStrings.format(this, BulkStrings.MOVEDBACK_MSG, fMoved, fStayed),
                         BulkStrings.t(this, BulkStrings.OK), false, null);
                 });
             }
@@ -294,7 +296,7 @@ public class BulkDashboardActivity extends Activity {
     }
 
     /** Slim gradient progress bar + dayein taraf bold green count. */
-    private LinearLayout logBarRow(BulkLogStyle.Parsed p, boolean liveEntry) {
+    private LinearLayout logBarRow(BulkLogStyle.Parsed p, boolean liveEntry, boolean showTime) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -337,7 +339,7 @@ public class BulkDashboardActivity extends Activity {
         count.setLayoutParams(cLp);
         row.addView(count);
 
-        if (p.timeText != null) {
+        if (showTime && p.timeText != null) {
             TextView tm = logTv(8, true);
             tm.setText(" • " + p.timeText);
             tm.setTextColor(BulkLogStyle.COLOR_SUB);
@@ -365,35 +367,65 @@ public class BulkDashboardActivity extends Activity {
             case RUN_DONE:
             case RUN_FAIL: {
                 boolean done = p.kind == BulkLogStyle.Kind.RUN_DONE;
-                LinearLayout head = new LinearLayout(this);
-                head.setOrientation(LinearLayout.HORIZONTAL);
-                head.setGravity(Gravity.CENTER_VERTICAL);
-                if (p.stamp != null) {
-                    TextView st = logTv(8.5f, true);
-                    st.setText(p.stamp + "  ");
-                    st.setTextColor(BulkLogStyle.COLOR_STAMP);
-                    head.addView(st);
+                // v134 layout (BulkLogStyle.entryLayout): BAR pehli
+                // line, HEAD darmiyan, pill wali SUB line sab se
+                // aakhir — lines ke beech saaf faasla, koi overlap nahi
+                for (BulkLogStyle.LinePart part : BulkLogStyle.entryLayout(p)) {
+                    switch (part) {
+                        case BAR: {
+                            block.addView(logBarRow(p, false, false));
+                            break;
+                        }
+                        case HEAD: {
+                            LinearLayout head = new LinearLayout(this);
+                            head.setOrientation(LinearLayout.HORIZONTAL);
+                            head.setGravity(Gravity.CENTER_VERTICAL);
+                            LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT);
+                            if (p.hasProgress()) hLp.topMargin = BulkTheme.dp(this, 3);
+                            head.setLayoutParams(hLp);
+                            if (p.stamp != null) {
+                                TextView st = logTv(8.5f, true);
+                                st.setText(p.stamp + "  ");
+                                st.setTextColor(BulkLogStyle.COLOR_STAMP);
+                                head.addView(st);
+                            }
+                            TextView mark = logTv(8.5f, false);
+                            mark.setText(done ? "✔ " : "✖ ");
+                            mark.setTypeface(Typeface.DEFAULT_BOLD);
+                            mark.setTextColor(done ? BulkLogStyle.COLOR_GREEN : BulkLogStyle.COLOR_RED);
+                            head.addView(mark);
+                            TextView proj = logTv(8.5f, false);
+                            proj.setText(p.project);
+                            proj.setTypeface(Typeface.DEFAULT_BOLD);
+                            proj.setTextColor(BulkLogStyle.COLOR_PROJECT);
+                            head.addView(proj);
+                            block.addView(head);
+                            break;
+                        }
+                        case SUB_WITH_PILL: {
+                            LinearLayout subRow = new LinearLayout(this);
+                            subRow.setOrientation(LinearLayout.HORIZONTAL);
+                            subRow.setGravity(Gravity.CENTER_VERTICAL);
+                            LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT);
+                            sLp.topMargin = BulkTheme.dp(this, 2);
+                            subRow.setLayoutParams(sLp);
+                            TextView sub = logTv(8.5f, true);
+                            sub.setText(p.mainText + (p.timeText != null ? " • " + p.timeText : ""));
+                            sub.setTextColor(BulkLogStyle.COLOR_SUB);
+                            subRow.addView(sub, new LinearLayout.LayoutParams(0,
+                                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                            subRow.addView(pillTv(p.pill,
+                                done ? BulkLogStyle.COLOR_DONE_BG : BulkLogStyle.COLOR_FAIL_BG,
+                                BulkLogStyle.COLOR_PILL_TEXT));
+                            block.addView(subRow);
+                            break;
+                        }
+                    }
                 }
-                TextView mark = logTv(8.5f, false);
-                mark.setText(done ? "✔ " : "✖ ");
-                mark.setTypeface(Typeface.DEFAULT_BOLD);
-                mark.setTextColor(done ? BulkLogStyle.COLOR_GREEN : BulkLogStyle.COLOR_RED);
-                head.addView(mark);
-                TextView proj = logTv(8.5f, false);
-                proj.setText(p.project);
-                proj.setTypeface(Typeface.DEFAULT_BOLD);
-                proj.setTextColor(BulkLogStyle.COLOR_PROJECT);
-                head.addView(proj);
-                head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
-                head.addView(pillTv(p.pill,
-                    done ? BulkLogStyle.COLOR_DONE_BG : BulkLogStyle.COLOR_FAIL_BG,
-                    BulkLogStyle.COLOR_PILL_TEXT));
-                block.addView(head);
-                if (p.hasProgress()) block.addView(logBarRow(p, false));
-                TextView sub = logTv(8.5f, true);
-                sub.setText(p.mainText + (p.timeText != null ? " • " + p.timeText : ""));
-                sub.setTextColor(BulkLogStyle.COLOR_SUB);
-                block.addView(sub);
                 break;
             }
             case RUN_PROGRESS: {
@@ -402,7 +434,7 @@ public class BulkDashboardActivity extends Activity {
                 proj.setTypeface(Typeface.DEFAULT_BOLD);
                 proj.setTextColor(BulkLogStyle.COLOR_PROJECT);
                 block.addView(proj);
-                if (p.hasProgress()) block.addView(logBarRow(p, true));
+                if (p.hasProgress()) block.addView(logBarRow(p, true, true));
                 break;
             }
             case RUN_START: {
@@ -749,6 +781,10 @@ public class BulkDashboardActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         frame.addView(scroll, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // v134: scroll handle (right edge) — Home ki lambi page par
+        // bhi wohi control (drawer is ke UPER ata hai, baad me add
+        // hota hai)
+        BulkScrollHandle.forScrollView(this, frame, scroll);
 
         buildDrawer(frame);
         setContentView(frame);
@@ -942,7 +978,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v133");
+        version.setText("Termux Mod v134");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));

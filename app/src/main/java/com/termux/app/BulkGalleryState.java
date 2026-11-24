@@ -233,4 +233,14 @@ public final class BulkGalleryState {
         if (!selecting) return new SelectionBar(true, false, false, false);
         return new SelectionBar(false, true, true, selectedCount > 0);
     }
+
+    /**
+     * v134 — scroll-jump pill ka target (pure): uper wali chevron =
+     * sab se pehli position; neeche wali = sab se aakhri. Khaali
+     * grid par hamesha 0 (koi scroll nahi hoga).
+     */
+    public static int scrollJumpTarget(boolean toTop, int itemCount) {
+        if (toTop) return 0;
+        return Math.max(0, itemCount - 1);
+    }
 }
