@@ -145,6 +145,11 @@ public final class BulkProjects {
      */
     public static boolean isCountableWallpaper(String name) {
         if (name == null || name.startsWith(".")) return false;
+        // v137: runner scripts "_temp" wali files ko process nahi
+        // karte (un ki apni filter me "_temp" not in f shart hai) —
+        // app ka count bhi unhe na gine, warna khali project bhi
+        // Run list me "1 Ready" ke sath ajata tha (owner ki report).
+        if (name.contains("_temp")) return false;
         return isImageFile(name);
     }
 
@@ -433,11 +438,37 @@ public final class BulkProjects {
     // ------------------------------------------------------------ merge (conf + disk)
 
     /**
+     * v137: list ko project NUMBER ke hisab se ascending sort karo
+     * (owner ka rule: har list 1, 2, 3, ... tartib me ho — conf ki
+     * jumbled tartib kabhi na dikhe). Number <= 0 (maloom nahi)
+     * wale aakhir me, apni asal tartib me (sort stable hai).
+     */
+    public static List<ProjectInfo> sortByNumber(List<ProjectInfo> projects) {
+        List<ProjectInfo> out = new ArrayList<>();
+        if (projects != null) {
+            for (ProjectInfo p : projects) {
+                if (p != null) out.add(p);
+            }
+        }
+        Collections.sort(out, (x, y) -> {
+            int kx = x.number <= 0 ? Integer.MAX_VALUE : x.number;
+            int ky = y.number <= 0 ? Integer.MAX_VALUE : y.number;
+            return Integer.compare(kx, ky);
+        });
+        return out;
+    }
+
+    /**
      * projects.conf wale projects + disk par mile extra projects mila kar
-     * aik list banao. Conf wale pehle (usi order me jo file me hai), disk
-     * wale number ke hisab se baad me. Disk-only project ki commands us ki
-     * detected script se poori banai jati hain (alias par bharosa nahi);
-     * script na mile to us ki commands null hongi.
+     * aik list banao. Yehi EK enumeration tamam lists istemal karti hain
+     * (Select Project, Projects screen, Run popup, Preview, Ready
+     * Assets) — is liye ZIP se add hua project (conf line + $HOME
+     * engine folder dono installer likhta hai) har jagah foran nazar
+     * ata hai. Duplicate number ki pehli entry jeet ti hai.
+     * v137: aakhri list hamesha number ke hisab se ascending hoti
+     * hai ({@link #sortByNumber}). Disk-only project ki commands us
+     * ki detected script se poori banai jati hain (alias par bharosa
+     * nahi); script na mile to us ki commands null hongi.
      *
      * @param diskScripts disk par mile har number ke liye detected script (null ho sakti hai)
      */
@@ -448,7 +479,7 @@ public final class BulkProjects {
         if (confProjects != null) {
             for (ProjectsConf.Project p : confProjects) {
                 int n = parseProjectNumber(p.name, p.workCmd);
-                if (n > 0) covered.add(n);
+                if (n > 0 && !covered.add(n)) continue; // duplicate line — pehli jeet ti hai
                 // v129: conf ki bare aliases (w<N>/b<N>/d<N>) yahin poori
                 // commands me badal jati hain — koi bhi run rasta (popup
                 // background run, terminal, Batch/Delete) ab alias par
@@ -474,7 +505,7 @@ public final class BulkProjects {
                 result.add(new ProjectInfo(n, "Project " + n, work, batch, delete, false));
             }
         }
-        return result;
+        return sortByNumber(result);
     }
 
     // ------------------------------------------------------------ run filter (v127)

@@ -2,7 +2,6 @@ package com.termux.app;
 
 import android.app.Activity;
 import android.app.Dialog;
-import android.content.Intent;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -33,8 +32,11 @@ import java.util.Map;
  *    verified sawal (Mode + Size) tappable options me ate hain; defaults
  *    pehle se select hote hain (script ke Enter-defaults). Jawab ke baad
  *    wahi live popup wala run — terminal samne nahi ata.
- *  - Jin projects ke prompts verified nahi (number 1..14 se bahar),
- *    wo hamesha plain terminal run karte hain — koi pipe nahi.
+ *  - v137: ZIP-added projects (15+) bhi console popup me hi chalte
+ *    hain — un ka prompt khandan asal script se pehchana jata hai
+ *    (BulkRunSettings.PromptProfile); unknown script par sirf Enter
+ *    (script defaults) pipe hote hain. Terminal run ka rasta
+ *    KHATAM — koi bhi Run ab TermuxActivity nahi kholta.
  *
  * Jawab BulkRunSettings.answersFor se bante hain aur
  * BulkRunSettings.buildPipedCommand se command me pipe hote hain,
@@ -54,19 +56,24 @@ public final class BulkRunHelper {
     public static void startRun(final Activity a, final BulkProjects.ProjectInfo p,
                                 final Runnable onLaunched) {
         if (a == null || p == null || p.workCmd == null) return;
-        if (!BulkRunSettings.hasVerifiedPrompts(p.number)) {
-            BulkLog.add(BulkStrings.format(a, BulkStrings.LOG_RUN_START, p.name));
-            launch(a, p.workCmd, onLaunched);
+        // v137: har run CONSOLE POPUP me hi chalta hai — terminal
+        // kabhi nahi khulta (owner ki sakht hidayat: ZIP-added
+        // project add/run par app terminal me jump kar jati thi).
+        // Prompt profile asal script se banta hai: bundled 1..14
+        // verified ADNAN; ZIP-added projects (15+) un ke script
+        // khandan (ADNAN / SYSTEM) ke hisab se; unknown script par
+        // sirf Enter (script ke apne defaults) pipe hote hain.
+        final BulkRunSettings.PromptProfile profile = BulkRunSettings.profileFor(
+            p.number, p.number > 0 ? BulkProjects.resolveScript(p.number) : null);
+        if (!BulkRunSettings.isAuto(a)
+            && profile != BulkRunSettings.PromptProfile.UNKNOWN) {
+            showManualPopup(a, p, onLaunched, profile);
             return;
         }
-        if (BulkRunSettings.isAuto(a)) {
-            List<String> answers = BulkRunSettings.answersFor(
-                p.number, BulkRunSettings.hdAnswer(a), BulkRunSettings.sizeAnswer(a));
-            runLiveInPopup(a, p,
-                BulkRunSettings.buildPipedCommand(p.workCmd, answers), onLaunched);
-        } else {
-            showManualPopup(a, p, onLaunched);
-        }
+        List<String> answers = BulkRunSettings.answersForProfile(
+            profile, BulkRunSettings.hdAnswer(a), BulkRunSettings.sizeAnswer(a));
+        runLiveInPopup(a, p,
+            BulkRunSettings.buildPipedCommand(p.workCmd, answers), onLaunched);
     }
 
     /**
@@ -84,9 +91,13 @@ public final class BulkRunHelper {
     // ------------------------------------------------------------ MANUAL popup
 
     private static void showManualPopup(final Activity a, final BulkProjects.ProjectInfo p,
-                                        final Runnable onLaunched) {
+                                        final Runnable onLaunched,
+                                        final BulkRunSettings.PromptProfile profile) {
         final Dialog dialog = new Dialog(a);
         LinearLayout panel = BulkTheme.modalPanel(a, p.name, dialog);
+        // v137: DEFAULT tag usi option par jo script ka asal default
+        // hai (ADNAN: HD; SYSTEM: Normal)
+        final boolean hdIsDefault = profile != BulkRunSettings.PromptProfile.SYSTEM;
 
         final boolean[] hdNormal = {BulkRunSettings.ANSWER_NORMAL.equals(BulkRunSettings.hdAnswer(a))};
         final boolean[] sizeCrop = {BulkRunSettings.ANSWER_CROP.equals(BulkRunSettings.sizeAnswer(a))};
@@ -98,10 +109,10 @@ public final class BulkRunHelper {
         Runnable refreshHd = () -> {
             hdGroup.removeAllViews();
             hdGroup.addView(optionRow(a,
-                BulkStrings.t(a, BulkStrings.HD_OPTION) + "  " + BulkStrings.t(a, BulkStrings.DEFAULT_TAG),
-                !hdNormal[0], () -> { hdNormal[0] = false; refreshHdGroup(hdGroup, a, hdNormal, sizeCrop, true); }));
-            hdGroup.addView(optionRow(a, BulkStrings.t(a, BulkStrings.NORMAL_OPTION),
-                hdNormal[0], () -> { hdNormal[0] = true; refreshHdGroup(hdGroup, a, hdNormal, sizeCrop, true); }));
+                BulkStrings.t(a, BulkStrings.HD_OPTION) + (hdIsDefault ? "  " + BulkStrings.t(a, BulkStrings.DEFAULT_TAG) : ""),
+                !hdNormal[0], () -> { hdNormal[0] = false; refreshHdGroup(hdGroup, a, hdNormal, sizeCrop, hdIsDefault); }));
+            hdGroup.addView(optionRow(a, BulkStrings.t(a, BulkStrings.NORMAL_OPTION) + (!hdIsDefault ? "  " + BulkStrings.t(a, BulkStrings.DEFAULT_TAG) : ""),
+                hdNormal[0], () -> { hdNormal[0] = true; refreshHdGroup(hdGroup, a, hdNormal, sizeCrop, hdIsDefault); }));
         };
         refreshHd.run();
 
@@ -121,7 +132,7 @@ public final class BulkRunHelper {
 
         TextView run = BulkTheme.primaryButton(a, BulkStrings.t(a, BulkStrings.NAV_RUN), v -> {
             dialog.dismiss();
-            List<String> answers = BulkRunSettings.answersFor(p.number,
+            List<String> answers = BulkRunSettings.answersForProfile(profile,
                 hdNormal[0] ? BulkRunSettings.ANSWER_NORMAL : BulkRunSettings.ANSWER_HD,
                 sizeCrop[0] ? BulkRunSettings.ANSWER_CROP : BulkRunSettings.ANSWER_ORIGINAL);
             runLiveInPopup(a, p,
@@ -138,13 +149,13 @@ public final class BulkRunHelper {
 
     // Option groups ko dobara banana (selection badalne par) — chhote helpers
     private static void refreshHdGroup(LinearLayout group, Activity a,
-                                       boolean[] hdNormal, boolean[] sizeCrop, boolean unused) {
+                                       boolean[] hdNormal, boolean[] sizeCrop, boolean hdIsDefault) {
         group.removeAllViews();
         group.addView(optionRow(a,
-            BulkStrings.t(a, BulkStrings.HD_OPTION) + "  " + BulkStrings.t(a, BulkStrings.DEFAULT_TAG),
-            !hdNormal[0], () -> { hdNormal[0] = false; refreshHdGroup(group, a, hdNormal, sizeCrop, true); }));
-        group.addView(optionRow(a, BulkStrings.t(a, BulkStrings.NORMAL_OPTION),
-            hdNormal[0], () -> { hdNormal[0] = true; refreshHdGroup(group, a, hdNormal, sizeCrop, true); }));
+            BulkStrings.t(a, BulkStrings.HD_OPTION) + (hdIsDefault ? "  " + BulkStrings.t(a, BulkStrings.DEFAULT_TAG) : ""),
+            !hdNormal[0], () -> { hdNormal[0] = false; refreshHdGroup(group, a, hdNormal, sizeCrop, hdIsDefault); }));
+        group.addView(optionRow(a, BulkStrings.t(a, BulkStrings.NORMAL_OPTION) + (!hdIsDefault ? "  " + BulkStrings.t(a, BulkStrings.DEFAULT_TAG) : ""),
+            hdNormal[0], () -> { hdNormal[0] = true; refreshHdGroup(group, a, hdNormal, sizeCrop, hdIsDefault); }));
     }
 
     private static void refreshSizeGroup(LinearLayout group, Activity a,
@@ -660,18 +671,8 @@ public final class BulkRunHelper {
         return text.length() <= maxChars ? text : text.substring(text.length() - maxChars);
     }
 
-    private static void launch(Activity a, String command, Runnable onLaunched) {
-        if (command == null) return;
-        try {
-            Intent intent = new Intent(a, TermuxActivity.class);
-            intent.putExtra(BulkDashboardActivity.EXTRA_RUN_COMMAND, command);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            a.startActivity(intent);
-            if (onLaunched != null) onLaunched.run();
-        } catch (Exception e) {
-            BulkTheme.showToast(a, "Terminal nahi khul saka.");
-        }
-    }
+    // v137: terminal launch wala rasta (launch) KHATAM — har Run
+    // console popup me hi chalta hai, ZIP-added projects bhi.
 
     // ------------------------------------------------------------ small builders
 

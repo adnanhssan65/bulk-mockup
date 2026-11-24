@@ -68,6 +68,77 @@ public final class BulkRunSettings {
         return out;
     }
 
+    // ------------------------------------------------------------ v137 prompt profiles
+
+    /**
+     * v137 — runner ke prompt khandan (families), asal scripts parh
+     * kar verify shuda (bundled 1..14 + ZIP wale 15..18 ki copies):
+     *
+     *   ADNAN  (adnan_core.py, adnan_core_4.py, dual_core.py,
+     *           project3_core.py, w<N>.py):
+     *           Mode [1] HD (DEFAULT) / [2] Normal — is_hd = jawab != '2'
+     *           Size [1] Original (DEFAULT) / [2] Crop — crop = jawab == '2'
+     *   SYSTEM (system_core.py):
+     *           Mode [1] Normal (DEFAULT) / [2] HD — is_hd = jawab == '2'
+     *           Size ADNAN wali hi tartib.
+     *   UNKNOWN (koi or script): app ko sawal maloom nahi — sirf
+     *           Enter pipe hota hai (script ke apne defaults lagu).
+     *
+     * Ye profiles is liye zaroori hain ke ZIP-added projects bhi ab
+     * console popup me chalte hain (terminal kabhi nahi khulta —
+     * owner ki sakht hidayat, v137).
+     */
+    public enum PromptProfile { ADNAN, SYSTEM, UNKNOWN }
+
+    /** Script ke naam se prompt khandan pehchano (pure). */
+    public static PromptProfile profileForScript(String script) {
+        if (script == null) return PromptProfile.UNKNOWN;
+        String s = script.trim();
+        if (s.equals("system_core.py")) return PromptProfile.SYSTEM;
+        if (s.equals("adnan_core.py") || s.equals("adnan_core_4.py")
+            || s.equals("dual_core.py") || s.equals("project3_core.py")
+            || s.matches("w\\d+\\.py")) {
+            return PromptProfile.ADNAN;
+        }
+        return PromptProfile.UNKNOWN;
+    }
+
+    /**
+     * Project ka profile: bundled 1..14 ke prompts pehle se verified
+     * hain (sab ADNAN khandan ke main scripts) — baqi (ZIP-added)
+     * projects ka faisla un ki asal (persisted/detected) script se.
+     */
+    public static PromptProfile profileFor(int projectNumber, String script) {
+        if (hasVerifiedPrompts(projectNumber)) return PromptProfile.ADNAN;
+        return profileForScript(script);
+    }
+
+    /**
+     * Profile ke hisab se stdin jawab [mode, size]. UNKNOWN par do
+     * khaali Enter — script apne defaults par chalti hai, lekin run
+     * phir bhi console popup ke andar hi rehta hai.
+     * Ghalat/unknown saved jawab hamesha script ke DEFAULT par
+     * girta hai (ADNAN: HD/Original; SYSTEM: Normal/Original).
+     */
+    public static List<String> answersForProfile(PromptProfile profile,
+                                                 String hdAnswer, String sizeAnswer) {
+        List<String> out = new ArrayList<>();
+        if (profile == null || profile == PromptProfile.UNKNOWN) {
+            out.add("");
+            out.add("");
+            return out;
+        }
+        boolean normal = ANSWER_NORMAL.equals(hdAnswer);
+        boolean crop = ANSWER_CROP.equals(sizeAnswer);
+        if (profile == PromptProfile.SYSTEM) {
+            out.add(normal ? "1" : "2"); // SYSTEM khandan: '1'=Normal (default), '2'=HD
+        } else {
+            out.add(normal ? "2" : "1"); // ADNAN khandan: '1'=HD (default), '2'=Normal
+        }
+        out.add(crop ? "2" : "1"); // dono khandan: '1'=Original (default), '2'=Crop
+        return out;
+    }
+
     /**
      * Jawab terminal command ke stdin me pipe karne wali command:
      *   printf '%s\n' '1' '1' | (cd ... && python adnan_core.py process 1)
