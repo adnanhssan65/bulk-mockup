@@ -243,6 +243,9 @@ public final class BulkStrings {
     public static final String RECREATE = "recreate";
     public static final String RECREATE_RESULT = "recreate_result";
 
+    // v132 — gallery mode gate (Copy/Move pehle select karo)
+    public static final String MODE_HINT = "mode_hint";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -526,6 +529,8 @@ public final class BulkStrings {
         put(RECREATE, "Recreate", "Dobara Banao");
         put(RECREATE_RESULT, "%1$d new folders created · %2$d already present",
             "%1$d naye folders bane · %2$d pehle se mojood thay");
+        put(MODE_HINT, "Select Copy or Move first to add wallpapers",
+            "Wallpapers add karne ke liye pehle Copy ya Move select karo");
     }
 
     private BulkStrings() {}

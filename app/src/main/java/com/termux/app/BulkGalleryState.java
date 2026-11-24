@@ -26,6 +26,14 @@ public final class BulkGalleryState {
 
     public static final int MODE_COPY = 0;
     public static final int MODE_MOVE = 1;
+    /** v132 (design update): grid khulte hi koi mode nahi — user ko
+     *  Copy ya Move khud chunna padta hai, tab hi Add chalta hai. */
+    public static final int MODE_NONE = -1;
+
+    /** Add CTA kab active: mode chuna ho AUR kam az kam ek selection ho. */
+    public static boolean canAdd(int mode, int selectedCount) {
+        return (mode == MODE_COPY || mode == MODE_MOVE) && selectedCount > 0;
+    }
 
     public static final int MIN_COLUMNS = 2;
     public static final int MAX_COLUMNS = 6;

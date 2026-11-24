@@ -104,6 +104,17 @@ public class BulkGalleryStateTest {
     }
 
     @Test
+    public void canAddNeedsModeAndSelection() {
+        // v132 design update: mode na chuna ho to Add kabhi nahi chalta
+        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_NONE, 5));
+        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_NONE, 0));
+        assertTrue(BulkGalleryState.canAdd(BulkGalleryState.MODE_COPY, 1));
+        assertTrue(BulkGalleryState.canAdd(BulkGalleryState.MODE_MOVE, 3));
+        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_COPY, 0));
+        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_MOVE, 0));
+    }
+
+    @Test
     public void sortFilesByNameAndDate() throws Exception {
         java.io.File dir = java.nio.file.Files.createTempDirectory("bulkgallery").toFile();
         try {

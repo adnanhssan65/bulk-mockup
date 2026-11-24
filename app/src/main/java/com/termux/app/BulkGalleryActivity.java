@@ -46,12 +46,17 @@ import java.util.Set;
  * har row ki height pakki (46/42/30dp).
  *
  * TOOLBAR (owner ke apne HTML design — All Images Gallery
- * Manager — ke mutabiq, 3 rows + hint bar):
+ * Manager — ke mutabiq, rows + hint bar):
  *   Row 1: "N selected" | Select All / Unselect All | Add/Move CTA
- *          (0 select par disabled; Copy mode me "Add (n)", Move mode
- *          me "Move (n)")
+ *          (Copy mode me "Add (n)", Move mode me "Move (n)")
+ *   Mode row (v132 design update): Copy | Move — Add row ke seedha
+ *          neeche apni row; chuna hua pill Add button jesa solid
+ *          green + safed, unchuna outlined + green text. Grid
+ *          khulte hi KOI mode nahi (MODE_NONE): Add disabled rehta
+ *          hai jab tak Copy/Move na chuna jaye; neeche hint line
+ *          sirf tab tak dikhti hai. Mode per-visit hai.
  *   Row 2: Sort (Newest -> Oldest -> Name cycle) | Grid (ek line me
- *          2 -> 3 -> 4 -> 5 -> 6 images cycle) | Copy / Move toggle
+ *          2 -> 3 -> 4 -> 5 -> 6 images cycle)
  *   Row 3 (v132): Lock toggle (on ho to selection se kuch hataya
  *          nahi ja sakta) | Clear (poori selection khaali — lock
  *          on ho tab bhi; yehi unselect ka asal rasta hai)
@@ -110,7 +115,7 @@ public class BulkGalleryActivity extends Activity {
     private GalleryAdapter mAdapter;
     private int mCols = BulkGalleryState.MIN_COLUMNS;
     private int mSortMode = BulkGalleryState.SORT_NEWEST;
-    private int mMode = BulkGalleryState.MODE_COPY;
+    private int mMode = BulkGalleryState.MODE_NONE;
 
     // Toolbar refs (refresh ke liye)
     private TextView mCountLabel;
@@ -124,6 +129,8 @@ public class BulkGalleryActivity extends Activity {
     private ImageView mMoveIcon;
     private TextView mCopyLabel;
     private TextView mMoveLabel;
+    private TextView mModeHint;
+    private LinearLayout mToolbarBlock;
     private TextView mTotalLabel;
     // v132: Lock / Clear (toolbar row 3)
     private LinearLayout mLockPill;
@@ -542,6 +549,10 @@ public class BulkGalleryActivity extends Activity {
         mBucketId = bucketId;
         mNames = null;
         mSelectedIds.clear();
+        // v132 design update: grid har dafa BINA mode ke khulta hai
+        // (Copy/Move user khud chunta hai) — lock bhi per-visit hai
+        mMode = BulkGalleryState.MODE_NONE;
+        mLocked = false;
         new Thread(() -> {
             final List<Long> ids = loadIds(bucketId);
             runOnUiThread(() -> {
@@ -565,10 +576,13 @@ public class BulkGalleryActivity extends Activity {
         // ANDAR nahi; har row ki height pakki (fixed dp), hub (v129)
         // wala hi usool jo owner ke phone par proven hai. Block ki
         // kul height bhi explicit hai: padding 6 + row1 46 + 4 +
+        // mode row 42 + (mode hint 2 + 16, sirf jab mode na ho) + 4 +
         // row2 42 + 4 + row3 42 (v132 Lock/Clear) + 6 + hint 30 +
-        // padding 6 = 186dp.
-        root.addView(buildToolbarBlock(), new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 186)));
+        // padding 6 = mode-hint ke sath 250dp, baghair 232dp
+        // (refreshGridState height mode ke hisab se rakhta hai).
+        mToolbarBlock = (LinearLayout) buildToolbarBlock();
+        root.addView(mToolbarBlock, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 250)));
 
         mGrid = new GridView(this);
         mGrid.setNumColumns(mCols);
@@ -737,6 +751,57 @@ public class BulkGalleryActivity extends Activity {
         row1.addView(mConfirmBtn);
         bar.addView(row1);
 
+        // Mode row — pakki height 42dp (v132 design update): Copy/Move
+        // Add row ke seedha neeche, apni row me do pills. Chuna hua
+        // pill Add button jesa solid green + safed; unchuna outlined
+        // + green text (styleCopyMovePill). Grid bina mode ke khulta
+        // hai — Add tab hi chalta hai jab mode chuna jaye.
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        modeRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams mrp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 42));
+        mrp.topMargin = BulkTheme.dp(this, 4);
+        modeRow.setLayoutParams(mrp);
+
+        mCopyPill = toolPill(R.drawable.ic_bulk_copy);
+        mCopyIcon = (ImageView) mCopyPill.getChildAt(0);
+        mCopyLabel = (TextView) mCopyPill.getChildAt(1);
+        mCopyLabel.setText(BulkStrings.t(this, BulkStrings.COPY_MODE));
+        mCopyPill.setOnClickListener(v -> {
+            mMode = BulkGalleryState.MODE_COPY;
+            refreshGridState();
+        });
+        modeRow.addView(mCopyPill);
+
+        mMovePill = toolPill(R.drawable.ic_bulk_chevron);
+        mMoveIcon = (ImageView) mMovePill.getChildAt(0);
+        mMoveLabel = (TextView) mMovePill.getChildAt(1);
+        mMoveLabel.setText(BulkStrings.t(this, BulkStrings.MOVE_MODE));
+        mMovePill.setOnClickListener(v -> {
+            mMode = BulkGalleryState.MODE_MOVE;
+            refreshGridState();
+        });
+        LinearLayout.LayoutParams mmp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mmp.leftMargin = BulkTheme.dp(this, 6);
+        mMovePill.setLayoutParams(mmp);
+        modeRow.addView(mMovePill);
+        bar.addView(modeRow);
+
+        // Mode hint — pakki height 16dp; sirf tab dikhta hai jab koi
+        // mode na chuna ho (refreshGridState visibility + block ki
+        // kul height dono sambhalta hai)
+        mModeHint = new TextView(this);
+        mModeHint.setText(BulkStrings.t(this, BulkStrings.MODE_HINT));
+        mModeHint.setTextColor(BulkTheme.textMuted(this));
+        mModeHint.setTextSize(11);
+        LinearLayout.LayoutParams mhp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 16));
+        mhp.topMargin = BulkTheme.dp(this, 2);
+        mModeHint.setLayoutParams(mhp);
+        bar.addView(mModeHint);
+
         // Row 2 — pakki height 42dp
         LinearLayout row2 = new LinearLayout(this);
         row2.setOrientation(LinearLayout.HORIZONTAL);
@@ -773,30 +838,6 @@ public class BulkGalleryActivity extends Activity {
 
         row2.addView(new View(this), new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        mCopyPill = toolPill(R.drawable.ic_bulk_copy);
-        mCopyIcon = (ImageView) mCopyPill.getChildAt(0);
-        mCopyLabel = (TextView) mCopyPill.getChildAt(1);
-        mCopyLabel.setText(BulkStrings.t(this, BulkStrings.COPY_MODE));
-        mCopyPill.setOnClickListener(v -> {
-            mMode = BulkGalleryState.MODE_COPY;
-            refreshGridState();
-        });
-        row2.addView(mCopyPill);
-
-        mMovePill = toolPill(R.drawable.ic_bulk_chevron);
-        mMoveIcon = (ImageView) mMovePill.getChildAt(0);
-        mMoveLabel = (TextView) mMovePill.getChildAt(1);
-        mMoveLabel.setText(BulkStrings.t(this, BulkStrings.MOVE_MODE));
-        mMovePill.setOnClickListener(v -> {
-            mMode = BulkGalleryState.MODE_MOVE;
-            refreshGridState();
-        });
-        LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mp.leftMargin = BulkTheme.dp(this, 6);
-        mMovePill.setLayoutParams(mp);
-        row2.addView(mMovePill);
         bar.addView(row2);
 
         // Row 3 — pakki height 42dp (v132: Lock + Clear)
@@ -921,6 +962,26 @@ public class BulkGalleryActivity extends Activity {
             android.graphics.PorterDuff.Mode.SRC_IN);
     }
 
+    /**
+     * Copy/Move pill (v132 design update): chuna hua = Add button
+     * jesa solid green bhara hua + onAccent (safed) text/icon;
+     * unchuna = outlined pill + green (accent) text/icon.
+     */
+    private void styleCopyMovePill(LinearLayout pill, ImageView icon, TextView label, boolean active) {
+        if (pill == null) return;
+        if (active) {
+            pill.setBackground(BulkTheme.primaryBg(this));
+            label.setTextColor(BulkTheme.onAccent(this));
+            icon.setColorFilter(BulkTheme.onAccent(this),
+                android.graphics.PorterDuff.Mode.SRC_IN);
+        } else {
+            pill.setBackground(toolPillBg(false));
+            label.setTextColor(BulkTheme.accent(this));
+            icon.setColorFilter(BulkTheme.accent(this),
+                android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+    }
+
     // ------------------------------------------------------------ selection state
 
     /** Mojooda selection ki positions (display order par) — drag ke base ke liye. */
@@ -982,8 +1043,11 @@ public class BulkGalleryActivity extends Activity {
                 mConfirmBtn.setText(BulkStrings.t(this,
                     move ? BulkStrings.MOVE : BulkStrings.ADD));
             }
-            mConfirmBtn.setEnabled(n > 0);
-            mConfirmBtn.setAlpha(n > 0 ? 1f : 0.45f);
+            // v132 design update: Add sirf tab active jab mode
+            // (Copy/Move) chuna ho AUR selection ho — warna greyed
+            boolean canAdd = BulkGalleryState.canAdd(mMode, n);
+            mConfirmBtn.setEnabled(canAdd);
+            mConfirmBtn.setAlpha(canAdd ? 1f : 0.45f);
         }
         if (mSortLabel != null) {
             mSortLabel.setText(BulkStrings.t(this,
@@ -994,8 +1058,23 @@ public class BulkGalleryActivity extends Activity {
         if (mGridLabel != null) {
             mGridLabel.setText(mCols + "x");
         }
-        styleModePill(mCopyPill, mCopyIcon, mCopyLabel, mMode == BulkGalleryState.MODE_COPY);
-        styleModePill(mMovePill, mMoveIcon, mMoveLabel, mMode == BulkGalleryState.MODE_MOVE);
+        styleCopyMovePill(mCopyPill, mCopyIcon, mCopyLabel, mMode == BulkGalleryState.MODE_COPY);
+        styleCopyMovePill(mMovePill, mMoveIcon, mMoveLabel, mMode == BulkGalleryState.MODE_MOVE);
+        // Mode hint + toolbar block ki kul height mode ke hisab se:
+        // hint sirf bina-mode ke, block 250dp (hint ke sath) / 232dp
+        boolean noMode = mMode == BulkGalleryState.MODE_NONE;
+        if (mModeHint != null) {
+            mModeHint.setVisibility(noMode ? View.VISIBLE : View.GONE);
+        }
+        if (mToolbarBlock != null && mToolbarBlock.getLayoutParams() != null) {
+            LinearLayout.LayoutParams tbp =
+                (LinearLayout.LayoutParams) mToolbarBlock.getLayoutParams();
+            int want = BulkTheme.dp(this, noMode ? 250 : 232);
+            if (tbp.height != want) {
+                tbp.height = want;
+                mToolbarBlock.setLayoutParams(tbp);
+            }
+        }
         // v132: Lock pill — on ho to accent style + "Locked" label
         if (mLockPill != null && mLockLabel != null) {
             mLockLabel.setText(BulkStrings.t(this,
@@ -1014,6 +1093,9 @@ public class BulkGalleryActivity extends Activity {
             finish();
             return;
         }
+        // v132 design update: mode ke baghair Add nahi (CTA disabled
+        // hai, ye sirf hifazati rukawat hai)
+        if (mMode == BulkGalleryState.MODE_NONE) return;
         ArrayList<Uri> uris = new ArrayList<>();
         for (Long id : mIds) {
             if (mSelectedIds.contains(id)) uris.add(uriFor(id));
