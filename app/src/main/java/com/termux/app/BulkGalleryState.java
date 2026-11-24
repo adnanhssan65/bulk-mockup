@@ -169,4 +169,48 @@ public final class BulkGalleryState {
         for (Entry e : sorted(es, mode)) out.add(files.get((int) e.id));
         return out;
     }
+
+    /**
+     * Sequence view ke liye jore (v132): mockups[i] ke foran baad
+     * ready[i] — dono liston ko di gayi tartib me zip; jo side lambi
+     * ho, us ke bache hue files apni tartib me aakhir me ate hain.
+     * Nayi list wapas hoti hai; inputs nahi badalte.
+     */
+    public static List<java.io.File> interleavePairs(List<java.io.File> mockups,
+                                                     List<java.io.File> ready) {
+        List<java.io.File> out = new ArrayList<>();
+        int m = mockups == null ? 0 : mockups.size();
+        int r = ready == null ? 0 : ready.size();
+        int n = Math.max(m, r);
+        for (int i = 0; i < n; i++) {
+            if (i < m) out.add(mockups.get(i));
+            if (i < r) out.add(ready.get(i));
+        }
+        return out;
+    }
+
+    /**
+     * Preview surfaces ke selection toolbar ki halat (pure, v132):
+     * default me sirf "Select" button; selection mode me Select All
+     * + Done; Delete sirf tab jab kam az kam ek item selected ho.
+     */
+    public static final class SelectionBar {
+        public final boolean showSelect;
+        public final boolean showSelectAll;
+        public final boolean showDone;
+        public final boolean showDelete;
+
+        SelectionBar(boolean showSelect, boolean showSelectAll,
+                     boolean showDone, boolean showDelete) {
+            this.showSelect = showSelect;
+            this.showSelectAll = showSelectAll;
+            this.showDone = showDone;
+            this.showDelete = showDelete;
+        }
+    }
+
+    public static SelectionBar selectionBar(boolean selecting, int selectedCount) {
+        if (!selecting) return new SelectionBar(true, false, false, false);
+        return new SelectionBar(false, true, true, selectedCount > 0);
+    }
 }

@@ -251,6 +251,13 @@ public final class BulkStrings {
     public static final String ADD_CHOICE_AUTO_COPY = "add_choice_auto_copy";
     public static final String ADD_CHOICE_AUTO_MOVE = "add_choice_auto_move";
 
+    // v132 — Preview Ready Assets: Sequence tab + select/delete
+    public static final String SEQUENCE_TAB = "sequence_tab";
+    public static final String TAP_SELECT_HINT = "tap_select_hint";
+    public static final String DELETE_ASSETS_TITLE = "delete_assets_title";
+    public static final String DELETE_ASSETS_MSG = "delete_assets_msg";
+    public static final String DONE_BTN = "done_btn";
+
     // ------------------------------------------------------------ table
 
     private static final Map<String, String> EN = new LinkedHashMap<>();
@@ -540,6 +547,14 @@ public final class BulkStrings {
         put(ADD_CHOICE_MANUAL, "Manual — ask every time", "Manual — har dafa poochho");
         put(ADD_CHOICE_AUTO_COPY, "Auto — Copy", "Auto — Copy");
         put(ADD_CHOICE_AUTO_MOVE, "Auto — Move", "Auto — Move");
+        put(SEQUENCE_TAB, "Sequence", "Sequence");
+        put(TAP_SELECT_HINT, "Tap a photo to preview · Use Select to pick files for delete",
+            "Preview ke liye photo par tap · Delete ke liye Select dabao");
+        put(DELETE_ASSETS_TITLE, "Delete Files", "Files Delete Karo");
+        put(DELETE_ASSETS_MSG,
+            "Delete %d selected file(s)? The files will be removed from the project folder. This cannot be undone.",
+            "Select kiye hue %d file delete kar dun? Files project folder se hat jayengi. Ye wapas nahi hoga.");
+        put(DONE_BTN, "Done", "Ho Gaya");
     }
 
     private BulkStrings() {}

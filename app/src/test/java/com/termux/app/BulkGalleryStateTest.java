@@ -181,4 +181,42 @@ public class BulkGalleryStateTest {
             BulkGalleryState.orderIds(load, BulkGalleryState.SORT_NAME, null));
         assertTrue(BulkGalleryState.orderIds(null, BulkGalleryState.SORT_NAME, names).isEmpty());
     }
+
+    @Test
+    public void interleavePairsZipAndLeftovers() {
+        java.io.File m1 = new java.io.File("m1"), m2 = new java.io.File("m2"),
+            m3 = new java.io.File("m3");
+        java.io.File r1 = new java.io.File("r1"), r2 = new java.io.File("r2");
+        // Barabar: m1 r1 m2 r2
+        assertEquals(Arrays.asList(m1, r1, m2, r2),
+            BulkGalleryState.interleavePairs(Arrays.asList(m1, m2), Arrays.asList(r1, r2)));
+        // Mockups zyada: bache hue aakhir me apni tartib me
+        assertEquals(Arrays.asList(m1, r1, m2, m3),
+            BulkGalleryState.interleavePairs(Arrays.asList(m1, m2, m3), Arrays.asList(r1)));
+        // Ek side khaali / dono null
+        assertEquals(Arrays.asList(r1, r2),
+            BulkGalleryState.interleavePairs(Arrays.asList(), Arrays.asList(r1, r2)));
+        assertTrue(BulkGalleryState.interleavePairs(null, null).isEmpty());
+    }
+
+    @Test
+    public void selectionBarStates() {
+        // Default: sirf Select button — na Select All, na Delete, na Done
+        BulkGalleryState.SelectionBar d = BulkGalleryState.selectionBar(false, 0);
+        assertTrue(d.showSelect);
+        assertFalse(d.showSelectAll);
+        assertFalse(d.showDone);
+        assertFalse(d.showDelete);
+        // Selection mode, 0 selected: Select All + Done, Delete NAHI
+        BulkGalleryState.SelectionBar s0 = BulkGalleryState.selectionBar(true, 0);
+        assertFalse(s0.showSelect);
+        assertTrue(s0.showSelectAll);
+        assertTrue(s0.showDone);
+        assertFalse(s0.showDelete);
+        // Selection mode, kuch selected: Delete bhi
+        BulkGalleryState.SelectionBar s3 = BulkGalleryState.selectionBar(true, 3);
+        assertTrue(s3.showSelectAll);
+        assertTrue(s3.showDone);
+        assertTrue(s3.showDelete);
+    }
 }

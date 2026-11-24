@@ -44,8 +44,15 @@ import java.util.Set;
  * v130 (owner ki hidayat): Drop Wallpapers ki grid me dropped images
  * SELECT (tap toggle) karke DELETE ho sakte hain — gallery wala
  * toolbar (Sort Newest/Oldest/Name cycle, Grid 2–6 cycle, Select All,
- * Delete + design-style confirm). Mockups / Ready Wallpapers tabs
- * read-only hi rehte hain.
+ * Delete + design-style confirm).
+ *
+ * v132 (owner ki hidayat): folder view me TEEsra tab "Sequence"
+ * (mockup + us ka ready jora tartib se), teeno tabs par Sort + Grid
+ * aur SELECT + DELETE (toolbar Drop ke sath shared hai). Toolbar ki
+ * halat: default me sirf "Select" button; selection mode me
+ * Select All + Done; Delete sirf kuch selected ho tab. Tile par
+ * default me tap = bara preview (inspector), selection mode me
+ * tap = select toggle.
  */
 public class BulkReadyAssetsActivity extends Activity {
 
@@ -57,7 +64,25 @@ public class BulkReadyAssetsActivity extends Activity {
 
     private LinearLayout mBody;
     private BulkProjects.ProjectInfo mOpenProject;
-    private boolean mMockupsTab = true;
+    // v132: folder view ke 3 tabs — Mockups / Wallpapers / Sequence
+    private static final int TAB_MOCKUPS = 0;
+    private static final int TAB_WALLPAPERS = 1;
+    private static final int TAB_SEQUENCE = 2;
+    private int mTab = TAB_MOCKUPS;
+    // v132: folder tabs ki selection (absolute paths) + toolbar halat
+    private final Set<String> mAssetSelected = new HashSet<>();
+    private int mAssetSort = BulkGalleryState.SORT_NAME;
+    private int mAssetCols = 2;
+    // v132: Preview surfaces ka selection mode — Select button se ON,
+    // Done se OFF (selection saaf); surface badalne par reset
+    private boolean mSelecting = false;
+
+    /** Selection mode + dono selections reset (surface change par). */
+    private void resetSelectionUi() {
+        mSelecting = false;
+        mAssetSelected.clear();
+        mDropSelected.clear();
+    }
     // v129: Drop Wallpapers wale hissay ki halat
     private boolean mDropList = false;
     private BulkProjects.ProjectInfo mDropProject;
@@ -322,6 +347,7 @@ public class BulkReadyAssetsActivity extends Activity {
 
         row.setOnClickListener(v -> {
             mDropProject = p;
+            resetSelectionUi();
             showDropFolder();
         });
         return row;
@@ -343,7 +369,7 @@ public class BulkReadyAssetsActivity extends Activity {
         back.setTextSize(13.5f);
         back.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         back.setPadding(0, 0, 0, BulkTheme.dp(this, 8));
-        back.setOnClickListener(v -> { mDropProject = null; showDropList(); });
+        back.setOnClickListener(v -> { mDropProject = null; resetSelectionUi(); showDropList(); });
         mBody.addView(back);
 
         File dir = BulkProjects.wallpapersDir(p.number);
@@ -367,24 +393,46 @@ public class BulkReadyAssetsActivity extends Activity {
             none.setPadding(0, BulkTheme.dp(this, 12), 0, 0);
             mBody.addView(none);
         } else {
-            mBody.addView(dropToolbar(files));
+            mBody.addView(selectToolbar(files, mDropSelected, mDropSort, mDropCols, mSelecting,
+                () -> { mDropSort = BulkGalleryState.nextSort(mDropSort); showDropFolder(); },
+                () -> { mDropCols = BulkGalleryState.nextColumns(mDropCols); showDropFolder(); },
+                this::showDropFolder,
+                () -> confirmDeleteFiles(files, mDropSelected,
+                    BulkStrings.DELETE_DROPPED_TITLE, BulkStrings.DELETE_DROPPED_MSG,
+                    this::showDropFolder),
+                () -> { mSelecting = true; showDropFolder(); },
+                () -> { mSelecting = false; mDropSelected.clear(); showDropFolder(); }));
             GridLayout grid = new GridLayout(this);
             grid.setColumnCount(mDropCols);
             LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             gp.topMargin = BulkTheme.dp(this, 8);
             grid.setLayoutParams(gp);
-            for (File f : files) grid.addView(dropThumb(f));
+            for (File f : files) {
+                grid.addView(selectThumb(f, mDropSelected, mDropCols, mSelecting,
+                    this::showDropFolder, null));
+            }
             mBody.addView(grid);
             loadThumbs(files);
         }
         BulkFonts.applyToTree(this, mBody);
     }
 
-    // ------------------------------------------------------------ v130 drop toolbar
+    // ------------------------------------------------------------ select toolbar (shared)
 
-    /** Gallery wala toolbar (compact): (N selected | Select All) / (Sort | Grid | Delete). */
-    private View dropToolbar(final List<File> files) {
+    /**
+     * Preview surfaces ka selection toolbar (compact, v132):
+     *   Default: (kul items | Select) / (Sort | Grid)
+     *   Selection mode: (N selected | Select All | Done) /
+     *   (Sort | Grid | Delete (n) — sirf jab kuch selected ho)
+     * Halat BulkGalleryState.selectionBar (pure) se ati hai. Drop
+     * Wallpapers aur folder tabs dono ke liye EK implementation.
+     */
+    private View selectToolbar(final List<File> files, final Set<String> selected,
+                               int sortMode, int cols, boolean selecting,
+                               final Runnable onSortCycle, final Runnable onGridCycle,
+                               final Runnable onRefresh, final Runnable onDelete,
+                               final Runnable onEnterSelect, final Runnable onDone) {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
@@ -393,32 +441,52 @@ public class BulkReadyAssetsActivity extends Activity {
         bar.setLayoutParams(blp);
 
         int selCount = 0;
-        for (File f : files) if (mDropSelected.contains(f.getAbsolutePath())) selCount++;
+        for (File f : files) if (selected.contains(f.getAbsolutePath())) selCount++;
+        BulkGalleryState.SelectionBar state =
+            BulkGalleryState.selectionBar(selecting, selCount);
 
         LinearLayout row1 = new LinearLayout(this);
         row1.setOrientation(LinearLayout.HORIZONTAL);
         row1.setGravity(Gravity.CENTER_VERTICAL);
         TextView count = new TextView(this);
-        count.setText(BulkStrings.format(this, BulkStrings.SELECTED_COUNT, selCount));
+        count.setText(selecting
+            ? BulkStrings.format(this, BulkStrings.SELECTED_COUNT, selCount)
+            : BulkStrings.format(this, BulkStrings.ITEMS_COUNT, files.size()));
         count.setTextColor(BulkTheme.accent(this));
         count.setTextSize(12.5f);
         count.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         row1.addView(count);
         row1.addView(new View(this), new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        final int fSelCount = selCount;
-        TextView selectAll = pillText(BulkStrings.t(this,
-            BulkGalleryState.isAllSelected(selCount, files.size())
-                ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL), false);
-        selectAll.setOnClickListener(v -> {
-            if (BulkGalleryState.isAllSelected(fSelCount, files.size())) {
-                for (File f : files) mDropSelected.remove(f.getAbsolutePath());
-            } else {
-                for (File f : files) mDropSelected.add(f.getAbsolutePath());
-            }
-            showDropFolder();
-        });
-        row1.addView(selectAll);
+        if (state.showSelect) {
+            TextView selectBtn = pillText(BulkStrings.t(this, BulkStrings.SELECT), false);
+            selectBtn.setOnClickListener(v -> onEnterSelect.run());
+            row1.addView(selectBtn);
+        }
+        if (state.showSelectAll) {
+            final int fSelCount = selCount;
+            TextView selectAll = pillText(BulkStrings.t(this,
+                BulkGalleryState.isAllSelected(selCount, files.size())
+                    ? BulkStrings.UNSELECT_ALL : BulkStrings.SELECT_ALL), false);
+            selectAll.setOnClickListener(v -> {
+                if (BulkGalleryState.isAllSelected(fSelCount, files.size())) {
+                    for (File f : files) selected.remove(f.getAbsolutePath());
+                } else {
+                    for (File f : files) selected.add(f.getAbsolutePath());
+                }
+                onRefresh.run();
+            });
+            row1.addView(selectAll);
+        }
+        if (state.showDone) {
+            TextView done = pillText(BulkStrings.t(this, BulkStrings.DONE_BTN), false);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dlp.leftMargin = BulkTheme.dp(this, 6);
+            done.setLayoutParams(dlp);
+            done.setOnClickListener(v -> onDone.run());
+            row1.addView(done);
+        }
         bar.addView(row1);
 
         LinearLayout row2 = new LinearLayout(this);
@@ -429,32 +497,26 @@ public class BulkReadyAssetsActivity extends Activity {
         r2p.topMargin = BulkTheme.dp(this, 8);
         row2.setLayoutParams(r2p);
         LinearLayout sortPill = pillIcon(R.drawable.ic_bulk_sort, BulkStrings.t(this,
-            mDropSort == BulkGalleryState.SORT_OLDEST ? BulkStrings.SORT_OLDEST
-                : mDropSort == BulkGalleryState.SORT_NAME ? BulkStrings.SORT_BY_NAME
+            sortMode == BulkGalleryState.SORT_OLDEST ? BulkStrings.SORT_OLDEST
+                : sortMode == BulkGalleryState.SORT_NAME ? BulkStrings.SORT_BY_NAME
                 : BulkStrings.SORT_NEWEST));
-        sortPill.setOnClickListener(v -> {
-            mDropSort = BulkGalleryState.nextSort(mDropSort);
-            showDropFolder();
-        });
+        sortPill.setOnClickListener(v -> onSortCycle.run());
         row2.addView(sortPill);
-        LinearLayout gridPill = pillIcon(R.drawable.ic_bulk_grid, mDropCols + "x");
-        gridPill.setOnClickListener(v -> {
-            mDropCols = BulkGalleryState.nextColumns(mDropCols);
-            showDropFolder();
-        });
+        LinearLayout gridPill = pillIcon(R.drawable.ic_bulk_grid, cols + "x");
+        gridPill.setOnClickListener(v -> onGridCycle.run());
         LinearLayout.LayoutParams gp2 = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         gp2.leftMargin = BulkTheme.dp(this, 6);
         gridPill.setLayoutParams(gp2);
         row2.addView(gridPill);
-        row2.addView(new View(this), new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView del = pillText(BulkStrings.t(this, BulkStrings.DELETE)
-            + (selCount > 0 ? " (" + selCount + ")" : ""), true);
-        del.setEnabled(selCount > 0);
-        del.setAlpha(selCount > 0 ? 1f : 0.45f);
-        del.setOnClickListener(v -> confirmDeleteDropped(files));
-        row2.addView(del);
+        if (state.showDelete) {
+            row2.addView(new View(this), new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            TextView del = pillText(BulkStrings.t(this, BulkStrings.DELETE)
+                + " (" + selCount + ")", true);
+            del.setOnClickListener(v -> onDelete.run());
+            row2.addView(del);
+        }
         bar.addView(row2);
         return bar;
     }
@@ -498,14 +560,16 @@ public class BulkReadyAssetsActivity extends Activity {
         return pill;
     }
 
-    private void confirmDeleteDropped(final List<File> files) {
+    /** Design-style confirm ke baad select ki hui files delete (Drop + folder tabs shared). */
+    private void confirmDeleteFiles(final List<File> files, final Set<String> selected,
+                                    String titleKey, String msgKey, final Runnable onRefresh) {
         final List<File> sel = new ArrayList<>();
         for (File f : files) {
-            if (mDropSelected.contains(f.getAbsolutePath())) sel.add(f);
+            if (selected.contains(f.getAbsolutePath())) sel.add(f);
         }
         if (sel.isEmpty()) return;
-        BulkTheme.showConfirm(this, BulkStrings.t(this, BulkStrings.DELETE_DROPPED_TITLE),
-            BulkStrings.format(this, BulkStrings.DELETE_DROPPED_MSG, sel.size()),
+        BulkTheme.showConfirm(this, BulkStrings.t(this, titleKey),
+            BulkStrings.format(this, msgKey, sel.size()),
             BulkStrings.t(this, BulkStrings.DELETE), true, () -> {
                 int deleted = 0;
                 for (File f : sel) {
@@ -513,27 +577,33 @@ public class BulkReadyAssetsActivity extends Activity {
                         deleted++;
                         mThumbs.remove(f.getAbsolutePath());
                     }
-                    mDropSelected.remove(f.getAbsolutePath());
+                    selected.remove(f.getAbsolutePath());
                 }
                 if (deleted > 0) {
                     String msg = BulkStrings.format(this, BulkStrings.DELETED_TOAST, deleted);
                     BulkTheme.showToast(this, msg);
                     BulkLog.add(msg);
                 }
-                showDropFolder();
+                onRefresh.run();
             });
     }
 
-    /** Drop grid ka tile: tap = select toggle (inspector NAHI — ye sirf dropped view hai). */
-    private View dropThumb(final File f) {
+    /**
+     * Selectable grid tile (Drop + folder tabs shared): selection
+     * mode me tap = select toggle; default mode me tap = inspector
+     * (agar diya ho). Long-press = inspector dono halton me.
+     */
+    private View selectThumb(final File f, final Set<String> selected, int cols,
+                             boolean selecting,
+                             final Runnable onRefresh, final Runnable onInspect) {
         final FrameLayout box = new FrameLayout(this);
         final String path = f.getAbsolutePath();
-        final boolean checked = mDropSelected.contains(path);
+        final boolean checked = selected.contains(path);
         box.setBackground(BulkTheme.tileBg(this, checked));
         int gap = BulkTheme.dp(this, 8);
         GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
         glp.width = 0;
-        glp.height = BulkTheme.dp(this, Math.max(56, Math.min(150, 300 / mDropCols)));
+        glp.height = BulkTheme.dp(this, Math.max(56, Math.min(150, 300 / cols)));
         glp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
         glp.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
         box.setLayoutParams(glp);
@@ -569,10 +639,20 @@ public class BulkReadyAssetsActivity extends Activity {
         badge.setVisibility(checked ? View.VISIBLE : View.GONE);
         box.addView(badge);
         box.setOnClickListener(v -> {
-            if (mDropSelected.contains(path)) mDropSelected.remove(path);
-            else mDropSelected.add(path);
-            showDropFolder();
+            if (selecting) {
+                if (selected.contains(path)) selected.remove(path);
+                else selected.add(path);
+                onRefresh.run();
+            } else if (onInspect != null) {
+                onInspect.run();
+            }
         });
+        if (onInspect != null) {
+            box.setOnLongClickListener(v -> {
+                onInspect.run();
+                return true;
+            });
+        }
         return box;
     }
 
@@ -633,7 +713,8 @@ public class BulkReadyAssetsActivity extends Activity {
 
         row.setOnClickListener(v -> {
             mOpenProject = p;
-            mMockupsTab = true;
+            mTab = TAB_MOCKUPS;
+            resetSelectionUi();
             showFolder();
         });
         return row;
@@ -653,11 +734,13 @@ public class BulkReadyAssetsActivity extends Activity {
         back.setTextSize(13.5f);
         back.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         back.setPadding(0, 0, 0, BulkTheme.dp(this, 8));
-        back.setOnClickListener(v -> { mOpenProject = null; showList(); });
+        back.setOnClickListener(v -> { mOpenProject = null; resetSelectionUi(); showList(); });
         mBody.addView(back);
 
-        // Asal path header
-        File dir = mMockupsTab ? BulkProjects.mockupsDir(p.number) : BulkProjects.readyDir(p.number);
+        // Asal path header (Sequence par project folder)
+        File dir = mTab == TAB_MOCKUPS ? BulkProjects.mockupsDir(p.number)
+            : mTab == TAB_WALLPAPERS ? BulkProjects.readyDir(p.number)
+            : BulkProjects.projectDir(p.number);
         TextView path = new TextView(this);
         path.setText(dir.getAbsolutePath());
         path.setTextColor(BulkTheme.textMuted(this));
@@ -666,7 +749,7 @@ public class BulkReadyAssetsActivity extends Activity {
         mBody.addView(path);
 
         TextView hint = new TextView(this);
-        hint.setText(BulkStrings.t(this, BulkStrings.TAP_TO_INSPECT));
+        hint.setText(BulkStrings.t(this, BulkStrings.TAP_SELECT_HINT));
         hint.setTextColor(BulkTheme.textMuted(this));
         hint.setTextSize(11);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(
@@ -675,26 +758,43 @@ public class BulkReadyAssetsActivity extends Activity {
         hint.setLayoutParams(hp);
         mBody.addView(hint);
 
-        // Tabs: Mockups/ | Wallpapers/
+        // Tabs: Mockups/ | Wallpapers/ | Sequence
         LinearLayout tabs = new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tp.topMargin = BulkTheme.dp(this, 10);
         tabs.setLayoutParams(tp);
-        TextView tabM = tabButton(BulkStrings.t(this, BulkStrings.MOCKUPS_TAB), mMockupsTab,
-            () -> { mMockupsTab = true; showFolder(); });
+        TextView tabM = tabButton(BulkStrings.t(this, BulkStrings.MOCKUPS_TAB), mTab == TAB_MOCKUPS,
+            () -> { mTab = TAB_MOCKUPS; showFolder(); });
         tabM.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tabs.addView(tabM);
-        TextView tabW = tabButton(BulkStrings.t(this, BulkStrings.WALLPAPERS_TAB), !mMockupsTab,
-            () -> { mMockupsTab = false; showFolder(); });
+        TextView tabW = tabButton(BulkStrings.t(this, BulkStrings.WALLPAPERS_TAB), mTab == TAB_WALLPAPERS,
+            () -> { mTab = TAB_WALLPAPERS; showFolder(); });
         LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         wlp.leftMargin = BulkTheme.dp(this, 8);
         tabW.setLayoutParams(wlp);
         tabs.addView(tabW);
+        TextView tabS = tabButton(BulkStrings.t(this, BulkStrings.SEQUENCE_TAB), mTab == TAB_SEQUENCE,
+            () -> { mTab = TAB_SEQUENCE; showFolder(); });
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        slp.leftMargin = BulkTheme.dp(this, 8);
+        tabS.setLayoutParams(slp);
+        tabs.addView(tabS);
         mBody.addView(tabs);
 
-        List<File> files = imageFiles(dir);
+        // Is tab ki display list (sort teeno tabs par lagta hai)
+        final List<File> files = mTab == TAB_MOCKUPS
+            ? BulkGalleryState.sortFiles(imageFiles(BulkProjects.mockupsDir(p.number)), mAssetSort)
+            : mTab == TAB_WALLPAPERS
+            ? BulkGalleryState.sortFiles(imageFiles(BulkProjects.readyDir(p.number)), mAssetSort)
+            : sequenceFiles(p);
+        // Selection sirf un files ki rakho jo dono folders me ab bhi hain
+        Set<String> existing = new HashSet<>();
+        for (File f : imageFiles(BulkProjects.mockupsDir(p.number))) existing.add(f.getAbsolutePath());
+        for (File f : imageFiles(BulkProjects.readyDir(p.number))) existing.add(f.getAbsolutePath());
+        mAssetSelected.retainAll(existing);
+
         if (files.isEmpty()) {
             TextView none = new TextView(this);
             none.setText(BulkStrings.t(this, BulkStrings.NO_WALLPAPERS));
@@ -703,17 +803,66 @@ public class BulkReadyAssetsActivity extends Activity {
             none.setPadding(0, BulkTheme.dp(this, 12), 0, 0);
             mBody.addView(none);
         } else {
+            mBody.addView(selectToolbar(files, mAssetSelected, mAssetSort, mAssetCols, mSelecting,
+                () -> { mAssetSort = BulkGalleryState.nextSort(mAssetSort); showFolder(); },
+                () -> { mAssetCols = BulkGalleryState.nextColumns(mAssetCols); showFolder(); },
+                this::showFolder,
+                () -> confirmDeleteFiles(files, mAssetSelected,
+                    BulkStrings.DELETE_ASSETS_TITLE, BulkStrings.DELETE_ASSETS_MSG,
+                    this::showFolder),
+                () -> { mSelecting = true; showFolder(); },
+                () -> { mSelecting = false; mAssetSelected.clear(); showFolder(); }));
             GridLayout grid = new GridLayout(this);
-            grid.setColumnCount(2);
+            grid.setColumnCount(mAssetCols);
             LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            gp.topMargin = BulkTheme.dp(this, 10);
+            gp.topMargin = BulkTheme.dp(this, 8);
             grid.setLayoutParams(gp);
-            for (File f : files) grid.addView(assetThumb(f));
+            for (final File f : files) {
+                grid.addView(selectThumb(f, mAssetSelected, mAssetCols, mSelecting,
+                    this::showFolder, () -> showInspector(f)));
+            }
             mBody.addView(grid);
             loadThumbs(files);
         }
         BulkFonts.applyToTree(this, mBody);
+    }
+
+    /**
+     * Sequence tab ki list: jora = folders ki NAAM tartib me nth
+     * mockup + nth ready (BulkGalleryState.interleavePairs). Sort
+     * Newest/Oldest ho to jore mockup ki mtime se hilte hain — jora
+     * kabhi nahi tootta; Name par canonical tartib hi rehti hai.
+     */
+    private List<File> sequenceFiles(BulkProjects.ProjectInfo p) {
+        List<File> mockups = BulkGalleryState.sortFiles(
+            imageFiles(BulkProjects.mockupsDir(p.number)), BulkGalleryState.SORT_NAME);
+        List<File> ready = BulkGalleryState.sortFiles(
+            imageFiles(BulkProjects.readyDir(p.number)), BulkGalleryState.SORT_NAME);
+        if (mAssetSort == BulkGalleryState.SORT_NAME) {
+            return BulkGalleryState.interleavePairs(mockups, ready);
+        }
+        List<File[]> pairs = new ArrayList<>();
+        int n = Math.max(mockups.size(), ready.size());
+        for (int i = 0; i < n; i++) {
+            pairs.add(new File[]{
+                i < mockups.size() ? mockups.get(i) : null,
+                i < ready.size() ? ready.get(i) : null});
+        }
+        final boolean newest = mAssetSort == BulkGalleryState.SORT_NEWEST;
+        pairs.sort((a, b) -> {
+            File ka = a[0] != null ? a[0] : a[1];
+            File kb = b[0] != null ? b[0] : b[1];
+            long ta = ka != null ? ka.lastModified() : 0L;
+            long tb = kb != null ? kb.lastModified() : 0L;
+            return newest ? Long.compare(tb, ta) : Long.compare(ta, tb);
+        });
+        List<File> flat = new ArrayList<>();
+        for (File[] pair : pairs) {
+            if (pair[0] != null) flat.add(pair[0]);
+            if (pair[1] != null) flat.add(pair[1]);
+        }
+        return flat;
     }
 
     private TextView tabButton(String text, boolean active, final Runnable onTap) {
@@ -722,37 +871,6 @@ public class BulkReadyAssetsActivity extends Activity {
             : BulkTheme.secondaryButton(this, text, null);
         t.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
         return t;
-    }
-
-    private View assetThumb(final File f) {
-        FrameLayout box = new FrameLayout(this);
-        box.setBackground(BulkTheme.tileBg(this, false));
-        int gap = BulkTheme.dp(this, 8);
-        GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
-        glp.width = 0;
-        glp.height = BulkTheme.dp(this, 150);
-        glp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-        glp.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
-        box.setLayoutParams(glp);
-        Bitmap bmp = mThumbs.get(f.getAbsolutePath());
-        if (bmp != null) {
-            ImageView iv = new ImageView(this);
-            iv.setImageBitmap(bmp);
-            iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            iv.setPadding(BulkTheme.dp(this, 3), BulkTheme.dp(this, 3),
-                BulkTheme.dp(this, 3), BulkTheme.dp(this, 3));
-            box.addView(iv, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        } else {
-            ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_image, BulkTheme.textMuted(this), 20);
-            FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
-                BulkTheme.dp(this, 20), BulkTheme.dp(this, 20));
-            ip.gravity = Gravity.CENTER;
-            iv.setLayoutParams(ip);
-            box.addView(iv);
-        }
-        box.setOnClickListener(v -> showInspector(f));
-        return box;
     }
 
     // ------------------------------------------------------------ inspector
