@@ -76,11 +76,33 @@ public final class ProjectsLauncher {
         List<ProjectsConf.Project> out = new ArrayList<>();
         for (ProjectsConf.Project p : projects) {
             out.add(new ProjectsConf.Project(p.name,
-                BulkProjects.resolveCommand(p.workCmd, scripts),
-                BulkProjects.resolveCommand(p.batchCmd, scripts),
-                BulkProjects.resolveCommand(p.deleteCmd, scripts)));
+                resolveOne(p.workCmd, scripts),
+                resolveOne(p.batchCmd, scripts),
+                resolveOne(p.deleteCmd, scripts)));
         }
         return out;
+    }
+
+    /**
+     * v138: scan-map se resolve karo; bare alias phir bhi reh jaye
+     * (scan-miss) to script TAAZA disk se parh kar (persisted
+     * .main_script pehle) poori command banao — terminal wala
+     * rasta bhi ab snapshot ki kamzori se mehfooz hai.
+     */
+    private static String resolveOne(String cmd, java.util.Map<Integer, String> scripts) {
+        String resolved = BulkProjects.resolveCommand(cmd, scripts);
+        if (!BulkProjects.isBareAlias(resolved)) return resolved;
+        String t = resolved.trim();
+        final int n;
+        try {
+            n = Integer.parseInt(t.substring(1));
+        } catch (Exception e) {
+            return resolved;
+        }
+        String action = BulkProjects.actionForAliasLetter(t.charAt(0));
+        String script = BulkProjects.resolveScript(n);
+        if (action == null || script == null) return resolved;
+        return BulkProjects.fullCommand(n, script, action);
     }
 
     private static List<ProjectsConf.Project> readProjects() {

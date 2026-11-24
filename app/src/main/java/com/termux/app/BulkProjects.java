@@ -266,6 +266,54 @@ public final class BulkProjects {
         return fullCommand(n, script, action);
     }
 
+    // ------------------------------------------------------------ v138: run-time commands
+
+    /** Command bare alias hai ("w1" / "b12" / "d3")? */
+    public static boolean isBareAlias(String cmd) {
+        return cmd != null && BARE_ALIAS.matcher(cmd).matches();
+    }
+
+    /**
+     * v138 — asal command, kisi snapshot par bharosa kiye baghair
+     * (PURE): number + script maloom hon to command hamesha
+     * {@link #fullCommand} se banti hai (cd $HOME/mockup_project_<N>
+     * + MOCKUP_BASE=<wahi dir> + python <script> <action> <N>) —
+     * conf ki bare alias ("w1") kabhi execute nahi hoti. Script
+     * maloom na ho to snapshot command waisi ki waisi — ghalat
+     * script invent nahi karni.
+     */
+    public static String effectiveCommand(int number, String script,
+                                          String snapshotCmd, String action) {
+        if (number > 0 && script != null && action != null) {
+            return fullCommand(number, script, action);
+        }
+        return snapshotCmd;
+    }
+
+    /**
+     * v138 — ProjectInfo ke liye asal command: script TAAZA disk
+     * se parhi jati hai (persisted .main_script pehle, warna
+     * detection — {@link #resolveScript}). Wajah: v137 par P1 ka
+     * popup run "w1: command not found" par fail hua — list-load
+     * ke snapshot (mergeProjects) me scan-miss ki wajah se
+     * workCmd bare alias reh gayi thi, or popup ka non-interactive
+     * bash (bash -c) .bashrc ke aliases nahi janta. Ab har app-run
+     * apni command run ke waqt khud banata hai; snapshot sirf tab
+     * istemal hoti hai jab script kisi tarah na mile.
+     */
+    public static String effectiveCommand(ProjectInfo p, String action) {
+        if (p == null || action == null) return null;
+        final String snapshot;
+        switch (action) {
+            case "process": snapshot = p.workCmd; break;
+            case "batch":   snapshot = p.batchCmd; break;
+            case "del":     snapshot = p.deleteCmd; break;
+            default:        snapshot = null; break;
+        }
+        String script = p.number > 0 ? resolveScript(p.number) : null;
+        return effectiveCommand(p.number, script, snapshot, action);
+    }
+
     /** .bashrc ke liye ek alias line, masalan: alias w15='cd ... && python w15.py process 15' */
     public static String aliasLine(String aliasName, int n, String script, String action) {
         return "alias " + aliasName + "='" + fullCommand(n, script, action) + "'";
@@ -307,6 +355,60 @@ public final class BulkProjects {
             if (p != null && parseProjectNumber(p.name, p.workCmd) == n) return true;
         }
         return false;
+    }
+
+    /**
+     * v138 (PURE) — Remove Project: projects.conf ke content se
+     * Project <N> ki TAMAM lines hata kar naya content banao.
+     * Line usi project ki mani jati hai jab us ka pehla cell
+     * "Project <N>" ho, ya parse hue number se match kare
+     * (bilkul {@link #confHasProject} wala usool — duplicate
+     * lines bhi saaf hoti hain). Comments, khaali lines or
+     * doosre projects bilkul waisi ki waisi rehti hain.
+     */
+    public static String removeConfLines(String confContent, int n) {
+        if (confContent == null) return null;
+        String wanted = "Project " + n;
+        StringBuilder out = new StringBuilder();
+        for (String raw : confContent.split("\n", -1)) {
+            String line = raw.trim();
+            boolean drop = false;
+            if (!line.isEmpty() && !line.startsWith("#")) {
+                String firstCell = line.split("\\|", -1)[0].trim();
+                if (firstCell.equals(wanted)) {
+                    drop = true;
+                } else {
+                    ProjectsConf.Project p = ProjectsConf.parseLine(line);
+                    if (p != null && parseProjectNumber(p.name, p.workCmd) == n) drop = true;
+                }
+            }
+            if (drop) continue;
+            if (out.length() > 0) out.append("\n");
+            out.append(raw);
+        }
+        return out.toString();
+    }
+
+    /**
+     * v138 (PURE) — Remove Project: .bashrc ke content se
+     * Project <N> ke teenon alias lines (w<N>/d<N>/b<N>) hata
+     * kar naya content banao. Sirf wohi lines hat ti hain jo in
+     * aliases ko define karti hon ("alias w1=...") — number ke
+     * baad '=' (ya space ke baad '=') lazmi hai, is liye w1
+     * hatane se w15 ki line kabhi nahi hatti. Baqi tamam
+     * content (exports, doosre aliases, comments) bilkul
+     * waisa hi rehta hai.
+     */
+    public static String removeAliasLines(String bashrcContent, int n) {
+        if (bashrcContent == null) return null;
+        Pattern aliasDef = Pattern.compile("^\\s*alias\\s+(?:w|d|b)" + n + "\\s*=");
+        StringBuilder out = new StringBuilder();
+        for (String raw : bashrcContent.split("\n", -1)) {
+            if (aliasDef.matcher(raw).find()) continue;
+            if (out.length() > 0) out.append("\n");
+            out.append(raw);
+        }
+        return out.toString();
     }
 
     // ------------------------------------------------------------ script detection

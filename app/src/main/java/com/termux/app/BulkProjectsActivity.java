@@ -81,6 +81,9 @@ public class BulkProjectsActivity extends Activity {
         root.setBackgroundColor(BulkTheme.appBg(this));
         root.addView(buildHeader());
         root.addView(buildSearchRow());
+        // v138: Remove Project ki chhoti si row screen ke TOP par
+        // (owner ki hidayat: har project ke sath alag button NAHI)
+        root.addView(buildRemoveProjectRow());
 
         ScrollView scroll = new ScrollView(this);
         mBody = new LinearLayout(this);
@@ -386,14 +389,19 @@ public class BulkProjectsActivity extends Activity {
                 TextView run = BulkTheme.primaryButton(this, BulkStrings.t(this, BulkStrings.RUN),
                     v -> BulkRunHelper.startRun(this, p));
                 run.setTextSize(12);
-                setEnabledStyle(run, p.workCmd != null);
+                // v138: enable ka faisla bhi asal (run-time) command par
+                setEnabledStyle(run, BulkProjects.effectiveCommand(p, "process") != null);
                 actions.addView(run, actionLp(0));
                 first = false;
             }
 
-            TextView batch = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.BATCH), v -> runInTerminal(p.batchCmd));
+            // v138: Batch bhi snapshot alias par nahi — asal command
+            // (terminal interactive hai, lekin poori command wahan bhi
+            // purani .bashrc aliases se mehfooz hai)
+            TextView batch = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.BATCH),
+                v -> runInTerminal(BulkProjects.effectiveCommand(p, "batch")));
             batch.setTextSize(12);
-            setEnabledStyle(batch, p.batchCmd != null);
+            setEnabledStyle(batch, BulkProjects.effectiveCommand(p, "batch") != null);
             actions.addView(batch, actionLp(first ? 0 : BulkTheme.dp(this, 8)));
 
             TextView delete = new TextView(this);
@@ -406,7 +414,7 @@ public class BulkProjectsActivity extends Activity {
             delete.setPadding(BulkTheme.dp(this, 8), BulkTheme.dp(this, 8), BulkTheme.dp(this, 8), BulkTheme.dp(this, 8));
             delete.setClickable(true);
             delete.setOnClickListener(v -> showDeletePopup(p));
-            setEnabledStyle(delete, p.deleteCmd != null);
+            setEnabledStyle(delete, BulkProjects.effectiveCommand(p, "del") != null);
             actions.addView(delete, actionLp(BulkTheme.dp(this, 8)));
 
             panel.addView(actions);
@@ -483,7 +491,11 @@ public class BulkProjectsActivity extends Activity {
      *     liye command terminal par interactive jati hai (bina pipe).
      */
     private void showDeletePopup(final BulkProjects.ProjectInfo p) {
-        if (p == null || p.deleteCmd == null || p.number <= 0) return;
+        // v138: asal delete command run ke waqt banti hai (snapshot
+        // alias kabhi execute nahi hoti — popup wala rasta
+        // non-interactive bash hai, wahan alias chalta hi nahi)
+        if (p == null || p.number <= 0
+            || BulkProjects.effectiveCommand(p, "del") == null) return;
         final String script = BulkProjects.resolveScript(p.number);
         final List<BulkDeleteMenu.Option> options = BulkDeleteMenu.optionsFor(script);
         final int[] selected = {options.get(0).digit};
@@ -521,10 +533,13 @@ public class BulkProjectsActivity extends Activity {
         TextView done = BulkTheme.primaryButton(this,
             BulkStrings.t(this, BulkStrings.DONE_BTN), v -> {
                 dialog.dismiss();
+                // v138: dono raston (terminal Warehouse + popup pipe)
+                // par asal command — snapshot ki bare alias kabhi nahi
+                final String delCmd = BulkProjects.effectiveCommand(p, "del");
                 if (BulkDeleteMenu.isWarehouse(script, selected[0])) {
-                    runInTerminal(p.deleteCmd);
+                    runInTerminal(delCmd);
                 } else {
-                    String piped = BulkRunSettings.buildPipedCommand(p.deleteCmd,
+                    String piped = BulkRunSettings.buildPipedCommand(delCmd,
                         java.util.Collections.singletonList(String.valueOf(selected[0])));
                     BulkRunHelper.runCommandInPopup(this, p, piped);
                 }
@@ -573,6 +588,129 @@ public class BulkProjectsActivity extends Activity {
 
         row.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
         return row;
+    }
+
+    // ------------------------------------------------------------ v138 Remove Project
+
+    /**
+     * Screen ke TOP par ek chhoti si "Remove Project" row —
+     * trash icon + label (danger rang). Tap par number-sort
+     * picker khulta hai. Asal removal confirm ke baad
+     * BulkProjectInstaller.removeProject se hoti hai
+     * (engine folder + conf line + bashrc aliases + provision
+     * record); TermuxMod/Project N + images mehfooz rehte hain.
+     */
+    private LinearLayout buildRemoveProjectRow() {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 9),
+            BulkTheme.dp(this, 20), BulkTheme.dp(this, 9));
+        row.setClickable(true);
+        row.setOnClickListener(v -> showRemoveProjectPicker());
+        ImageView icon = BulkTheme.icon(this, R.drawable.ic_bulk_trash, BulkTheme.danger(this), 15);
+        icon.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 15), BulkTheme.dp(this, 15)));
+        row.addView(icon);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.REMOVE_PROJECT));
+        label.setTextSize(13);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setTextColor(BulkTheme.danger(this));
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.leftMargin = BulkTheme.dp(this, 8);
+        label.setLayoutParams(llp);
+        row.addView(label);
+        wrap.addView(row);
+        View line = new View(this);
+        line.setBackground(BulkTheme.hLine(this));
+        wrap.addView(line, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f))));
+        return wrap;
+    }
+
+    /** Picker: mergeProjects ki number-sort list (loadProjects pehle se sorted deta hai). */
+    private void showRemoveProjectPicker() {
+        final java.util.List<BulkProjects.ProjectInfo> projects = new java.util.ArrayList<>();
+        for (BulkProjects.ProjectInfo p : loadProjects()) {
+            if (p != null && p.number > 0) projects.add(p);
+        }
+        if (projects.isEmpty()) {
+            Toast.makeText(this, BulkStrings.t(this, BulkStrings.NO_PROJECTS),
+                Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final Dialog dialog = new Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.REMOVE_PROJECT), dialog);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        for (final BulkProjects.ProjectInfo p : projects) {
+            list.addView(removePickerRow(p, () -> {
+                dialog.dismiss();
+                confirmRemoveProject(p);
+            }));
+        }
+        scroll.addView(list);
+        int scrollH = projects.size() > 6
+            ? (int) (getResources().getDisplayMetrics().heightPixels * 0.55)
+            : ViewGroup.LayoutParams.WRAP_CONTENT;
+        panel.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, scrollH));
+        BulkTheme.showPanelDialog(this, panel);
+    }
+
+    private LinearLayout removePickerRow(final BulkProjects.ProjectInfo p, final Runnable onTap) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = BulkTheme.dp(this, 8);
+        row.setLayoutParams(lp);
+        TextView name = new TextView(this);
+        name.setText(p.name);
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(13.5f);
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        row.addView(name, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        row.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
+        return row;
+    }
+
+    /** Confirm (danger) — saaf likha hai kya remove hoga or kya NAHI hoga. */
+    private void confirmRemoveProject(final BulkProjects.ProjectInfo p) {
+        BulkTheme.showConfirm(this,
+            BulkStrings.format(this, BulkStrings.REMOVE_PROJECT_CONFIRM_TITLE, p.name),
+            BulkStrings.format(this, BulkStrings.REMOVE_PROJECT_CONFIRM_MSG, p.number),
+            BulkStrings.t(this, BulkStrings.REMOVE_BTN), true,
+            () -> new Thread(() -> {
+                boolean ok = true;
+                try {
+                    BulkProjectInstaller.removeProject(this, p.number);
+                } catch (Exception e) {
+                    ok = false;
+                    Logger.logError(LOG_TAG, "Remove Project " + p.number
+                        + " fail: " + e.getMessage());
+                }
+                final boolean done = ok;
+                runOnUiThread(() -> {
+                    if (sExpandedNumber == p.number) sExpandedNumber = Integer.MIN_VALUE;
+                    Toast.makeText(this, done
+                            ? BulkStrings.format(this, BulkStrings.REMOVED_TOAST, p.name)
+                            : BulkStrings.t(this, BulkStrings.REMOVE_FAILED),
+                        Toast.LENGTH_SHORT).show();
+                    refreshList();
+                });
+            }).start());
     }
 
     /** Command ko terminal me chalao — TermuxActivity khol kar wahan type ho jati hai. */

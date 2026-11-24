@@ -157,6 +157,49 @@ public final class BulkProjectInstaller {
         }
     }
 
+    /**
+     * v138 — Remove Project: project ki installed copy + us ki
+     * tamam registration saaf karo:
+     *   1. $HOME/mockup_project_<N> engine folder (poora)
+     *   2. ~/projects.conf me Project <N> ki line(s)
+     *   3. ~/.bashrc me w<N>/d<N>/b<N> alias lines
+     *   4. drop-folder provision record — taake dobara add hone
+     *      par TermuxMod folder phir se provision ho sake
+     * TermuxMod/Project N or us ki images ko hath NAHI lagta —
+     * wo owner ke outputs hain, hamesha mehfooz.
+     *
+     * Bundled project: Projects screen khud kabhi extract nahi
+     * karti, is liye removal ke baad project tamam lists se
+     * foran ghayab ho jata hai; agli dafa Dashboard khulne par
+     * BulkProjectBundles ki only-if-missing extraction fresh
+     * bundled copy wapas laga degi (installProject aliases +
+     * conf line bhi dobara register kar deta hai). ZIP wala
+     * project dobara ZIP add karne tak ghayab rehta hai, or
+     * re-add bilkul saaf register hota hai.
+     */
+    public static void removeProject(Context context, int n) throws Exception {
+        if (n <= 0) return;
+        deleteRecursive(BulkProjects.projectDir(n));
+        File conf = ProjectsLauncher.projectsConfFile();
+        if (conf.exists()) {
+            String updated = BulkProjects.removeConfLines(readText(conf), n);
+            if (updated != null) writeText(conf, updated);
+        }
+        File bashrc = new File(BulkMockupSetup.homeDir(), ".bashrc");
+        if (bashrc.exists()) {
+            String updated = BulkProjects.removeAliasLines(readText(bashrc), n);
+            if (updated != null) writeText(bashrc, updated);
+        }
+        BulkDropFolders.clearProvisionRecord(context, n);
+        Logger.logInfo(LOG_TAG, "Project " + n + " removed");
+    }
+
+    private static void writeText(File f, String content) throws Exception {
+        try (FileOutputStream out = new FileOutputStream(f, false)) {
+            out.write(content.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
     // ------------------------------------------------------------ file helpers
 
     public static void copyDir(File src, File dest) throws Exception {

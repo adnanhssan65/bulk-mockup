@@ -423,7 +423,8 @@ public class BulkAddProjectActivity extends Activity {
                 BulkProjectInstaller.installProject(this, extractedProject, n, script);
 
                 // v132: naye project ka manual-move drop folder bhi banao
-                BulkDropFolders.ensureForProject(n);
+                // v138: poora set + provision record (dobara kabhi nahi banta)
+                BulkDropFolders.ensureForProject(this, n);
 
                 addedNumber = n;
             } catch (Exception e) {

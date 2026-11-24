@@ -55,6 +55,13 @@ public final class BulkStrings {
     public static final String RUN = "run";
     public static final String BATCH = "batch";
     public static final String DELETE = "delete";
+    // v138 — Remove Project (Projects screen ke top wali row)
+    public static final String REMOVE_PROJECT = "remove_project";
+    public static final String REMOVE_PROJECT_CONFIRM_TITLE = "remove_project_confirm_title";
+    public static final String REMOVE_PROJECT_CONFIRM_MSG = "remove_project_confirm_msg";
+    public static final String REMOVE_BTN = "remove_btn";
+    public static final String REMOVED_TOAST = "removed_toast";
+    public static final String REMOVE_FAILED = "remove_failed";
 
     public static final String ADD_WALLPAPERS_SUBTITLE = "add_wallpapers_subtitle";
     public static final String STEP1_SELECT_PROJECT = "step1_select_project";
@@ -390,6 +397,14 @@ public final class BulkStrings {
         put(RUN, "Run", "Chalao");
         put(BATCH, "Batch", "Batch");
         put(DELETE, "Delete", "Delete Karo");
+        put(REMOVE_PROJECT, "Remove Project", "Project Remove Karo");
+        put(REMOVE_PROJECT_CONFIRM_TITLE, "Remove %s?", "%s Remove Karun?");
+        put(REMOVE_PROJECT_CONFIRM_MSG,
+            "This removes the project's engine folder, its entry in the projects list, and its w%1$d / d%1$d / b%1$d terminal shortcuts.\n\nNOT removed: your TermuxMod/Project %1$d folder and its images — they stay safe.\n\nIf the project came with the app, a fresh copy is installed next time the app opens. If you added it from a ZIP, it stays removed until you add the ZIP again.",
+            "Is se project ka engine folder, projects list wali entry aur w%1$d / d%1$d / b%1$d terminal shortcuts remove ho jayenge.\n\nYe remove NAHI hoga: tumhara TermuxMod/Project %1$d folder aur us ki images — wo mehfooz rahengi.\n\nAgar project app ke sath aya tha to agli dafa app khulne par fresh copy lag jayegi. Agar ZIP se add kiya tha to ZIP dobara add karne tak remove rahega.");
+        put(REMOVE_BTN, "Remove", "Remove Karo");
+        put(REMOVED_TOAST, "%s removed", "%s remove ho gaya");
+        put(REMOVE_FAILED, "Project could not be removed.", "Project remove nahi ho saka.");
 
         // Add Wallpapers screen
         put(ADD_WALLPAPERS_SUBTITLE, "Select project first, then pick images",

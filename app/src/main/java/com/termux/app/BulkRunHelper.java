@@ -55,7 +55,16 @@ public final class BulkRunHelper {
 
     public static void startRun(final Activity a, final BulkProjects.ProjectInfo p,
                                 final Runnable onLaunched) {
-        if (a == null || p == null || p.workCmd == null) return;
+        if (a == null || p == null) return;
+        // v138: command snapshot (p.workCmd) par bharosa NAHI —
+        // asal command number + TAAZA script se yahin, run ke waqt
+        // banti hai (BulkProjects.effectiveCommand). v137 par P1
+        // ka run "w1: command not found" par fail hua tha: snapshot
+        // me bare alias reh gayi thi or popup ka bash -c aliases
+        // nahi janta. Ab jo command chalti hai wo hamesha poori
+        // hoti hai (cd $HOME/... + MOCKUP_BASE + python <script>).
+        final String cmd = BulkProjects.effectiveCommand(p, "process");
+        if (cmd == null) return;
         // v137: har run CONSOLE POPUP me hi chalta hai — terminal
         // kabhi nahi khulta (owner ki sakht hidayat: ZIP-added
         // project add/run par app terminal me jump kar jati thi).
@@ -67,13 +76,13 @@ public final class BulkRunHelper {
             p.number, p.number > 0 ? BulkProjects.resolveScript(p.number) : null);
         if (!BulkRunSettings.isAuto(a)
             && profile != BulkRunSettings.PromptProfile.UNKNOWN) {
-            showManualPopup(a, p, onLaunched, profile);
+            showManualPopup(a, p, cmd, onLaunched, profile);
             return;
         }
         List<String> answers = BulkRunSettings.answersForProfile(
             profile, BulkRunSettings.hdAnswer(a), BulkRunSettings.sizeAnswer(a));
         runLiveInPopup(a, p,
-            BulkRunSettings.buildPipedCommand(p.workCmd, answers), onLaunched);
+            BulkRunSettings.buildPipedCommand(cmd, answers), onLaunched);
     }
 
     /**
@@ -91,6 +100,7 @@ public final class BulkRunHelper {
     // ------------------------------------------------------------ MANUAL popup
 
     private static void showManualPopup(final Activity a, final BulkProjects.ProjectInfo p,
+                                        final String cmd,
                                         final Runnable onLaunched,
                                         final BulkRunSettings.PromptProfile profile) {
         final Dialog dialog = new Dialog(a);
@@ -136,7 +146,7 @@ public final class BulkRunHelper {
                 hdNormal[0] ? BulkRunSettings.ANSWER_NORMAL : BulkRunSettings.ANSWER_HD,
                 sizeCrop[0] ? BulkRunSettings.ANSWER_CROP : BulkRunSettings.ANSWER_ORIGINAL);
             runLiveInPopup(a, p,
-                BulkRunSettings.buildPipedCommand(p.workCmd, answers), onLaunched);
+                BulkRunSettings.buildPipedCommand(cmd, answers), onLaunched);
         });
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -352,6 +362,15 @@ public final class BulkRunHelper {
                 ProcessBuilder pb = new ProcessBuilder(
                     TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/bash", "-c", pipedCommand);
                 pb.environment().putAll(runEnvironment(pb.environment()));
+                // v138: MOCKUP_BASE environment me bhi pakka taake
+                // purani /storage-default wali runner copies (owner
+                // ki installed P1 / 15–18) bhi app-run me hamesha
+                // asal $HOME engine folder par kaam karen — command
+                // ke andar wali assignment ke sath belt-and-braces.
+                if (p.number > 0) {
+                    pb.environment().put("MOCKUP_BASE",
+                        BulkProjects.projectDir(p.number).getAbsolutePath());
+                }
                 pb.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
                 pb.redirectErrorStream(true);
                 Process proc = pb.start();

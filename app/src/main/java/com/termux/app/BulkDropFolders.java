@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import com.termux.shared.logger.Logger;
 
@@ -232,12 +233,146 @@ public final class BulkDropFolders {
         return new int[]{created, present};
     }
 
-    /** Ek project ka drop folder (ZIP se naya project ane par). */
-    public static void ensureForProject(int n) {
+    /**
+     * Ek project ka drop folder (ZIP se naya project ane par).
+     * v138: poora set (Mockups / Ready Wallpapers ke sath) banta
+     * hai or provision record bhi lag jata hai — sync ki provision
+     * pass ise dobara kabhi nahi chhedti.
+     */
+    public static void ensureForProject(Context ctx, int n) {
         if (n <= 0) return;
         Set<Integer> one = new TreeSet<>();
         one.add(n);
-        ensureDropFolders(one);
+        ensureDropFoldersFull(one);
+        markProvisioned(ctx, n);
+    }
+
+    // ------------------------------------------------------------ v138: one-time provision
+
+    private static final String PREFS = "bulk_mockup";
+    private static final String KEY_PROVISION_PREFIX = "dropfolder_provisioned_";
+
+    /**
+     * v138 (PURE): drop folder ki one-time provision SIRF tab jab
+     * us project ka provision record mojood na ho. Record lag jane
+     * ke baad app wo folder dobara KABHI nahi banati — owner delete
+     * kare to delete hi rehta hai (wapas lane ka wahid rasta
+     * Permissions -> Recreate Folders hai, jo is record ko nahi
+     * chhedta).
+     */
+    public static boolean shouldProvision(boolean provisionRecorded) {
+        return !provisionRecorded;
+    }
+
+    /** Project ka provision record laga hai? */
+    public static boolean isProvisionRecorded(Context c, int n) {
+        if (c == null || n <= 0) return false;
+        try {
+            return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_PROVISION_PREFIX + n, false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static void markProvisioned(Context c, int n) {
+        if (c == null || n <= 0) return;
+        try {
+            SharedPreferences.Editor e = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
+            e.putBoolean(KEY_PROVISION_PREFIX + n, true).apply();
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * v138 — Remove Project par provision record saaf karo:
+     * project dobara add ho to us ka TermuxMod folder phir se
+     * ek dafa provision ho sakta hai (warna purana record use
+     * hamesha ke liye rok deta). Folder khud is se kabhi nahi
+     * hatta — TermuxMod/Project N or us ki images Remove
+     * Project me hamesha mehfooz rehti hain.
+     */
+    public static void clearProvisionRecord(Context c, int n) {
+        if (c == null || n <= 0) return;
+        try {
+            c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .remove(KEY_PROVISION_PREFIX + n).apply();
+        } catch (Exception ignored) {}
+    }
+
+    /** Bundled project numbers: assets ke "bulk/projects" zips se. */
+    public static Set<Integer> bundledNumbers(Context ctx) {
+        Set<Integer> out = new TreeSet<>();
+        if (ctx == null) return out;
+        try {
+            String[] names = ctx.getAssets().list(BulkProjectBundles.ASSETS_DIR);
+            if (names != null) {
+                for (String name : names) {
+                    String base = name;
+                    if (base.toLowerCase().endsWith(".zip")) {
+                        base = base.substring(0, base.length() - 4);
+                    }
+                    int n = BulkProjects.parseFolderNumber(base);
+                    if (n > 0) out.add(n);
+                }
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    /**
+     * v138: v136 ki pehli setup (dropfolders_initialized) BUNDLED
+     * projects ke folders bana chuki thi — un ke provision records
+     * pehle se lagao, taake owner ka delete kiya hua bundled
+     * folder provision pass me dobara na ban jaye. Sirf record
+     * lagta hai; is step me folder kabhi nahi banta. ZIP-added
+     * projects is seeding me NAHI ate (un ka record asal
+     * provision ya ZIP-add se hi lagta hai) — yahi wajah hai ke
+     * purani ZIP-add wale 15/16/17, jin ke folders v136 init me
+     * nahi bane thay, pehli v138 pass me provision ho jate hain.
+     */
+    public static void seedProvisionRecordsForBundled(Context ctx, Set<Integer> numbers) {
+        if (ctx == null || numbers == null) return;
+        if (!BulkHomeMigration.isDropInitialized(ctx)) return;
+        Set<Integer> bundled = bundledNumbers(ctx);
+        for (int n : numbers) {
+            if (n > 0 && bundled.contains(n) && !isProvisionRecorded(ctx, n)) {
+                markProvisioned(ctx, n);
+            }
+        }
+    }
+
+    /**
+     * v138: jin discovered projects ka provision record nahi, un
+     * ke liye TermuxMod/Project N (+ Mockups / Ready Wallpapers)
+     * EK dafa banao + record lagao. Folder pehle se mojood ho
+     * (ZIP-add / Recreate se bana ho) to sirf record lagta hai —
+     * kuch dobara nahi banta. Folder ban hi na sake (storage
+     * fail) to record NAHI lagta; agli pass me dobara koshish
+     * hogi. Record wala project is pass me kabhi nahi chheda
+     * jata — owner ka delete kiya folder waisa hi rehta hai.
+     * @return is pass me asal me bane (pehle ghayab) folders
+     */
+    public static int provisionMissing(Context ctx, Set<Integer> numbers) {
+        if (ctx == null || numbers == null) return 0;
+        int created = 0;
+        for (int n : numbers) {
+            if (n <= 0 || !shouldProvision(isProvisionRecorded(ctx, n))) continue;
+            File dir = new File(rootDir(), dropFolderName(n));
+            boolean existed = dir.isDirectory();
+            try {
+                Set<Integer> one = new TreeSet<>();
+                one.add(n);
+                ensureDropFoldersFull(one);
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Provision fail Project " + n + ": " + e.getMessage());
+                continue;
+            }
+            if (dir.isDirectory()) {
+                if (!existed) created++;
+                markProvisioned(ctx, n);
+            }
+        }
+        return created;
     }
 
     /**
@@ -474,6 +609,19 @@ public final class BulkDropFolders {
     public static int syncNow(Context ctx) {
         Set<Integer> known = knownNumbers();
         if (known.isEmpty()) return 0;
+        // v138: ghayab drop folders ki ONE-TIME provision — sirf
+        // v136 init ke BAAD (fresh install par pehli setup wala
+        // pass hi folders banata hai; us se race nahi karna).
+        // Enumeration wahi hai jo tamam lists istemal karti hain
+        // (mergeProjects: conf + $HOME disk) — is liye purane
+        // versions me ZIP-add hue projects (15/16/17), jin ke
+        // folders v136 init me reh gaye thay, pehli v138 pass me
+        // ban jate hain. Record lag jane ke baad koi folder dobara
+        // kabhi nahi banta (v136 lifecycle waisa ka waisa).
+        if (BulkHomeMigration.isDropInitialized(ctx)) {
+            seedProvisionRecordsForBundled(ctx, known);
+            provisionMissing(ctx, known);
+        }
         // v135: Preview Video ka master switch (Control Panel) OFF ho
         // to video kabhi copy nahi hoti — Auto ON ho tab bhi nahi.
         // v136: videos bhi sirf MOJOOD drop folders me jati hain.
