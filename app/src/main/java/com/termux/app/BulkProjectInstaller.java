@@ -22,8 +22,8 @@ import java.util.zip.ZipInputStream;
  * ZIP wali screen or app ke andar pehle se mojood (bundled) projects —
  * dono yahi istemal karte hain:
  *
- *   1. /storage/emulated/0/mockup_project_<N> me copy (pehle se ho to
- *      ruk jao — overwrite kabhi nahi)
+ *   1. $HOME/mockup_project_<N> me atomic copy (v136: pehle se ho
+ *      to ruk jao — overwrite kabhi nahi; runner marker ke sath)
  *   2. ghayab subfolders: <N>_wallpapers, <N>_Mockups,
  *      <N>_Ready_Wallpapers, Ready_Upload_Batches
  *   3. ~/.bashrc me w<N>/d<N>/b<N> aliases — sirf jo pehle se na hon
@@ -55,6 +55,7 @@ public final class BulkProjectInstaller {
             ZipEntry entry;
             while ((entry = zin.getNextEntry()) != null) {
                 String name = entry.getName().replace('\\', '/');
+                if (name.startsWith("__MACOSX/")) continue;
                 if (!name.startsWith(prefix)) continue;
                 File dest = new File(extractDir, name);
                 String destCanonical = dest.getCanonicalPath();
@@ -80,17 +81,41 @@ public final class BulkProjectInstaller {
 
     /**
      * Extract hue project folder ko asal jagah lagao + register karo.
-     * Target pehle se ho to Exception (saaf message ke sath) — overwrite nahi.
+     * Target pehle se ho to Exception (saaf bilingual message ke
+     * sath) — overwrite nahi.
+     *
+     * v136 (ZIP-add self-setting): install ATOMIC hai — pehle ek
+     * temp sibling folder me poora copy + subfolders + runner
+     * marker banta hai, phir ek rename se asal jagah par ajata
+     * hai. Darmiyan me koi fail ho to temp saaf ho jata hai or
+     * kuch register NAHI hota (aadha-set project kabhi nahi).
+     * Runner script marker (.main_script) me persist hoti hai —
+     * Run/Batch/Delete hamesha wahi script istemal karte hain.
      */
     public static void installProject(Context context, File extractedProjectDir, int n, String script) throws Exception {
         File target = BulkProjects.projectDir(n);
         if (target.exists()) {
-            throw new Exception("Project " + n + " pehle se hai.");
+            throw new Exception(BulkStrings.format(context, BulkStrings.PROJECT_EXISTS, n));
         }
-        copyDir(extractedProjectDir, target);
-        for (String sub : BulkProjects.subfolderNames(n)) {
-            File d = new File(target, sub);
-            if (!d.exists()) d.mkdirs();
+        File staging = new File(target.getParentFile(),
+            target.getName() + ".installing-" + System.currentTimeMillis());
+        try {
+            copyDir(extractedProjectDir, staging);
+            for (String sub : BulkProjects.subfolderNames(n)) {
+                File d = new File(staging, sub);
+                if (!d.exists()) d.mkdirs();
+            }
+            // Runner choice hamesha ke liye mehfooz
+            try (FileOutputStream out = new FileOutputStream(
+                    new File(staging, BulkProjects.MAIN_SCRIPT_MARKER))) {
+                out.write((script + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+            if (!staging.renameTo(target)) {
+                throw new Exception("Project folder asal jagah par nahi ja saka.");
+            }
+        } catch (Exception e) {
+            deleteRecursive(staging);
+            throw e;
         }
         appendAliases(n, script);
         appendConfLine(context, n);

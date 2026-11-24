@@ -329,6 +329,71 @@ public final class BulkProjects {
         return py.size() == 1 ? py.get(0) : null;
     }
 
+    /**
+     * v136: install ke waqt muntakhib runner script project folder
+     * ke andar is marker file me hamesha ke liye mehfooz (persist)
+     * rehti hai — Run/Batch/Delete har dafa wahi script istemal
+     * karte hain, folder me baad me or .py ajaye to bhi faisla
+     * nahi badalta.
+     */
+    public static final String MAIN_SCRIPT_MARKER = ".main_script";
+
+    /**
+     * Script ka faisla (pure): persisted choice pehle — basharti
+     * ke wo ab bhi folder ki files me mojood ho; warna fresh
+     * detection (detectMainScript).
+     */
+    public static String chooseScript(String persisted, List<String> rootFileNames, int n) {
+        if (persisted != null && rootFileNames != null) {
+            String p = persisted.trim();
+            if (!p.isEmpty() && p.toLowerCase().endsWith(".py")) {
+                for (String f : rootFileNames) {
+                    if (f != null && f.trim().equals(p)) return p;
+                }
+            }
+        }
+        return detectMainScript(rootFileNames, n);
+    }
+
+    /** Marker file ka content parho (na ho / kharab ho to null). */
+    public static String readPersistedScript(File projectDir) {
+        if (projectDir == null) return null;
+        File marker = new File(projectDir, MAIN_SCRIPT_MARKER);
+        if (!marker.isFile()) return null;
+        try {
+            byte[] data = new byte[(int) Math.min(marker.length(), 256)];
+            try (java.io.FileInputStream in = new java.io.FileInputStream(marker)) {
+                int r = in.read(data);
+                if (r <= 0) return null;
+                return new String(data, 0, r, "UTF-8").trim();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Ek project ki asal script: persisted pehle, warna detection. */
+    public static String resolveScript(int n) {
+        File dir = projectDir(n);
+        return chooseScript(readPersistedScript(dir), listFileNames(dir), n);
+    }
+
+    /**
+     * ZIP file ke naam se project number (pure) — fallback jab ZIP
+     * ke andar folder na ho lekin file ka naam hi
+     * mockup_project_<N> (.zip ke sath ya bagher) ho.
+     */
+    public static int parseZipBaseNumber(String zipFileName) {
+        if (zipFileName == null) return -1;
+        String name = zipFileName.trim();
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (slash >= 0) name = name.substring(slash + 1);
+        if (name.toLowerCase().endsWith(".zip")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        return parseFolderNumber(name);
+    }
+
     // ------------------------------------------------------------ ZIP root detection
 
     /**
@@ -462,7 +527,8 @@ public final class BulkProjects {
         }
         Collections.sort(numbers);
         for (int n : numbers) {
-            map.put(n, detectMainScript(listFileNames(projectDir(n)), n));
+            File dir = projectDir(n);
+            map.put(n, chooseScript(readPersistedScript(dir), listFileNames(dir), n));
         }
         return map;
     }

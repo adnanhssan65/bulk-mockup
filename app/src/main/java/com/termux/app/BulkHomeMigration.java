@@ -332,9 +332,17 @@ public final class BulkHomeMigration {
             return;
         }
 
-        String script = BulkProjects.detectMainScript(
+        String script = BulkProjects.chooseScript(
+            BulkProjects.readPersistedScript(homeDir),
             BulkProjects.listFileNames(homeDir), n);
-        if (script != null) appendHomeAliases(n, script);
+        if (script != null) {
+            // Runner choice persist bhi kar do (ZIP-add wala hi usool)
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(
+                    new File(homeDir, BulkProjects.MAIN_SCRIPT_MARKER))) {
+                out.write((script + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Exception ignored) {}
+            appendHomeAliases(n, script);
+        }
         BulkLog.add(BulkStrings.format(context, BulkStrings.LOG_HOMEMIG, n));
         result.moved++;
         markMigrated(context, n);

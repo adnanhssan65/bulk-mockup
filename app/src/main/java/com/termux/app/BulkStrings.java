@@ -109,6 +109,9 @@ public final class BulkStrings {
     public static final String OPEN_PROJECTS = "open_projects";
     public static final String EXTRACTED_FROM = "extracted_from";
     public static final String PROJECT_N = "project_n";
+    public static final String ZIP_NO_FOLDER = "zip_no_folder";
+    public static final String ZIP_NO_SCRIPT = "zip_no_script";
+    public static final String PROJECT_EXISTS = "project_exists";
 
     public static final String PERM_SUB = "perm_sub";
     public static final String ALLOW_ALL = "allow_all";
@@ -449,6 +452,12 @@ public final class BulkStrings {
         put(OPEN_PROJECTS, "Open Projects", "Projects Kholain");
         put(EXTRACTED_FROM, "Extracted from %s", "%s se nikala gaya");
         put(PROJECT_N, "Project %d", "Project %d");
+        put(ZIP_NO_FOLDER, "No project found in the ZIP: it needs a mockup_project_<N> folder inside, or the ZIP file itself named mockup_project_<N>.zip. Nothing was added.",
+            "ZIP me project nahi mila: andar mockup_project_<N> folder hona chahiye, ya ZIP file ka naam mockup_project_<N>.zip ho. Kuch add nahi hua.");
+        put(ZIP_NO_SCRIPT, "The project's main runner script could not be detected. Nothing was added.",
+            "Project ki main runner script nahi mil saki. Kuch add nahi hua.");
+        put(PROJECT_EXISTS, "Project %d already exists. Nothing was changed.",
+            "Project %d pehle se hai. Kuch change nahi hua.");
 
         // Permissions screen
         put(PERM_SUB, "All of these are needed for the app to work properly.",

@@ -484,8 +484,7 @@ public class BulkProjectsActivity extends Activity {
      */
     private void showDeletePopup(final BulkProjects.ProjectInfo p) {
         if (p == null || p.deleteCmd == null || p.number <= 0) return;
-        final String script = BulkProjects.detectMainScript(
-            BulkProjects.listFileNames(BulkProjects.projectDir(p.number)), p.number);
+        final String script = BulkProjects.resolveScript(p.number);
         final List<BulkDeleteMenu.Option> options = BulkDeleteMenu.optionsFor(script);
         final int[] selected = {options.get(0).digit};
 

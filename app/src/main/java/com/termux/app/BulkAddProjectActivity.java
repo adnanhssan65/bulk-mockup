@@ -368,20 +368,32 @@ public class BulkAddProjectActivity extends Activity {
                 File zipCopy = new File(tempDir, "project.zip");
                 copyUri(zipUri, zipCopy);
 
-                // 1) Entries parho — project folder + number pehchano
+                // 1) Entries parho — project folder + number pehchano.
+                //    v136 self-setting: folder na mile to FALLBACK —
+                //    number ZIP ke file naam se (mockup_project_<N>.zip)
+                //    or files seedha root par mani jati hain. Number
+                //    dono tarah na mile to saaf bilingual error or
+                //    kuch register NAHI hota.
                 List<String> entries = BulkProjectInstaller.listEntries(zipCopy);
                 String rootFolder = BulkProjects.findProjectRoot(entries);
-                if (rootFolder == null) {
-                    throw new Exception("ZIP me mockup_project_<N> folder nahi mila.");
+                final boolean flatMode = rootFolder == null;
+                final int n;
+                final String prefix;
+                if (!flatMode) {
+                    n = BulkProjects.parseFolderNumber(rootFolder);
+                    prefix = rootFolder + "/";
+                } else {
+                    n = BulkProjects.parseZipBaseNumber(zipName);
+                    rootFolder = "mockup_project_" + n;
+                    prefix = "";
                 }
-                int n = BulkProjects.parseFolderNumber(rootFolder);
                 if (n <= 0) {
-                    throw new Exception("Project number nahi mila.");
+                    throw new Exception(BulkStrings.t(BulkAddProjectActivity.this,
+                        BulkStrings.ZIP_NO_FOLDER));
                 }
 
                 // 2) Main script pehchano (root ki files se)
                 List<String> rootFiles = new ArrayList<>();
-                String prefix = rootFolder + "/";
                 for (String e : entries) {
                     String norm = e.replace('\\', '/');
                     if (norm.startsWith(prefix)) {
@@ -391,13 +403,17 @@ public class BulkAddProjectActivity extends Activity {
                 }
                 String script = BulkProjects.detectMainScript(rootFiles, n);
                 if (script == null) {
-                    throw new Exception("Project ki main script nahi mili.");
+                    throw new Exception(BulkStrings.t(BulkAddProjectActivity.this,
+                        BulkStrings.ZIP_NO_SCRIPT));
                 }
 
-                // 3) Extract (sirf project folder, zip-slip guard ke sath)
+                // 3) Extract (sirf project folder, zip-slip guard ke sath;
+                //    flat mode me saari files project folder ke andar)
                 File extractDir = new File(tempDir, "extract");
-                BulkProjectInstaller.extractProject(zipCopy, prefix, extractDir);
-                File extractedProject = new File(extractDir, rootFolder);
+                File extractedProject = flatMode
+                    ? new File(extractDir, rootFolder) : extractDir;
+                BulkProjectInstaller.extractProject(zipCopy, prefix, extractedProject);
+                if (!flatMode) extractedProject = new File(extractDir, rootFolder);
                 if (!extractedProject.isDirectory()) {
                     throw new Exception("ZIP khul nahi saka.");
                 }

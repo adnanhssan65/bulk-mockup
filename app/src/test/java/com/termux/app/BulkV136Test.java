@@ -152,6 +152,32 @@ public class BulkV136Test {
         assertFalse(BulkHomeMigration.shouldUseDropFolder(false));
     }
 
+    // ------------------------------------------- ZIP-add self-setting
+
+    @Test
+    public void persistedScriptWins() {
+        List<String> files = Arrays.asList("system_core.py", "adnan_core.py", "custom.py");
+        // Persisted choice mojood ho to wahi — detection adnan_core deta
+        assertEquals("custom.py", BulkProjects.chooseScript("custom.py", files, 1));
+        // Persisted file folder se gayab ho jaye to detection par wapas
+        assertEquals("adnan_core.py", BulkProjects.chooseScript("gone.py", files, 1));
+        // Marker khaali/kharab ho to detection
+        assertEquals("adnan_core.py", BulkProjects.chooseScript(null, files, 1));
+        assertEquals("adnan_core.py", BulkProjects.chooseScript("  ", files, 1));
+        assertEquals("adnan_core.py", BulkProjects.chooseScript("notes.txt", files, 1));
+    }
+
+    @Test
+    public void zipNameFallbackNumber() {
+        assertEquals(15, BulkProjects.parseZipBaseNumber("mockup_project_15.zip"));
+        assertEquals(15, BulkProjects.parseZipBaseNumber("mockup_project_15"));
+        assertEquals(3, BulkProjects.parseZipBaseNumber("Mockup_Project_3.ZIP"));
+        assertEquals(9, BulkProjects.parseZipBaseNumber("/storage/emulated/0/Download/mockup_project_9.zip"));
+        assertEquals(-1, BulkProjects.parseZipBaseNumber("random.zip"));
+        assertEquals(-1, BulkProjects.parseZipBaseNumber("project_15.zip"));
+        assertEquals(-1, BulkProjects.parseZipBaseNumber(null));
+    }
+
     // ------------------------------------------------------------ version
 
     @Test
