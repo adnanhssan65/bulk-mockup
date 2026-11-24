@@ -359,12 +359,12 @@ public class BulkGalleryActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BulkTheme.appBg(this));
-        // v136 (owner ka FINAL faisla): folder-list header me sirf
-        // back + title — gear/settings button yahan NAHI (settings
-        // sirf gallery grids ke andar chahiye, wahan gear mojood
-        // hai). subHeader ka right slot khaali spacer se bhara hai.
-        root.addView(BulkTheme.subHeader(this, BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS),
-            BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE), new View(this)));
+        // v136 (owner ka FINAL header layout, preview
+        // pv_v136_picker_chip): folderListHeader — back + title +
+        // System Picker chip EK hi row me TITLE line par centered;
+        // subtitle un ke neeche full width, saaf gap ke sath. Gear
+        // is header me nahi (settings sirf gallery grids me hain).
+        root.addView(folderListHeader());
 
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -376,18 +376,11 @@ public class BulkGalleryActivity extends Activity {
         scroll.addView(body);
         root.addView(scroll);
 
-        // v136 (owner ka FINAL faisla): System Picker list ki
-        // PEHLI row hai — lekin CHHOTI: folder row jitni hi
-        // height (68dp) or waisa hi style, sirf icon tile chhota
-        // (28dp) hai, bara pink tile nahi.
-        LinearLayout.LayoutParams spLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(this, 68));
-        body.addView(systemPickerRow(), spLp);
         // v132: All Images ka cover ab gallery ki pehli image hai
         // (pehle khaali box ata tha — coverId -1 pass ho raha tha)
         LinearLayout.LayoutParams allLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        allLp.topMargin = BulkTheme.dp(this, 10);
+        allLp.topMargin = 0;
         body.addView(folderRow(null, BulkStrings.t(this, BulkStrings.ALL_IMAGES),
             mTotalCount, mAllCoverId), allLp);
         for (Bucket b : mBuckets) {
@@ -413,48 +406,99 @@ public class BulkGalleryActivity extends Activity {
     }
 
     /**
-     * System Picker row — v136 FINAL shakal (owner ka faisla):
-     * folder row JAISI hi row (pillBg, wohi padding 12/10, label
-     * 14sp, right chevron, kul height 68dp jo showFolders ke
-     * LayoutParams se pakki hoti hai), lekin icon tile CHHOTA
-     * hai (28dp, andar 16dp folder glyph) — purana 48dp wala
-     * bara tile owner ko pasand nahi aya tha. Tap = wohi system
-     * picker (Gallery / File Manager) jo staging flow me jata hai.
+     * v136 folder-list header (owner ka approved layout, preview
+     * pv_v136_picker_chip): PEHLI row me back button, title or
+     * System Picker chip — teeno TITLE line par vertically
+     * centered (ek saaf row). Subtitle is row ke NEECHE full
+     * width par ati hai, chip ke bottom se kam az kam 8dp saaf
+     * gap ke sath — chip subtitle ko kabhi nahi chhooti.
+     * (Aam subHeader yahan istemal nahi hota: wahan right button
+     * title+subtitle ke pure block par center hota hai, jis se
+     * 40dp chip subtitle se takrati thi.)
      */
-    private View systemPickerRow() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(BulkTheme.pillBg(this));
-        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
-            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
-        FrameLayout iconBox = new FrameLayout(this);
-        iconBox.setBackground(BulkTheme.iconBoxBg(this));
-        iconBox.setLayoutParams(new LinearLayout.LayoutParams(
-            BulkTheme.dp(this, 28), BulkTheme.dp(this, 28)));
+    private View folderListHeader() {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 14),
+            BulkTheme.dp(this, 20), 0);
+        bar.addView(BulkTheme.circleButton(this, R.drawable.ic_bulk_back, 34,
+            v -> finish()));
+
+        TextView title = new TextView(this);
+        title.setText(BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS));
+        title.setTextSize(16);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setTextColor(BulkTheme.textMain(this));
+        title.setSingleLine(true);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tlp.leftMargin = BulkTheme.dp(this, 10);
+        tlp.rightMargin = BulkTheme.dp(this, 8);
+        title.setLayoutParams(tlp);
+        bar.addView(title);
+
+        bar.addView(systemPickerChip());
+        wrap.addView(bar);
+
+        TextView sub = new TextView(this);
+        sub.setText(BulkStrings.t(this, BulkStrings.ADD_WALLPAPERS_SUBTITLE));
+        sub.setTextSize(11);
+        sub.setTextColor(BulkTheme.textMuted(this));
+        sub.setPadding(BulkTheme.dp(this, 20), 0, BulkTheme.dp(this, 20),
+            BulkTheme.dp(this, 10));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = BulkTheme.dp(this, 8);
+        sub.setLayoutParams(slp);
+        wrap.addView(sub);
+
+        View line = new View(this);
+        line.setBackground(BulkTheme.hLine(this));
+        wrap.addView(line, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f))));
+        return wrap;
+    }
+
+    /**
+     * System Picker CHIP — v136 FINAL shakal (owner ke alfaaz:
+     * "wha pr icon ni, chota sa option bna do, sath lekh do
+     * system picker", size MEDIUM rakha jaye; preview
+     * pv_v136_picker_chip): folder-list header ke top-right me
+     * ek themed pill chip — folder glyph + "System Picker" text,
+     * ~40dp unchi (aram-deh tap target), normal chhota label
+     * text. Na bare icon, na list row. Tap = wohi system picker
+     * (Gallery / File Manager) jo staging flow me jata hai.
+     */
+    private View systemPickerChip() {
+        LinearLayout chip = new LinearLayout(this);
+        chip.setOrientation(LinearLayout.HORIZONTAL);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setBackground(BulkTheme.pillBg(this));
+        chip.setPadding(BulkTheme.dp(this, 12), 0, BulkTheme.dp(this, 12), 0);
+        chip.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, BulkTheme.dp(this, 40)));
         ImageView iv = BulkTheme.icon(this, R.drawable.ic_bulk_folder, BulkTheme.accent(this), 16);
-        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(
-            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16));
-        ip.gravity = Gravity.CENTER;
-        iv.setLayoutParams(ip);
-        iconBox.addView(iv);
-        row.addView(iconBox);
+        iv.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16)));
+        chip.addView(iv);
         TextView label = new TextView(this);
         label.setText(BulkStrings.t(this, BulkStrings.SYSTEM_PICKER));
         label.setTextColor(BulkTheme.textMain(this));
-        label.setTextSize(14);
+        label.setTextSize(12.5f);
         label.setSingleLine(true);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        lp.leftMargin = BulkTheme.dp(this, 11);
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = BulkTheme.dp(this, 6);
         label.setLayoutParams(lp);
-        row.addView(label);
-        ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron, BulkTheme.textMuted(this), 14);
-        chev.setLayoutParams(new LinearLayout.LayoutParams(
-            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
-        row.addView(chev);
-        row.setOnClickListener(v -> launchSystemPicker());
-        return row;
+        chip.addView(label);
+        chip.setClickable(true);
+        chip.setOnClickListener(v -> launchSystemPicker());
+        return chip;
     }
 
     private static final int REQ_SYS_PICK = 47;
