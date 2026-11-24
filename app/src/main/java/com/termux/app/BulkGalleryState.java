@@ -26,13 +26,26 @@ public final class BulkGalleryState {
 
     public static final int MODE_COPY = 0;
     public static final int MODE_MOVE = 1;
-    /** v132 (design update): grid khulte hi koi mode nahi — user ko
-     *  Copy ya Move khud chunna padta hai, tab hi Add chalta hai. */
+    /** Koi preset mode nahi — Add par popup se poochho (Manual). */
     public static final int MODE_NONE = -1;
 
-    /** Add CTA kab active: mode chuna ho AUR kam az kam ek selection ho. */
-    public static boolean canAdd(int mode, int selectedCount) {
-        return (mode == MODE_COPY || mode == MODE_MOVE) && selectedCount > 0;
+    // v132 redesign: Add ka Copy/Move ikhtiyar — persisted setting
+    public static final int CHOICE_MANUAL = 0;     // har dafa popup
+    public static final int CHOICE_AUTO_COPY = 1;  // hamesha Copy
+    public static final int CHOICE_AUTO_MOVE = 2;  // hamesha Move
+
+    /** Setting se asal mode: Auto par preset mode, Manual par MODE_NONE (poochho). */
+    public static int resolveMode(int choice) {
+        if (choice == CHOICE_AUTO_COPY) return MODE_COPY;
+        if (choice == CHOICE_AUTO_MOVE) return MODE_MOVE;
+        return MODE_NONE;
+    }
+
+    /** Prefs se aya hua choice mehfooz range me rakho.
+     *  Ghalat value par factory default (Auto–Move). */
+    public static int clampChoice(int choice) {
+        return (choice == CHOICE_MANUAL || choice == CHOICE_AUTO_COPY
+            || choice == CHOICE_AUTO_MOVE) ? choice : CHOICE_AUTO_MOVE;
     }
 
     public static final int MIN_COLUMNS = 2;

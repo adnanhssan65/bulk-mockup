@@ -104,14 +104,20 @@ public class BulkGalleryStateTest {
     }
 
     @Test
-    public void canAddNeedsModeAndSelection() {
-        // v132 design update: mode na chuna ho to Add kabhi nahi chalta
-        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_NONE, 5));
-        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_NONE, 0));
-        assertTrue(BulkGalleryState.canAdd(BulkGalleryState.MODE_COPY, 1));
-        assertTrue(BulkGalleryState.canAdd(BulkGalleryState.MODE_MOVE, 3));
-        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_COPY, 0));
-        assertFalse(BulkGalleryState.canAdd(BulkGalleryState.MODE_MOVE, 0));
+    public void addChoiceResolveAndClamp() {
+        // v132 redesign: Manual = poochho (MODE_NONE), Auto = preset mode
+        assertEquals(BulkGalleryState.MODE_NONE,
+            BulkGalleryState.resolveMode(BulkGalleryState.CHOICE_MANUAL));
+        assertEquals(BulkGalleryState.MODE_COPY,
+            BulkGalleryState.resolveMode(BulkGalleryState.CHOICE_AUTO_COPY));
+        assertEquals(BulkGalleryState.MODE_MOVE,
+            BulkGalleryState.resolveMode(BulkGalleryState.CHOICE_AUTO_MOVE));
+        assertEquals(BulkGalleryState.CHOICE_MANUAL, BulkGalleryState.clampChoice(0));
+        assertEquals(BulkGalleryState.CHOICE_AUTO_COPY, BulkGalleryState.clampChoice(1));
+        assertEquals(BulkGalleryState.CHOICE_AUTO_MOVE, BulkGalleryState.clampChoice(2));
+        // Ghalat value = factory default (Auto–Move)
+        assertEquals(BulkGalleryState.CHOICE_AUTO_MOVE, BulkGalleryState.clampChoice(99));
+        assertEquals(BulkGalleryState.CHOICE_AUTO_MOVE, BulkGalleryState.clampChoice(-3));
     }
 
     @Test

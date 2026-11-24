@@ -228,6 +228,13 @@ public final class BulkTheme {
 
     /** Sub-screens ka mushtarika header: back gol button + title/subtitle + theme button, neeche border line. */
     public static LinearLayout subHeader(final Activity a, String title, String subtitle) {
+        return subHeader(a, title, subtitle, null);
+    }
+
+    /** subHeader ka variant: dayein taraf theme button ki jagah apna
+     *  button (null ho to theme button hi lagta hai). */
+    public static LinearLayout subHeader(final Activity a, String title, String subtitle,
+                                         View rightButton) {
         LinearLayout wrap = new LinearLayout(a);
         wrap.setOrientation(LinearLayout.VERTICAL);
 
@@ -258,7 +265,7 @@ public final class BulkTheme {
         titles.addView(s);
         bar.addView(titles);
 
-        bar.addView(themeButton(a));
+        bar.addView(rightButton != null ? rightButton : themeButton(a));
         wrap.addView(bar);
 
         View line = new View(a);

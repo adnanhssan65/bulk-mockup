@@ -243,8 +243,13 @@ public final class BulkStrings {
     public static final String RECREATE = "recreate";
     public static final String RECREATE_RESULT = "recreate_result";
 
-    // v132 — gallery mode gate (Copy/Move pehle select karo)
-    public static final String MODE_HINT = "mode_hint";
+    // v132 — gallery Add ka Copy/Move popup + persisted setting
+    public static final String ADD_N_WALLPAPERS = "add_n_wallpapers";
+    public static final String COPY_OR_MOVE_Q = "copy_or_move_q";
+    public static final String ADD_MODE = "add_mode";
+    public static final String ADD_CHOICE_MANUAL = "add_choice_manual";
+    public static final String ADD_CHOICE_AUTO_COPY = "add_choice_auto_copy";
+    public static final String ADD_CHOICE_AUTO_MOVE = "add_choice_auto_move";
 
     // ------------------------------------------------------------ table
 
@@ -529,8 +534,12 @@ public final class BulkStrings {
         put(RECREATE, "Recreate", "Dobara Banao");
         put(RECREATE_RESULT, "%1$d new folders created · %2$d already present",
             "%1$d naye folders bane · %2$d pehle se mojood thay");
-        put(MODE_HINT, "Select Copy or Move first to add wallpapers",
-            "Wallpapers add karne ke liye pehle Copy ya Move select karo");
+        put(ADD_N_WALLPAPERS, "Add %1$d Wallpapers", "%1$d Wallpapers Add Karo");
+        put(COPY_OR_MOVE_Q, "Copy or Move?", "Copy ya Move?");
+        put(ADD_MODE, "Add Mode", "Add Mode");
+        put(ADD_CHOICE_MANUAL, "Manual — ask every time", "Manual — har dafa poochho");
+        put(ADD_CHOICE_AUTO_COPY, "Auto — Copy", "Auto — Copy");
+        put(ADD_CHOICE_AUTO_MOVE, "Auto — Move", "Auto — Move");
     }
 
     private BulkStrings() {}
