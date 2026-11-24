@@ -19,7 +19,8 @@ import java.util.Map;
  *      (tile). Explicit choice mehfooz; baghair choice wale
  *      installs upgrade par naye default par.
  *  (3) Run console popup ka dark panel + DejaVu Sans Mono console
- *      font (banner glyphs) — style constants + asset path.
+ *      font — v140 me REVERT ho gaya (owner ko v138 wali look hi
+ *      perfect lagi): font catalog wapas sirf 10 bundled fonts.
  */
 public class BulkV139Test {
 
@@ -137,15 +138,15 @@ public class BulkV139Test {
         assertEquals(3, BulkPanelSettings.iconIndex("pro"));
     }
 
-    // ------------------------------------------------------------ (3) console style
+    // ------------------------------------------------------------ (3) console style — v140 REVERT
 
     @Test
-    public void consoleStyleConstantsMatchApprovedPreview() {
-        assertEquals(0xFF0A1A0C, BulkRunHelper.CONSOLE_BG);
-        assertEquals(0xFF9BE29B, BulkRunHelper.CONSOLE_TEXT);
-        assertEquals("bulk/fonts/dejavu-sans-mono.ttf", BulkFonts.CONSOLE_ASSET);
-        // Console font UI catalog me NAHI — picker ke 10 fonts waisay hi
+    public void consoleFontRevertedToBundledCatalogOnly() {
+        // v140: v139 ka dark console + DejaVu console font wapas liya
+        // gaya — console ab v138 ki tarah UI font/MONOSPACE par hai or
+        // fonts folder me sirf asal 10 bundled fonts hain (picker bhi).
         assertEquals(10, BulkFonts.bundledCount());
         assertFalse(BulkFonts.isValidId("dejavu-sans-mono"));
+        assertFalse(BulkFonts.isValidId("console"));
     }
 }
