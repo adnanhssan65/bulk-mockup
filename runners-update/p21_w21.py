@@ -10,6 +10,8 @@
 #          591-byte trailer, MP4 ke aakhir me uuid box "vivoMediaExtInfo"); gallery isi ID se
 #          dono ko jor kar Live Photo chalati hai. Clip = darmiyan wale 3 second, CRF 0 LOSSLESS.
 # Koi sawal nahi poochta — process bilkul automatic hai. Sirf ffmpeg lazmi hai.
+# PATCH (v4 + drop-fetch): process se pehle TermuxMod drop folder ki videos khud input
+#          me MOVE ho jati hain (app sirf images fetch karta hai, videos nahi).
 import os, sys, time, shutil, subprocess, gc, re, struct
 from datetime import datetime, timedelta
 from PIL import Image, ImageFile
@@ -90,6 +92,35 @@ def gallery_copy_outputs(items):
             shutil.copyfile(src, d)
             os.utime(d, (t, t))
             safe_scan(d)
+    except Exception:
+        pass
+
+# --- Drop folder auto-fetch (TermuxMod) ---
+# App drop folder se sirf IMAGES fetch karta hai, videos kabhi nahi — is liye process
+# shuru hone se pehle drop folder (TermuxMod/Project N) ki videos khud input me MOVE
+# kar lo, taake folder wala tareeqa bina terminal command ke chal jaye.
+# Sirf seedhi files (subfolders ko haath nahi); naam takra jaye to _1, _2 suffix.
+# Koi bhi masla ho to khamoshi se aage barho — run kabhi nahi rukta.
+def fetch_drop_videos():
+    try:
+        src_dir = os.path.join(TM_ROOT, f"Project {P_NUM}")
+        if not os.path.isdir(src_dir):
+            return
+        names = [f for f in os.listdir(src_dir)
+                 if os.path.isfile(os.path.join(src_dir, f)) and f.lower().endswith(VID_EXTS)]
+        moved = 0
+        for f in sorted(names):
+            dst = os.path.join(I, f)
+            if os.path.exists(dst):
+                stem, ext = os.path.splitext(f)
+                n = 1
+                while os.path.exists(os.path.join(I, f"{stem}_{n}{ext}")):
+                    n += 1
+                dst = os.path.join(I, f"{stem}_{n}{ext}")
+            shutil.move(os.path.join(src_dir, f), dst)
+            moved += 1
+        if moved:
+            print(f" {C4}\U0001f4e5 Drop folder se {moved} video(s) mil gayin{ENDC}")
     except Exception:
         pass
 
@@ -435,6 +466,7 @@ if action == 'process':
     os.makedirs(O, exist_ok=True); os.makedirs(R, exist_ok=True)
     if not os.path.isdir(I):
         print(f" {C2}\u2716 Input folder nahi mila: {P_NUM}_wallpapers{ENDC}"); sys.exit()
+    fetch_drop_videos()
     vids = list_inputs()
     if not vids:
         print(f" {C2}\u2716 {P_NUM}_wallpapers me koi video (.mp4/.mov/.m4v) nahi mili.{ENDC}"); sys.exit()
