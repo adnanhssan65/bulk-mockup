@@ -35,6 +35,14 @@ public final class BulkProjectInstaller {
 
     private BulkProjectInstaller() {}
 
+    /**
+     * v145 — sab se aakhri installProject call ki Project Check
+     * report (ZIP-add screen result me dikhane ke liye). Fixer
+     * fail ho jaye to bhi install aage barhta hai; report null
+     * ya failed ho sakti hai — parhne wala dono handle kare.
+     */
+    public static volatile BulkProjectFixer.Report lastFixReport;
+
     /** ZIP file ke tamam entries ke naam. */
     public static List<String> listEntries(File zipFile) throws Exception {
         List<String> names = new ArrayList<>();
@@ -110,6 +118,21 @@ public final class BulkProjectInstaller {
                     new File(staging, BulkProjects.MAIN_SCRIPT_MARKER))) {
                 out.write((script + "\n").getBytes(StandardCharsets.UTF_8));
             }
+            // v145: New Project Check — runner ki mashhoor kharabiyan
+            // (path / history / delay / wakelock / scan / gallery)
+            // staging me hi fix karo, rename se pehle. Fixer kabhi
+            // install ko nahi rokta: fail ho to asal runner mehfooz
+            // rehta hai or report me "check nahi ho saka" ata hai.
+            BulkProjectFixer.Report fixReport = null;
+            try {
+                File scriptFile = new File(staging, script);
+                if (scriptFile.isFile()) {
+                    fixReport = BulkProjectFixer.fixRunnerFile(scriptFile, n);
+                }
+            } catch (Exception ignored) {
+                fixReport = null;
+            }
+            lastFixReport = fixReport;
             if (!staging.renameTo(target)) {
                 throw new Exception("Project folder asal jagah par nahi ja saka.");
             }

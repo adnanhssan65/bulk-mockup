@@ -368,6 +368,12 @@
             android:exported="false"
             android:label="Output Folder" />
 
+        <!-- v145: More Settings screen (Backup / Export Project / Output Folder) -->
+        <activity
+            android:name=".app.BulkMoreSettingsActivity"
+            android:exported="false"
+            android:label="More Settings" />
+
         <!-- v127: App Gallery (drag-select image picker) -->
         <activity
             android:name=".app.BulkGalleryActivity"

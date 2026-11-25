@@ -48,6 +48,7 @@ public class BulkAddProjectActivity extends Activity {
     private LinearLayout mBusyBar;
     private TextView mDoneName;
     private TextView mDoneFrom;
+    private TextView mDoneCheck;
     private final AtomicBoolean mBusyAnim = new AtomicBoolean(false);
 
     @Override
@@ -212,6 +213,19 @@ public class BulkAddProjectActivity extends Activity {
         fp.topMargin = BulkTheme.dp(this, 3);
         mDoneFrom.setLayoutParams(fp);
         mDonePanel.addView(mDoneFrom);
+
+        // v145: Project Check — chhoti rows me auto-fix ki report
+        // (bara block nahi; sirf chand lines, muted rang me)
+        mDoneCheck = new TextView(this);
+        mDoneCheck.setTextColor(BulkTheme.textMuted(this));
+        mDoneCheck.setTextSize(11.5f);
+        mDoneCheck.setTypeface(android.graphics.Typeface.MONOSPACE);
+        LinearLayout.LayoutParams kp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        kp.topMargin = BulkTheme.dp(this, 10);
+        mDoneCheck.setLayoutParams(kp);
+        mDoneCheck.setVisibility(View.GONE);
+        mDonePanel.addView(mDoneCheck);
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -442,12 +456,65 @@ public class BulkAddProjectActivity extends Activity {
                         BulkStrings.PROJECT_N, fNumber));
                     mDoneFrom.setText(BulkStrings.format(BulkAddProjectActivity.this,
                         BulkStrings.EXTRACTED_FROM, zipName));
+                    String checkText = buildCheckText();
+                    if (checkText != null) {
+                        mDoneCheck.setText(checkText);
+                        mDoneCheck.setVisibility(View.VISIBLE);
+                    } else {
+                        mDoneCheck.setVisibility(View.GONE);
+                    }
                     showState(2);
                 } else {
                     showError(fError != null ? fError : "Project add nahi ho saka.");
                 }
             });
         }).start();
+    }
+
+    /**
+     * v145 — Project Check ki report lines (installer ki aakhri
+     * report se). Report na ho to null (section chhupa rehta hai);
+     * fixer fail hua ho to sirf "check nahi ho saka" wali line.
+     */
+    private String buildCheckText() {
+        BulkProjectFixer.Report r = BulkProjectInstaller.lastFixReport;
+        if (r == null) return null;
+        StringBuilder sb = new StringBuilder();
+        sb.append(BulkStrings.t(this, BulkStrings.CHECK_TITLE));
+        if (r.failed) {
+            sb.append('\n').append(BulkStrings.t(this, BulkStrings.CHECK_FAILED));
+            return sb.toString();
+        }
+        appendCheckLine(sb, BulkStrings.CHECK_BASE_PATH, r.basePath);
+        appendCheckLine(sb, BulkStrings.CHECK_HISTORY, r.history);
+        appendCheckLine(sb, BulkStrings.CHECK_DELAYS, r.delays);
+        appendCheckLine(sb, BulkStrings.CHECK_WAKELOCK, r.wakelock);
+        appendCheckLine(sb, BulkStrings.CHECK_SCAN, r.scanTimeout);
+        appendCheckLine(sb, BulkStrings.CHECK_GALLERY, r.gallery);
+        if (r.galleryNeedsClaude) {
+            sb.append('\n').append(BulkStrings.t(this, BulkStrings.CHECK_GALLERY_CLAUDE));
+        }
+        return sb.toString();
+    }
+
+    private void appendCheckLine(StringBuilder sb, String labelKey,
+                                 BulkProjectFixer.Status status) {
+        String word;
+        switch (status) {
+            case FIXED:
+                word = BulkStrings.t(this, BulkStrings.CHECK_FIXED);
+                break;
+            case ALREADY_OK:
+                word = BulkStrings.t(this, BulkStrings.CHECK_OK);
+                break;
+            default:
+                word = BulkStrings.t(this, BulkStrings.CHECK_NA);
+                break;
+        }
+        sb.append('\n')
+            .append(BulkStrings.t(this, labelKey))
+            .append(" : ")
+            .append(word);
     }
 
     // ------------------------------------------------------------ file helpers

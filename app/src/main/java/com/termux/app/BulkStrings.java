@@ -302,6 +302,24 @@ public final class BulkStrings {
     public static final String BACKUP_SAVED = "backup_saved";
     public static final String BACKUP_LOADED = "backup_loaded";
     public static final String BACKUP_SAVE_FAILED = "backup_save_failed";
+
+    // v145 — New Project Check (ZIP-add par runner auto-fix ki report)
+    public static final String CHECK_TITLE = "check_title";
+    public static final String CHECK_BASE_PATH = "check_base_path";
+    public static final String CHECK_HISTORY = "check_history";
+    public static final String CHECK_DELAYS = "check_delays";
+    public static final String CHECK_WAKELOCK = "check_wakelock";
+    public static final String CHECK_SCAN = "check_scan";
+    public static final String CHECK_GALLERY = "check_gallery";
+    public static final String CHECK_FIXED = "check_fixed";
+    public static final String CHECK_OK = "check_ok";
+    public static final String CHECK_NA = "check_na";
+    public static final String CHECK_FAILED = "check_failed";
+    public static final String CHECK_GALLERY_CLAUDE = "check_gallery_claude";
+
+    // v145 — More Settings (sidebar ki teen rows ab is apni screen par)
+    public static final String MORE_SETTINGS = "more_settings";
+    public static final String MORE_SETTINGS_SUB = "more_settings_sub";
     public static final String CP_RESET = "cp_reset";
     public static final String CP_RESET_MSG = "cp_reset_msg";
     public static final String CP_RESET_DONE = "cp_reset_done";
@@ -781,6 +799,25 @@ public final class BulkStrings {
         put(BACKUP_SAVED, "Settings saved ✓", "Settings save ho gayin ✓");
         put(BACKUP_LOADED, "Settings loaded ✓", "Settings wapas ah gayin ✓");
         put(BACKUP_SAVE_FAILED, "Save failed", "Save nahi ho saki");
+
+        // v145 — New Project Check report (ZIP-add result)
+        put(CHECK_TITLE, "Project Check", "Project Check");
+        put(CHECK_BASE_PATH, "Base path", "Base path (rasta)");
+        put(CHECK_HISTORY, "Shared history", "Shared history");
+        put(CHECK_DELAYS, "Loading delays", "Loading delays");
+        put(CHECK_WAKELOCK, "Wakelock stall", "Wakelock stall");
+        put(CHECK_SCAN, "Scan timeout", "Scan timeout");
+        put(CHECK_GALLERY, "Gallery sequence", "Gallery sequence");
+        put(CHECK_FIXED, "Fixed", "Fix kar diya");
+        put(CHECK_OK, "Already OK", "Pehle se theek");
+        put(CHECK_NA, "Not applied", "Nahi laga");
+        put(CHECK_FAILED, "Project check could not run — project installed as-is.",
+            "Project check nahi ho saka — project wese hi lag gaya.");
+        put(CHECK_GALLERY_CLAUDE, "Gallery sequence not applied — send this project to Muse, he will add it.",
+            "Gallery sequence nahi laga — ye project Muse ko bhejo, wo laga de ga");
+        put(MORE_SETTINGS, "More Settings", "More Settings");
+        put(MORE_SETTINGS_SUB, "Backup, Export Project and Output Folder",
+            "Backup, Export Project aur Output Folder");
         put(CP_RESET, "Reset to Defaults", "Defaults Par Wapas");
         put(CP_RESET_MSG,
             "All settings will return to factory defaults. The Control Panel password will also reset to the default. Continue?",

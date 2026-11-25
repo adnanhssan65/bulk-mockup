@@ -113,7 +113,10 @@ public class BulkV144Test {
     // ------------------------------------------------------------ wiring (source scan)
 
     private static String dashboardSource() throws Exception {
-        String rel = "app/src/main/java/com/termux/app/BulkDashboardActivity.java";
+        return findSource("app/src/main/java/com/termux/app/BulkDashboardActivity.java");
+    }
+
+    private static String findSource(String rel) throws Exception {
         // cwd se upar chalte hue dono layouts try karo (repo root /
         // workspace root) — harness jis jagah se bhi chale, source mile.
         File dir = new File(System.getProperty("user.dir")).getAbsoluteFile();
@@ -137,16 +140,27 @@ public class BulkV144Test {
 
     @Test
     public void sidebarBackupRowAndPopupAreWired() throws Exception {
-        String src = dashboardSource();
-        assertTrue("BulkDashboardActivity source milna chahiye", src != null);
-        // Sidebar ki chhoti row
-        assertTrue(src.contains("drawerRow(BulkStrings.t(this, BulkStrings.BACKUP)"));
+        // v145 Item D: Backup row drawer se hat kar More Settings screen
+        // par chali gayi hai — popup ka flow ab shared BulkMoreActions me
+        // hai (wiring wahi hai, host badla hai). Drawer -> More Settings
+        // row -> screen -> wahi popup.
+        String dash = dashboardSource();
+        assertTrue("BulkDashboardActivity source milna chahiye", dash != null);
+        assertTrue(dash.contains("drawerRow(BulkStrings.t(this, BulkStrings.MORE_SETTINGS)"));
+        assertTrue(dash.contains("BulkMoreSettingsActivity.class"));
+
+        String act = findSource("app/src/main/java/com/termux/app/BulkMoreActions.java");
+        assertTrue("BulkMoreActions source milna chahiye", act != null);
         // Popup + dono actions helper ke zariye
-        assertTrue(src.contains("showBackupPopup()"));
-        assertTrue(src.contains("BulkSettingsBackup.save(this)"));
-        assertTrue(src.contains("BulkSettingsBackup.load(this)"));
-        assertTrue(src.contains("BulkStrings.BACKUP_SAVE"));
-        assertTrue(src.contains("BulkStrings.BACKUP_LOAD"));
+        assertTrue(act.contains("showBackupPopup"));
+        assertTrue(act.contains("BulkSettingsBackup.save(a)"));
+        assertTrue(act.contains("BulkSettingsBackup.load(a)"));
+        assertTrue(act.contains("BulkStrings.BACKUP_SAVE"));
+        assertTrue(act.contains("BulkStrings.BACKUP_LOAD"));
+
+        String page = findSource("app/src/main/java/com/termux/app/BulkMoreSettingsActivity.java");
+        assertTrue("BulkMoreSettingsActivity source milna chahiye", page != null);
+        assertTrue(page.contains("BulkMoreActions.showBackupPopup"));
     }
 
     @Test
