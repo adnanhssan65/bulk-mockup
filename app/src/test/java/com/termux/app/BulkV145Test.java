@@ -105,9 +105,12 @@ public class BulkV145Test {
         "    except: pass",
         "",
         "def safe_scan(path, timeout_sec=1):",
+        "    # Fire-and-forget: scan ko kabhi wait nahi karna — app ke andar run ho to",
+        "    # termux-media-scan wapas ane me dair karta hai aur har image par time zaya hota hai.",
+        "    # Scan pichay chal kar apna kaam khud pura kar leta hai, tartib launch order se rehti hai.",
         "    try:",
-        "        subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)",
-        "    except subprocess.TimeoutExpired:",
+        "        subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
+        "    except Exception:",
         "        pass",
         "",
         "TM_ROOT = \"/storage/emulated/0/TermuxMod\"",
@@ -199,8 +202,11 @@ public class BulkV145Test {
         // 4: wakelock fire-and-forget
         assertTrue(out.contains("subprocess.Popen([\"termux-wake-lock\" if enable else \"termux-wake-unlock\"]"));
         assertFalse(out.contains("os.system(\"termux-wake-lock"));
-        // 5: scan timeout
+        // 5: scan stall — body Popen fire-and-forget (P1 wali form), def bhi 1 par
         assertTrue(out.contains("def safe_scan(path, timeout_sec=1)"));
+        assertTrue(out.contains(
+            "subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
+        assertFalse(out.contains("subprocess.run([\"termux-media-scan\", path]"));
         // 6: gallery helper + call, sahi tartib me (scan ke baad)
         assertTrue(out.contains("def gallery_pair_copy(mock_path, wall_path, mt, wt):"));
         int scanAt = out.indexOf("safe_scan(mock_path)");
@@ -242,9 +248,13 @@ public class BulkV145Test {
         // mukhtalif variable naam ke sath base path fix
         assertTrue(r.text.contains(
             "BASE_DIR = os.environ.get(\"MOCKUP_BASE\", os.path.dirname(os.path.abspath(__file__)))"));
-        // bina-timeout wali scan call par timeout=1 jud gaya
+        // safe_scan ka body Popen fire-and-forget ho gaya
         assertTrue(r.text.contains(
-            "subprocess.run([\"termux-media-scan\", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)"));
+            "subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
+        // bulk scan_group helper ko hath NAHI laga (na timeout juda, na Popen bana)
+        assertTrue(r.text.contains(
+            "subprocess.run([\"termux-media-scan\", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
+        assertFalse(r.text.contains("timeout=1)"));
         assertFalse(r.text.contains("gallery_pair_copy"));
     }
 
@@ -262,6 +272,44 @@ public class BulkV145Test {
         assertTrue(rn.report.failed);
     }
 
+    // ------------------------------------------------------------ scenario 5: scan_media (P5-style)
+
+    /** P5-style runner — scan_media naam wala function + safe_scan_dir helper. */
+    private static final String SCAN_MEDIA_STYLE = lines(
+        "import os, subprocess",
+        "",
+        "P_NUM = 5",
+        "B = os.environ.get(\"MOCKUP_BASE\", os.path.dirname(os.path.abspath(__file__)))",
+        "T_F = \"/storage/emulated/0/.mockup_time_tracker.txt\"",
+        "",
+        "def scan_media(path, timeout_sec=5):",
+        "    try:",
+        "        subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)",
+        "    except subprocess.TimeoutExpired:",
+        "        pass",
+        "",
+        "def safe_scan_dir(path, timeout_sec=20):",
+        "    try:",
+        "        subprocess.run([\"termux-media-scan\", \"-r\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)",
+        "    except subprocess.TimeoutExpired:",
+        "        pass"
+    );
+
+    @Test
+    public void scanMediaVariantFixedAndDirHelperUntouched() {
+        BulkProjectFixer.FixResult r = BulkProjectFixer.fixText(SCAN_MEDIA_STYLE, 5);
+        assertFalse(r.report.failed);
+        assertEquals(BulkProjectFixer.Status.FIXED, r.report.scanTimeout);
+        // scan_media ka body Popen ho gaya, def ka default bhi 1
+        assertTrue(r.text.contains("def scan_media(path, timeout_sec=1):"));
+        assertTrue(r.text.contains(
+            "subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
+        // safe_scan_dir bilkul waisa ka waisa (bulk helper ko hath nahi lagta)
+        assertTrue(r.text.contains("def safe_scan_dir(path, timeout_sec=20):"));
+        assertTrue(r.text.contains(
+            "subprocess.run([\"termux-media-scan\", \"-r\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)"));
+    }
+
     // ------------------------------------------------------------ file level
 
     @Test
@@ -276,6 +324,7 @@ public class BulkV145Test {
         String after = new String(Files.readAllBytes(script.toPath()), StandardCharsets.UTF_8);
         assertTrue(after.contains("def gallery_pair_copy"));
         assertTrue(after.contains("timeout_sec=1"));
+        assertTrue(after.contains("subprocess.Popen([\"termux-media-scan\", path]"));
 
         File backup = new File(dir, "w9.py.orig");
         assertTrue("backup .orig banna chahiye", backup.isFile());
@@ -349,12 +398,12 @@ public class BulkV145Test {
     }
 
     @Test
-    public void versionBumpedTo145() throws Exception {
+    public void versionBumpedTo146() throws Exception {
         String dash = findSource("app/src/main/java/com/termux/app/BulkDashboardActivity.java");
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v145"));
+        assertTrue(dash.contains("Termux Mod v146"));
         String gradle = findSource("app/build.gradle");
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 145"));
+        assertTrue(gradle.contains("versionCode 146"));
     }
 }

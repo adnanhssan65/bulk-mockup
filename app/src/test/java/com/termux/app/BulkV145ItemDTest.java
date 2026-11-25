@@ -143,9 +143,9 @@ public class BulkV145ItemDTest {
     public void versionStill145() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 145"));
+        assertTrue(gradle.contains("versionCode 146"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v145"));
+        assertTrue(dash.contains("Termux Mod v146"));
     }
 }

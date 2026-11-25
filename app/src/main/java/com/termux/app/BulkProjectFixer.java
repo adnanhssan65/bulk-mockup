@@ -24,10 +24,13 @@ import java.util.regex.Pattern;
  *      sleeps (engine poll, retry backoff) ko hath NAHI lagta
  *   4. WAKELOCK — set_wakelock ka os.system wala body (ya inline
  *      os.system calls) → subprocess.Popen fire-and-forget
- *   5. SCAN TIMEOUT — safe_scan/scan_media ka default timeout >1
- *      → 1; termux-media-scan calls par literal timeout=5 → 1;
- *      bina-timeout wali simple subprocess.run scan call par
- *      timeout=1 judta hai (sirf jab call saaf tor par band ho)
+ *   5. SCAN STALL — safe_scan/scan_media ka body subprocess.run
+ *      (wait karne wala) ho to pura body P1 wale proven
+ *      subprocess.Popen fire-and-forget form se badal jata hai
+ *      (naam + signature waisa ka waisa; def ka default
+ *      timeout_sec >1 ho to 1). Body pehle se Popen wala ho to
+ *      ALREADY_OK — koi change nahi. safe_scan_dir or bulk/batch
+ *      scan helpers ko hath NAHI lagta.
  *   6. GALLERY SEQUENCE — sirf family pair pattern par: helper
  *      mojood na ho or process_one me safe_scan(mock_path) +
  *      safe_scan(wall_path) ki adjacent jori mile to P1 wala
@@ -92,9 +95,6 @@ public final class BulkProjectFixer {
 
     private static final Pattern SCAN_DEF_TIMEOUT = Pattern.compile(
         "(def\\s+(?:safe_scan|scan_media)\\s*\\([^)]*?timeout_sec\\s*=\\s*)(\\d+)");
-
-    private static final Pattern TIMEOUT_LITERAL = Pattern.compile(
-        "timeout\\s*=\\s*(\\d+)");
 
     private static final Pattern SCAN_LINE_MOCK = Pattern.compile(
         "^(\\s*)safe_scan\\(mock_path\\)\\s*$");
@@ -334,87 +334,71 @@ public final class BulkProjectFixer {
         }
     }
 
-    // ------------------------------------------------------------ item 5: scan timeout
+    // ------------------------------------------------------------ item 5: scan stall
 
+    /**
+     * Per-file scan function (safe_scan, warna scan_media) ka body
+     * subprocess.run wala ho to pura body P1 ke proven Popen
+     * fire-and-forget form se badal do — naam + signature waisa ka
+     * waisa rehta hai, sirf def ke default timeout_sec >1 ko 1 kar
+     * dete hain taake form P1 se mil jaye. Body pehle se Popen wala
+     * ho to ALREADY_OK or koi change nahi (byte-identical ki
+     * guarantee). safe_scan_dir / bulk helpers is me nahi ate —
+     * un ke naam alag hain or unhe jaan bujh kar nahi cherhte.
+     */
     private static void fixScanTimeout(List<String> lines, Report report, boolean[] needImport) {
-        boolean fixed = false;
-        boolean ok = false;
+        int[] range = null;
+        String param = null;
+        for (String fn : new String[]{"safe_scan", "scan_media"}) {
+            int[] r = findFunction(lines, fn);
+            if (r == null) continue;
+            Matcher dm = Pattern.compile("def\\s+" + Pattern.quote(fn) + "\\s*\\(([^)]*)\\)")
+                .matcher(lines.get(r[0]));
+            if (!dm.find()) continue;
+            String ps = dm.group(1).trim();
+            if (ps.isEmpty()) continue;
+            String first = ps.split(",")[0].split("=")[0].trim();
+            if (!first.matches("[A-Za-z_][A-Za-z0-9_]*")) continue;
+            range = r;
+            param = first;
+            break;
+        }
+        if (range == null) return; // scan function hi nahi — NOT_APPLIED
 
-        // (a) safe_scan / scan_media ki definition ka default
-        for (int i = 0; i < lines.size(); i++) {
-            Matcher m = SCAN_DEF_TIMEOUT.matcher(lines.get(i));
-            if (m.find()) {
-                int v = parseIntSafe(m.group(2), -1);
-                if (v > 1) {
-                    lines.set(i, m.replaceFirst("$1" + "1"));
-                    fixed = true;
-                } else if (v == 1) {
-                    ok = true;
-                }
-            }
+        StringBuilder body = new StringBuilder();
+        for (int i = range[1]; i < range[2]; i++) body.append(lines.get(i)).append('\n');
+        String b = body.toString();
+        if (b.contains("subprocess.Popen") && b.contains("termux-media-scan")) {
+            report.scanTimeout = Status.ALREADY_OK;
+            return;
+        }
+        if (!b.contains("subprocess.run") || !b.contains("termux-media-scan")) {
+            return; // ajeeb body — hath nahi lagana
         }
 
-        // (b) media-scan wali lines par literal timeout=5 → 1 (sirf 5:
-        //     bulk/dir scan ke bare timeout jaan bujh kar nahi cherhte —
-        //     published fixed runners me wo wese ke wese rehte hain)
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            if (!line.contains("termux-media-scan")) continue;
-            Matcher m = TIMEOUT_LITERAL.matcher(line);
-            StringBuffer sb = new StringBuffer();
-            boolean lineChanged = false;
-            while (m.find()) {
-                int v = parseIntSafe(m.group(1), -1);
-                if (v == 5) {
-                    m.appendReplacement(sb, "timeout=1");
-                    lineChanged = true;
-                } else {
-                    if (v == 1) ok = true;
-                    m.appendReplacement(sb, Matcher.quoteReplacement(m.group(0)));
-                }
-            }
-            m.appendTail(sb);
-            if (lineChanged) {
-                lines.set(i, sb.toString());
-                fixed = true;
-            }
+        // Def ka default timeout_sec >1 → 1 (P1 ki exact form)
+        Matcher m = SCAN_DEF_TIMEOUT.matcher(lines.get(range[0]));
+        if (m.find() && parseIntSafe(m.group(2), -1) > 1) {
+            lines.set(range[0], m.replaceFirst("$1" + "1"));
         }
 
-        // (c) bina timeout wali simple subprocess.run scan call — call ke
-        //     band hone ki jagah saaf mile to timeout=1 jod do
-        String text = join(lines);
-        StringBuilder out = new StringBuilder();
-        int idx = 0;
-        while (true) {
-            int start = text.indexOf("subprocess.run(", idx);
-            if (start < 0) {
-                out.append(text.substring(idx));
-                break;
-            }
-            int end = matchingParen(text, start + "subprocess.run".length(), 800);
-            if (end < 0) {
-                out.append(text.substring(idx));
-                break;
-            }
-            String call = text.substring(start, end + 1);
-            out.append(text, idx, start);
-            if (call.contains("termux-media-scan") && !call.contains("timeout")) {
-                out.append(call, 0, call.length() - 1).append(", timeout=1)");
-                fixed = true;
-                needImport[0] = true; // subprocess pehle se istemal ho raha hai, phir bhi pakka kar lo
-            } else {
-                out.append(call);
-            }
-            idx = end + 1;
-        }
-        String newText = out.toString();
-        if (!newText.equals(text)) {
-            lines.clear();
-            for (String l : newText.split("\n", -1)) lines.add(l);
-        }
+        // Body ka asal hissa (akhir ki khali lines mehfooz rakho)
+        int bodyEnd = range[2];
+        while (bodyEnd > range[1] && lines.get(bodyEnd - 1).trim().isEmpty()) bodyEnd--;
 
-        if (fixed) report.scanTimeout = Status.FIXED;
-        else if (ok) report.scanTimeout = Status.ALREADY_OK;
+        String defIndent = indentStr(lines.get(range[0]));
+        List<String> newBody = new ArrayList<>();
+        newBody.add(defIndent + "    # Fire-and-forget: scan ko kabhi wait nahi karna — app ke andar run ho to");
+        newBody.add(defIndent + "    # termux-media-scan wapas ane me dair karta hai aur har image par time zaya hota hai.");
+        newBody.add(defIndent + "    # Scan pichay chal kar apna kaam khud pura kar leta hai, tartib launch order se rehti hai.");
+        newBody.add(defIndent + "    try:");
+        newBody.add(defIndent + "        subprocess.Popen([\"termux-media-scan\", " + param
+            + "], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)");
+        newBody.add(defIndent + "    except Exception:");
+        newBody.add(defIndent + "        pass");
+        replaceRange(lines, range[1], bodyEnd, newBody);
+        needImport[0] = true;
+        report.scanTimeout = Status.FIXED;
     }
 
     // ------------------------------------------------------------ item 6: gallery sequence
@@ -554,21 +538,6 @@ public final class BulkProjectFixer {
     private static void replaceRange(List<String> lines, int from, int toExclusive, List<String> repl) {
         for (int i = toExclusive - 1; i >= from; i--) lines.remove(i);
         lines.addAll(from, repl);
-    }
-
-    /** openIdx par '(' hai — us ki matching ')' ki position, window ke andar na mile to -1. */
-    private static int matchingParen(String text, int openIdx, int window) {
-        int depth = 0;
-        int limit = Math.min(text.length(), openIdx + window);
-        for (int i = openIdx; i < limit; i++) {
-            char c = text.charAt(i);
-            if (c == '(') depth++;
-            else if (c == ')') {
-                depth--;
-                if (depth == 0) return i;
-            }
-        }
-        return -1;
     }
 
     private static int indentOf(String line) {

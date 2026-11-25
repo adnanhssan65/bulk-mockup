@@ -806,7 +806,7 @@ public final class BulkStrings {
         put(CHECK_HISTORY, "Shared history", "Shared history");
         put(CHECK_DELAYS, "Loading delays", "Loading delays");
         put(CHECK_WAKELOCK, "Wakelock stall", "Wakelock stall");
-        put(CHECK_SCAN, "Scan timeout", "Scan timeout");
+        put(CHECK_SCAN, "Scan stall", "Scan stall");
         put(CHECK_GALLERY, "Gallery sequence", "Gallery sequence");
         put(CHECK_FIXED, "Fixed", "Fix kar diya");
         put(CHECK_OK, "Already OK", "Pehle se theek");
