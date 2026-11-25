@@ -295,6 +295,13 @@ public final class BulkStrings {
     public static final String CP_IMPORT_DONE = "cp_import_done";
     public static final String CP_IMPORT_NOT_FOUND = "cp_import_not_found";
     public static final String CP_IMPORT_FAILED = "cp_import_failed";
+    // v144 — sidebar Backup (Settings Save / Wapas Lao)
+    public static final String BACKUP = "backup";
+    public static final String BACKUP_SAVE = "backup_save";
+    public static final String BACKUP_LOAD = "backup_load";
+    public static final String BACKUP_SAVED = "backup_saved";
+    public static final String BACKUP_LOADED = "backup_loaded";
+    public static final String BACKUP_SAVE_FAILED = "backup_save_failed";
     public static final String CP_RESET = "cp_reset";
     public static final String CP_RESET_MSG = "cp_reset_msg";
     public static final String CP_RESET_DONE = "cp_reset_done";
@@ -768,6 +775,12 @@ public final class BulkStrings {
         put(CP_IMPORT_DONE, "Settings imported", "Settings import ho gayin");
         put(CP_IMPORT_NOT_FOUND, "Backup file not found", "Backup file nahi mili");
         put(CP_IMPORT_FAILED, "Import failed — file is not valid", "Import fail — file durust nahi hai");
+        put(BACKUP, "Backup", "Backup");
+        put(BACKUP_SAVE, "Settings Save", "Settings Save Karo");
+        put(BACKUP_LOAD, "Load Settings", "Settings Wapas Lao (Load)");
+        put(BACKUP_SAVED, "Settings saved ✓", "Settings save ho gayin ✓");
+        put(BACKUP_LOADED, "Settings loaded ✓", "Settings wapas ah gayin ✓");
+        put(BACKUP_SAVE_FAILED, "Save failed", "Save nahi ho saki");
         put(CP_RESET, "Reset to Defaults", "Defaults Par Wapas");
         put(CP_RESET_MSG,
             "All settings will return to factory defaults. The Control Panel password will also reset to the default. Continue?",

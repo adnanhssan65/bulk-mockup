@@ -76,6 +76,10 @@ public class BulkDashboardActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // v144: fresh install par saved settings khud wapas (sidebar
+        // Backup) — UI banne se pehle, taake naam/theme/font wapas
+        // wali halat me hi lagu hon. Flag/file ki shart helper me hai.
+        BulkSettingsBackup.autoRestoreIfNeeded(this);
         setTitle(BulkPanelSettings.appName(this));
 
         if (!BulkMockupSetup.isSetupDone()) {
@@ -1101,6 +1105,12 @@ public class BulkDashboardActivity extends Activity {
             closeDrawer();
             openScreen(BulkControlPanelActivity.class, "Control Panel nahi khul saka.");
         }));
+        // v144: Backup — chhoti si row (owner ka UI rule); tap par
+        // Settings Save / Wapas Lao wala chhota popup khulta hai
+        drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.BACKUP), false, v -> {
+            closeDrawer();
+            showBackupPopup();
+        }));
         drawer.addView(drawerRow(BulkStrings.t(this, BulkStrings.CHECK_FOR_UPDATES), false, v -> {
             closeDrawer();
             openScreen(BulkUpdateActivity.class, "Update screen nahi khul saki.");
@@ -1127,7 +1137,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v143");
+        version.setText("Termux Mod v144");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -1188,6 +1198,63 @@ public class BulkDashboardActivity extends Activity {
         chev.setLayoutParams(new LinearLayout.LayoutParams(BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
         row.addView(chev);
         return row;
+    }
+
+    // ------------------------------------------------------------ v144 backup
+
+    /** Sidebar Backup popup: do chhoti rows — Settings Save / Wapas Lao. */
+    private void showBackupPopup() {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.BACKUP), dialog);
+
+        TextView saveBtn = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.BACKUP_SAVE), v -> {
+                dialog.dismiss();
+                new Thread(() -> {
+                    final boolean ok = BulkSettingsBackup.save(this);
+                    runOnUiThread(() -> {
+                        if (isFinishing()) return;
+                        Toast.makeText(this, BulkStrings.t(this, ok
+                            ? BulkStrings.BACKUP_SAVED
+                            : BulkStrings.BACKUP_SAVE_FAILED),
+                            Toast.LENGTH_LONG).show();
+                    });
+                }).start();
+            });
+        panel.addView(saveBtn);
+
+        TextView loadBtn = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.BACKUP_LOAD), v -> {
+                dialog.dismiss();
+                new Thread(() -> {
+                    final int res = BulkSettingsBackup.load(this);
+                    runOnUiThread(() -> {
+                        if (isFinishing()) return;
+                        if (res == BulkSettingsBackup.LOAD_OK) {
+                            BulkControlPanelActivity.applyIconAliases(this,
+                                BulkPanelSettings.iconChoice(this));
+                            Toast.makeText(this,
+                                BulkStrings.t(this, BulkStrings.BACKUP_LOADED),
+                                Toast.LENGTH_LONG).show();
+                            recreate();
+                        } else {
+                            Toast.makeText(this, BulkStrings.t(this,
+                                res == BulkSettingsBackup.LOAD_NOT_FOUND
+                                    ? BulkStrings.CP_IMPORT_NOT_FOUND
+                                    : BulkStrings.CP_IMPORT_FAILED),
+                                Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }).start();
+            });
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.topMargin = BulkTheme.dp(this, 10);
+        loadBtn.setLayoutParams(llp);
+        panel.addView(loadBtn);
+
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     private void openDrawer() {
