@@ -40,7 +40,7 @@ def animated_spinner(text, duration=0.6):
 
 def safe_scan(path):
     try:
-        subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
     except:
         pass
 
