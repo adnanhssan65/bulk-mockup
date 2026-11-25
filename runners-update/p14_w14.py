@@ -96,14 +96,15 @@ def animated_spinner(text, duration=0.8):
 
 def set_wakelock(enable=True):
     try:
-        if enable: os.system("termux-wake-lock >/dev/null 2>&1")
-        else: os.system("termux-wake-unlock >/dev/null 2>&1")
+        # Fire-and-forget: app ke session-less process me ye command atak sakti hai - intezar nahi karna
+        subprocess.Popen(["termux-wake-lock" if enable else "termux-wake-unlock"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: pass
 
 # --- SCAN (Project 1 jesa) ---
 # Har file save hote hi foran, ONE BY ONE aur usi order me scan hoti hai (pehle mockup, phir wallpapers 1..6).
 # Isse gallery me sequence bilkul sahi rehti hai.
-def safe_scan(path, timeout_sec=5):
+def safe_scan(path, timeout_sec=1):
     try:
         subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)
     except subprocess.TimeoutExpired:
