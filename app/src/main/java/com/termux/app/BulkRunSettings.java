@@ -81,6 +81,13 @@ public final class BulkRunSettings {
      *   SYSTEM (system_core.py):
      *           Mode [1] Normal (DEFAULT) / [2] HD — is_hd = jawab == '2'
      *           Size ADNAN wali hi tartib.
+     *   SINGLE (w20.py — v147 me bundled):
+     *           Sirf EK sawal: Mode [1] HD (DEFAULT) / [2] Normal.
+     *           Size wala sawal is runner me hai hi nahi — jawab
+     *           sirf mode wala pipe hota hai.
+     *   NONE (w21.py — v147 me bundled):
+     *           Koi sawal nahi — runner poori tarah automatic hai
+     *           (video → Live Photo). Kuch pipe nahi hota.
      *   UNKNOWN (koi or script): app ko sawal maloom nahi — sirf
      *           Enter pipe hota hai (script ke apne defaults lagu).
      *
@@ -88,13 +95,17 @@ public final class BulkRunSettings {
      * console popup me chalte hain (terminal kabhi nahi khulta —
      * owner ki sakht hidayat, v137).
      */
-    public enum PromptProfile { ADNAN, SYSTEM, UNKNOWN }
+    public enum PromptProfile { ADNAN, SYSTEM, SINGLE, NONE, UNKNOWN }
 
     /** Script ke naam se prompt khandan pehchano (pure). */
     public static PromptProfile profileForScript(String script) {
         if (script == null) return PromptProfile.UNKNOWN;
         String s = script.trim();
         if (s.equals("system_core.py")) return PromptProfile.SYSTEM;
+        // v147: w20/w21 ke apne khandan aam w<N> wale ADNAN rule se
+        // PEHLE — un ke sawal ginti me mukhtalif hain (1 / 0).
+        if (s.equals("w20.py")) return PromptProfile.SINGLE;
+        if (s.equals("w21.py")) return PromptProfile.NONE;
         if (s.equals("adnan_core.py") || s.equals("adnan_core_4.py")
             || s.equals("dual_core.py") || s.equals("project3_core.py")
             || s.matches("w\\d+\\.py")) {
@@ -109,7 +120,9 @@ public final class BulkRunSettings {
      * faisla un ki asal (persisted/detected) script se. v139: 15–18
      * bhi bundled hain; un ke profiles bhi script se hi bante hain
      * (w15/w17/w18 = ADNAN, P16 ki system_core.py = SYSTEM) — dono
-     * khandan VM par asal runs se verify shuda hain.
+     * khandan VM par asal runs se verify shuda hain. v147: 20/21 bhi
+     * bundled — w20.py = SINGLE (sirf Mode sawal), w21.py = NONE
+     * (koi sawal nahi), dono VM par asal runs se verify shuda.
      */
     public static PromptProfile profileFor(int projectNumber, String script) {
         if (hasVerifiedPrompts(projectNumber)) return PromptProfile.ADNAN;
@@ -120,6 +133,8 @@ public final class BulkRunSettings {
      * Profile ke hisab se stdin jawab [mode, size]. UNKNOWN par do
      * khaali Enter — script apne defaults par chalti hai, lekin run
      * phir bhi console popup ke andar hi rehta hai.
+     * SINGLE par sirf mode jawab [mode]; NONE par khaali list —
+     * buildPipedCommand bina pipe ke asal command chalata hai.
      * Ghalat/unknown saved jawab hamesha script ke DEFAULT par
      * girta hai (ADNAN: HD/Original; SYSTEM: Normal/Original).
      */
@@ -131,7 +146,14 @@ public final class BulkRunSettings {
             out.add("");
             return out;
         }
+        if (profile == PromptProfile.NONE) {
+            return out; // koi sawal hi nahi — kuch pipe nahi hota
+        }
         boolean normal = ANSWER_NORMAL.equals(hdAnswer);
+        if (profile == PromptProfile.SINGLE) {
+            out.add(normal ? "2" : "1"); // ADNAN wali tartib: '1'=HD (default), '2'=Normal
+            return out;
+        }
         boolean crop = ANSWER_CROP.equals(sizeAnswer);
         if (profile == PromptProfile.SYSTEM) {
             out.add(normal ? "1" : "2"); // SYSTEM khandan: '1'=Normal (default), '2'=HD

@@ -14,9 +14,9 @@ import java.util.Locale;
  *   1) Project ke <N>_Mockups folder me koi image ho to SAB SE NAYI
  *      asal mockup file (lastModified sab se zyada; tie par naam ka
  *      bara harf wala — faisla hamesha tay shuda).
- *   2) Warna bundled projects (1–14) ke liye app ke andar wala
- *      preview asset: assets/bulk/previews/p<N>.jpg (ye asal runner
- *      outputs se bane hain).
+ *   2) Warna bundled projects (1–18, 20, 21) ke liye app ke andar
+ *      wala preview asset: assets/bulk/previews/p<N>.jpg (ye asal
+ *      runner outputs se bane hain).
  *   3) Warna PLACEHOLDER — neutral tile project number ke sath.
  */
 public final class BulkPreviewSource {
@@ -25,8 +25,8 @@ public final class BulkPreviewSource {
     public static final int KIND_BUNDLED = 1;
     public static final int KIND_PLACEHOLDER = 2;
 
-    /** Bundled previews sirf projects 1..18 ke liye hain (v139: 15–18 bhi bundled). */
-    public static final int LAST_BUNDLED_PROJECT = 18;
+    /** Sab se bara bundled project number (v147: 20/21 bhi bundled — 19 kabhi tha hi nahi). */
+    public static final int LAST_BUNDLED_PROJECT = 21;
 
     private BulkPreviewSource() {}
 
@@ -57,9 +57,19 @@ public final class BulkPreviewSource {
         return "bulk/previews/p" + projectNumber + ".jpg";
     }
 
-    /** Is number ke liye bundled preview mojood ho sakta hai? (1..18) */
+    /**
+     * Ye number bundled project hai? Bundled set = 1..18, 20, 21
+     * (v139: 15–18; v147: 20/21 — Project 19 kabhi bana hi nahi,
+     * is liye saada range nahi, asal set hi check hota hai).
+     */
+    public static boolean isBundledProject(int projectNumber) {
+        return (projectNumber >= 1 && projectNumber <= 18)
+            || projectNumber == 20 || projectNumber == 21;
+    }
+
+    /** Is number ke liye bundled preview mojood ho sakta hai? (bundled set hi) */
     public static boolean hasBundledRange(int projectNumber) {
-        return projectNumber >= 1 && projectNumber <= LAST_BUNDLED_PROJECT;
+        return isBundledProject(projectNumber);
     }
 
     /**

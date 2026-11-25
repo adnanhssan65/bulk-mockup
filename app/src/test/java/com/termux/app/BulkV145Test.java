@@ -398,12 +398,12 @@ public class BulkV145Test {
     }
 
     @Test
-    public void versionBumpedTo146() throws Exception {
+    public void versionBumpedTo147() throws Exception {
         String dash = findSource("app/src/main/java/com/termux/app/BulkDashboardActivity.java");
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v146"));
+        assertTrue(dash.contains("Termux Mod v147"));
         String gradle = findSource("app/build.gradle");
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 146"));
+        assertTrue(gradle.contains("versionCode 147"));
     }
 }

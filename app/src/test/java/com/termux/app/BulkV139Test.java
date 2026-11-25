@@ -28,7 +28,7 @@ public class BulkV139Test {
 
     @Test
     public void bundledPreviewRangeCovers15To18() {
-        assertEquals(18, BulkPreviewSource.LAST_BUNDLED_PROJECT);
+        assertEquals(21, BulkPreviewSource.LAST_BUNDLED_PROJECT); // v147: 20/21 bhi bundled
         for (int n = 15; n <= 18; n++) {
             assertTrue("p" + n, BulkPreviewSource.hasBundledRange(n));
             assertEquals("bulk/previews/p" + n + ".jpg",

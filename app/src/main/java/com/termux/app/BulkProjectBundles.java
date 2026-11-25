@@ -40,6 +40,15 @@ public final class BulkProjectBundles {
         new Thread(() -> {
             boolean changed = false;
             try {
+                // v147: pehle upgrade-repair (bundled projects ki
+                // purani/ajnabi runner files bundled wali se refresh),
+                // phir ghayab projects ki fresh install — tartib yahi
+                // hai taake lists bante waqt dono kaam ho chuke hon.
+                BulkProjectRepair.repairOnUpgradeIfNeeded(context.getApplicationContext());
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Upgrade repair fail: " + e.getMessage());
+            }
+            try {
                 changed = installMissing(context.getApplicationContext());
             } catch (Exception e) {
                 Logger.logError(LOG_TAG, "Bundled projects check fail: " + e.getMessage());
