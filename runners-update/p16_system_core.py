@@ -51,8 +51,13 @@ def animated_spinner(text, duration=0.8):
     sys.stdout.write(f"\r {C4}✔{ENDC} {text} Completed!       \n")
 
 def safe_scan(path):
-    try: subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-    except: pass
+    # Fire-and-forget: scan ko kabhi wait nahi karna — app ke andar run ho to
+    # termux-media-scan wapas ane me dair karta hai aur har image par time zaya hota hai.
+    # Scan pichay chal kar apna kaam khud pura kar leta hai, tartib launch order se rehti hai.
+    try:
+        subprocess.Popen(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
 
 
 # --- Gallery copies (TermuxMod) — set ki tartib me ---
