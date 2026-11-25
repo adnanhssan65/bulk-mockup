@@ -41,11 +41,12 @@ def animated_spinner(text, duration=0.8):
 
 def set_wakelock(enable=True):
     try:
-        if enable: os.system("termux-wake-lock >/dev/null 2>&1")
-        else: os.system("termux-wake-unlock >/dev/null 2>&1")
+        # Fire-and-forget: app ke session-less process me ye command atak sakti hai - intezar nahi karna
+        subprocess.Popen(["termux-wake-lock" if enable else "termux-wake-unlock"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: pass
 
-def scan_media(path, timeout_sec=5):
+def scan_media(path, timeout_sec=1):
     try:
         subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)
     except subprocess.TimeoutExpired:
