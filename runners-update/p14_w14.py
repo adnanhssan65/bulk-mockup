@@ -1,0 +1,990 @@
+import os, sys, time, shutil, subprocess, random, threading, gc, queue, colorsys
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont, ImageFile, ImageFilter
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # Halki truncated files ko galat "corrupt" na samjhe
+import PIL.ImageCms as cms
+from tqdm import tqdm
+import cv2, numpy as np
+
+# --- MULTI-COLORS (Neon/Aesthetic Gradient) ---
+C1 = '\033[95m'  # Magenta
+C2 = '\033[91m'  # Red
+C3 = '\033[93m'  # Yellow
+C4 = '\033[92m'  # Green
+C5 = '\033[96m'  # Cyan
+C6 = '\033[94m'  # Blue
+ENDC = '\033[0m'
+BOLD = '\033[1m'
+
+# --- AESTHETIC QUOTES ---
+QUOTES = [
+    "Create your own sunshine.",
+    "Small steps every day.",
+    "Keep going. Keep growing.",
+    "Aesthetic is not just a look, it's a vibe.",
+    "Coding with a touch of elegance.",
+    "Transform reality with code."
+]
+
+#  HACKER TERMINAL PREMIUM HEADER
+HL = '\u2500'
+HD = '\u2550'
+HG  = '\033[92m'   # Hacker Green (bright)
+HG2 = '\033[32m'   # Hacker Green (dim)
+HC  = '\033[96m'   # Cyan accent
+HR  = '\033[91m'   # Red alert accent
+HY  = '\033[93m'   # Yellow accent
+
+def display_header():
+    os.system('clear')
+    quote = random.choice(QUOTES)
+
+    print(f"{HG2}{HL * 56}{ENDC}")
+    boot_lines = [
+        "Initializing secure shell........",
+        "Loading encryption modules.......",
+        "Mounting mockup engine...........",
+        "Verifying integrity checksum.....",
+    ]
+    for line in boot_lines:
+        print(f"{HG} [BOOT]{ENDC} {line} {HC}[OK]{ENDC}")
+        time.sleep(0)
+    print(f"{HG2}{HL * 56}{ENDC}\n")
+
+    ascii_art = [
+        "   \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2557   \u2588\u2588\u2557",
+        "  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551",
+        "  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551",
+        "  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551\u255a\u2588\u2588\u2557\u2588\u2588\u2551",
+        "  \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2588\u2551",
+        "  \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u255d  \u255a\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u2550\u2550\u255d"
+    ]
+    for line in ascii_art:
+        print(f"{HG}{BOLD}{line}{ENDC}")
+
+    print(f"\n{HC}      \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510")
+    print(f"      \u2502   \U0001f4bb  R O O T   M O D E    \u2502")
+    print(f"      \u2502   \U0001f513  A C C E S S   O K    \u2502")
+    print(f"      \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518{ENDC}\n")
+
+    print(f" {HG}\U0001f338 \u26a1 \U0001f338   W e l c o m e   t o   t h e   S y s t e m   \U0001f338 \u26a1 \U0001f338{ENDC}\n")
+
+    project_line = f"Project : {P_NUM}"
+    owner_line   = "Owner   : Mehar Adnan"
+    contact_line = "Contact : +44 7404 032136"
+    pad = 46
+    prefix = " \u26a1 "
+    box_w = len(prefix) + pad
+
+    print(f" {HG2}\u2554{HD * box_w}\u2557{ENDC}")
+    print(f" {HG2}\u2551{HY}{prefix}{project_line:<{pad}}{HG2}\u2551{ENDC}")
+    print(f" {HG2}\u2551{HY}{prefix}{quote:<{pad}}{HG2}\u2551{ENDC}")
+    print(f" {HG2}\u2551{HY}{prefix}{owner_line:<{pad}}{HG2}\u2551{ENDC}")
+    print(f" {HG2}\u2551{HY}{prefix}{contact_line:<{pad}}{HG2}\u2551{ENDC}")
+    print(f" {HG2}\u255a{HD * box_w}\u255d{ENDC}")
+
+    print(f"\n {HR}\U0001f6e1\ufe0f  [ ACCESS GRANTED ]{ENDC} {HG}\u2014 Session Encrypted \u2705{ENDC}")
+    print(f" {C1}\u26a1{C3}\u2726{C5}\u26a1{C3}\u2726{C1}\u26a1  {BOLD}{HG}P R E M I U M   E D I T I O N{ENDC}  {C1}\u26a1{C3}\u2726{C5}\u26a1{C3}\u2726{C1}\u26a1{ENDC}\n")
+
+def animated_spinner(text, duration=0.8):
+    frames = ['\u2022', 'o', 'O', 'o']
+    for i in range(int(duration * 10)):
+        sys.stdout.write(f"\r {C1}\u273f{ENDC} {C5}{frames[i % len(frames)]}{ENDC} {text}...")
+        sys.stdout.flush()
+        time.sleep(0)
+    sys.stdout.write(f"\r {C4}\u2714{ENDC} {text} Completed!       \n")
+
+def set_wakelock(enable=True):
+    try:
+        if enable: os.system("termux-wake-lock >/dev/null 2>&1")
+        else: os.system("termux-wake-unlock >/dev/null 2>&1")
+    except: pass
+
+# --- SCAN (Project 1 jesa) ---
+# Har file save hote hi foran, ONE BY ONE aur usi order me scan hoti hai (pehle mockup, phir wallpapers 1..6).
+# Isse gallery me sequence bilkul sahi rehti hai.
+def safe_scan(path, timeout_sec=5):
+    try:
+        subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+
+
+# --- Gallery copies (TermuxMod) — set ki tartib me ---
+# Run ke sath hi har set ki files TermuxMod/Project N folder me bhi laga do,
+# bilkul usi order me jis order me save hui theen: pehli file Mockups me,
+# baqi Ready Wallpapers me; har copy par usi file ka tracker time aur copy
+# ke foran baad scan. Is se gallery me images set ki tartib me ati hain
+# (block me nahi). Folder mojood na ho to khamoshi se skip —
+# folder banana app ka kaam hai.
+TM_ROOT = "/storage/emulated/0/TermuxMod"
+def gallery_copy_outputs(items):
+    try:
+        proj = os.path.join(TM_ROOT, f"Project {P_NUM}")
+        dm = os.path.join(proj, "Mockups")
+        dr = os.path.join(proj, "Ready Wallpapers")
+        if not (os.path.isdir(dm) and os.path.isdir(dr)):
+            return
+        import shutil
+        for i, (src, t) in enumerate(items):
+            d = os.path.join(dm if i == 0 else dr, os.path.basename(src))
+            shutil.copyfile(src, d)
+            os.utime(d, (t, t))
+            safe_scan(d)
+    except Exception:
+        pass
+
+def safe_scan_dir(path, timeout_sec=20):
+    try:
+        subprocess.run(["termux-media-scan", "-r", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+
+# Optional plugins: agar installed hon to HEIC/AVIF bhi khul jayengi (na hon to koi masla nahi)
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except Exception:
+    pass
+try:
+    import pillow_avif  # noqa
+except Exception:
+    pass
+
+# Har tarah ki image extension (naam ke bajaye andar ka asal format PIL khud pehchanta hai)
+IMG_EXTS = ('.jpg', '.jpeg', '.jpe', '.jfif', '.png', '.webp', '.avif', '.heic', '.heif',
+            '.bmp', '.tif', '.tiff', '.gif', '.jp2', '.ico')
+
+READ_ERR = {}  # file path -> asli wajah (skip message me dikhane ke liye)
+
+def sniff_type(path):
+    # File ke andar asal me kya hai (naam .jpg ho tab bhi)
+    try:
+        with open(path, 'rb') as fh:
+            h = fh.read(32)
+    except Exception as e:
+        return f"open fail: {type(e).__name__}"
+    if len(h) == 0: return "khali file (0 bytes)"
+    if h[:3] == b'\xff\xd8\xff': return "jpeg"
+    if h[:8] == b'\x89PNG\r\n\x1a\n': return "png"
+    if h[:4] == b'RIFF' and h[8:12] == b'WEBP': return "webp"
+    if h[4:8] == b'ftyp': return "heif/avif:" + h[8:12].decode('latin1')
+    if h[:5].lower() == b'<html' or h[:9].lower() == b'<!doctype': return "html (download fail)"
+    return "unknown:" + h[:8].hex()
+
+def safe_imread(path):
+    errs = []
+    flags = cv2.IMREAD_COLOR | getattr(cv2, 'IMREAD_IGNORE_ORIENTATION', 0)
+    # 1) PIL pehle (har type ki image isi se khulti hai) — transparent/palette/16-bit sab RGB me
+    try:
+        with Image.open(path) as im:
+            im.load()
+            if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                im = im.convert("RGBA")
+                bgc = Image.new("RGBA", im.size, (0, 0, 0, 255))
+                im = Image.alpha_composite(bgc, im)
+            rgb = im.convert('RGB')
+        return np.array(rgb)[:, :, ::-1].copy()  # RGB -> BGR (cv2 format)
+    except Exception as e:
+        errs.append(f"PIL {type(e).__name__}: {str(e)[:40]}")
+    # 2) Backup: cv2 direct
+    try:
+        img = cv2.imread(path, flags)
+        if img is not None and img.size > 0:
+            return img
+        errs.append("cv2 None")
+    except Exception as e:
+        errs.append(f"cv2 {type(e).__name__}")
+    # 3) Backup: cv2 imdecode
+    try:
+        img = cv2.imdecode(np.fromfile(path, dtype=np.uint8), flags)
+        if img is not None and img.size > 0:
+            return img
+    except Exception as e:
+        errs.append(f"imdecode {type(e).__name__}")
+    # 4) ffmpeg (agar Termux me installed ho) - aakhri koshish
+    try:
+        if shutil.which('ffmpeg'):
+            tmp_png = os.path.join(B, ".ff_tmp_read.png")
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, tmp_png],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+            img = cv2.imread(tmp_png, cv2.IMREAD_COLOR)
+            try: os.remove(tmp_png)
+            except: pass
+            if img is not None and img.size > 0:
+                return img
+            errs.append("ffmpeg fail")
+    except Exception as e:
+        errs.append(f"ffmpeg {type(e).__name__}")
+    READ_ERR[path] = f"{sniff_type(path)} | " + "; ".join(errs)
+    return None
+
+
+cv2.setNumThreads(0)
+import math
+
+cv2.setNumThreads(0)
+import math
+
+# ====================== PROJECT 14 : "CUSTOMIZED BACKGROUND" (Lock Screen + Home Screen) ======================
+P_NUM = sys.argv[2] if len(sys.argv) > 2 else "14"
+B = os.environ.get("MOCKUP_BASE", os.path.dirname(os.path.abspath(__file__)))
+I = os.path.join(B, f"{P_NUM}_wallpapers")
+O = os.path.join(B, f"{P_NUM}_Mockups")
+R = os.path.join(B, f"{P_NUM}_Ready_Wallpapers")
+W_H = os.path.join(B, "Ready_Upload_Batches")
+FONT_DIR = os.path.join(B, "fonts")
+BG_RECENT = os.path.join(B, ".bg_recent.txt")
+T_F = "/storage/emulated/0/.mockup_time_tracker.txt"
+
+# --- FONTS (sab zip ke "fonts" folder me; apna font chahiye to bas file badal do) ---
+FONT_TIME   = os.path.join(FONT_DIR, "SF Pro - Semibold Stencil.otf")   # glass time
+FONT_DATE   = os.path.join(FONT_DIR, "SF Pro - Semibold Soft.otf")      # date
+FONT_STATUS = os.path.join(FONT_DIR, "Inter-SemiBold.otf")              # carrier / widgets
+FONT_NUM    = os.path.join(FONT_DIR, "Inter-Bold.otf")                  # battery number
+FONT_TITLE  = os.path.join(FONT_DIR, "Lora-Italic.ttf")                 # "Customized Background" + labels
+
+# --- TEXTS ---
+TITLE_TEXT   = "Customized Background"
+LABEL_LEFT   = "Lock Screen"
+LABEL_RIGHT  = "Home Screen"
+CARRIER_TEXT = "ONIC"
+
+# --- MODES ---
+TIME_MODE  = "real"       # "real" = asli waqt | "fixed" = hamesha FIXED_TIME
+FIXED_TIME = "5:42"
+BATTERY_RANGE = (40, 100)
+TEXT_STYLE = "tinted"     # "tinted" = wallpaper ke rang ka date/time | "white"
+LUM_SPLIT = 0.55; BRIGHT_SPLIT = 0.78; TINT_MIN_CONTRAST = 4.0
+STATUS_DARK_LUM = 0.70
+GRAIN = 0.8
+WIDGETS = True            # right phone par weather / alarm / sunset widgets
+CITY_LAT, CITY_LON, TZ_HOURS = 24.86, 67.00, 5.0     # sunset time ke liye (Karachi) - apna shehar likh sakte ho
+TEMP_RANGE = (18, 34)
+
+# --- GEOMETRY (reference ke mutabiq, pixels) ---
+CW, CH = 1659, 2212
+SW, SH, RAD = 730, 1472, 100
+POS_L, POS_R = (78, 371), (851, 371)
+PT = SW / 393.0
+# gradient background: (y, centre colour, kinare ka colour) -- reference se naapa hua
+_BGY = [0, 150, 300, 450, 600, 750, 900, 1050, 1200, 1350, 1500, 1650, 1800, 1950, 2100, 2211]
+_BGC = [(139,140,142),(141,142,147),(144,143,148),(148,149,154),(149,150,155),(155,155,163),(163,166,175),(174,177,186),(184,187,196),(198,198,210),(208,211,218),(217,217,225),(222,225,232),(226,227,232),(226,229,234),(226,229,234)]
+_BGE = [(59,59,61),(57,57,59),(53,54,56),(50,51,55),(48,49,53),(48,49,53),(50,51,55),(55,56,58),(62,63,68),(72,73,78),(88,89,94),(106,109,118),(130,132,144),(149,151,164),(170,174,185),(172,176,188)]
+
+# ---------------- drawing helpers ----------------
+def _ss_mask(w, h, fn, ss=2):
+    im = Image.new('L', (max(1, int(w)) * ss, max(1, int(h)) * ss), 0)
+    fn(ImageDraw.Draw(im), ss)
+    return np.asarray(im.resize((max(1, int(w)), max(1, int(h))), Image.BOX), np.float32) / 255.0
+
+def rr_mask(w, h, rect, radius, ss=3):
+    x0, y0, x1, y1 = rect
+    return _ss_mask(w, h, lambda d, s: d.rounded_rectangle((x0 * s, y0 * s, x1 * s - 1, y1 * s - 1), radius=radius * s, fill=255), ss)
+
+def put(canvas, mask, x, y, color, alpha=1.0):
+    h, w = mask.shape[:2]; H, W = canvas.shape[:2]
+    x, y = int(round(x)), int(round(y))
+    x0, y0, x1, y1 = max(0, x), max(0, y), min(W, x + w), min(H, y + h)
+    if x1 <= x0 or y1 <= y0: return
+    m = mask[y0 - y:y1 - y, x0 - x:x1 - x][..., None] * alpha
+    reg = canvas[y0:y1, x0:x1]
+    reg += (np.array(color, np.float32) - reg) * m
+
+def text_tile(text, font):
+    bb = font.getbbox(text, anchor='ls')
+    pad = 8
+    w, h = bb[2] - bb[0] + 2 * pad, bb[3] - bb[1] + 2 * pad
+    im = Image.new('L', (w, h), 0)
+    ox, oy = pad - bb[0], pad - bb[1]
+    ImageDraw.Draw(im).text((ox, oy), text, font=font, fill=255, anchor='ls')
+    return np.asarray(im, np.float32) / 255.0, ox, oy, bb
+
+def draw_text(cv, text, font, cx, base_y, color, alpha=1.0, align="c", shadow=0.0):
+    m, ox, oy, bb = text_tile(text, font)
+    if align == "c": x = cx - (bb[0] + bb[2]) / 2.0 - ox
+    elif align == "l": x = cx - bb[0] - ox
+    else: x = cx - bb[2] - ox
+    y = base_y - oy
+    if shadow > 0:
+        put(cv, cv2.GaussianBlur(m, (0, 0), 3.0), x, y + 2, (0, 0, 0), shadow)
+    put(cv, m, x, y, color, alpha)
+
+def digit_h(font):
+    return -font.getbbox("0", anchor='ls')[1]
+
+def fit_font(path, text, target_w):
+    f = ImageFont.truetype(path, 200)
+    bb = f.getbbox(text, anchor='ls')
+    return ImageFont.truetype(path, max(8, int(round(200 * target_w / float(bb[2] - bb[0])))))
+
+def signal_mask():
+    bw, gap, H = 3.0 * PT, 1.7 * PT, 11.2 * PT
+    w, h = int(math.ceil(4 * bw + 3 * gap)) + 1, int(math.ceil(H)) + 1
+    def fn(d, s):
+        for i, r in enumerate([0.36, 0.56, 0.78, 1.0]):
+            x0 = i * (bw + gap); bh = H * r
+            d.rounded_rectangle((x0 * s, (H - bh) * s, (x0 + bw) * s - 1, H * s - 1), radius=0.9 * PT * s, fill=255)
+    return _ss_mask(w, h, fn, 4)
+
+def wifi_mask():
+    Ro = 11.6 * PT
+    w, h = int(math.ceil(2 * Ro * math.sin(math.radians(46)))) + 2, int(math.ceil(Ro + 0.8 * PT))
+    cx, cy = w / 2.0, Ro + 0.3 * PT
+    def fn(d, s):
+        for ro, ri in [(11.6, 8.9), (7.5, 5.0), (3.5, 0)]:
+            ro, ri = ro * PT, ri * PT
+            d.pieslice(((cx - ro) * s, (cy - ro) * s, (cx + ro) * s, (cy + ro) * s), 224, 316, fill=255)
+            if ri > 0: d.pieslice(((cx - ri) * s, (cy - ri) * s, (cx + ri) * s, (cy + ri) * s), 224, 316, fill=0)
+    return _ss_mask(w, h, fn, 4)
+
+def flashlight_mask(size):
+    k0 = size / 24.0
+    def fn(d, s):
+        k = k0 * s
+        d.polygon([(6.4 * k, 2.0 * k), (17.6 * k, 2.0 * k), (15.4 * k, 8.2 * k), (8.6 * k, 8.2 * k)], fill=255)
+        d.rounded_rectangle((5.6 * k, 0.9 * k, 18.4 * k, 3.6 * k), radius=1.1 * k, fill=255)
+        d.rounded_rectangle((8.4 * k, 7.8 * k, 15.6 * k, 22.8 * k), radius=2.6 * k, fill=255)
+        d.rounded_rectangle((10.9 * k, 11.8 * k, 13.1 * k, 15.8 * k), radius=1.1 * k, fill=0)
+    return _ss_mask(size + 1, size + 1, fn, 4)
+
+def camera_mask(size):
+    k0 = size / 24.0
+    def fn(d, s):
+        k = k0 * s
+        d.rounded_rectangle((1.6 * k, 6.4 * k, 22.4 * k, 20.8 * k), radius=3.6 * k, fill=255)
+        d.rounded_rectangle((8.0 * k, 3.6 * k, 16.0 * k, 7.6 * k), radius=1.5 * k, fill=255)
+        d.ellipse(((12 - 5.0) * k, (13.6 - 5.0) * k, (12 + 5.0) * k, (13.6 + 5.0) * k), fill=0)
+        d.ellipse(((12 - 3.4) * k, (13.6 - 3.4) * k, (12 + 3.4) * k, (13.6 + 3.4) * k), fill=255)
+    return _ss_mask(size + 1, size + 1, fn, 4)
+
+def sun_mask(size):
+    k = size / 24.0
+    def fn(d, s):
+        c = 12 * k * s
+        r = 4.6 * k * s
+        d.ellipse((c - r, c - r, c + r, c + r), fill=255)
+        for i in range(8):
+            a = math.radians(i * 45)
+            x0, y0 = c + math.cos(a) * 7.6 * k * s, c + math.sin(a) * 7.6 * k * s
+            x1, y1 = c + math.cos(a) * 10.6 * k * s, c + math.sin(a) * 10.6 * k * s
+            d.line((x0, y0, x1, y1), fill=255, width=max(2, int(1.9 * k * s)))
+    return _ss_mask(size + 1, size + 1, fn, 4)
+
+def alarm_mask(size):
+    k = size / 24.0
+    def fn(d, s):
+        K = k * s
+        d.ellipse((4.2 * K, 5.2 * K, 19.8 * K, 20.8 * K), fill=255)
+        d.ellipse((1.4 * K, 3.4 * K, 7.4 * K, 9.0 * K), fill=255); d.ellipse((16.6 * K, 3.4 * K, 22.6 * K, 9.0 * K), fill=255)
+        d.line((12 * K, 8.4 * K, 12 * K, 13.2 * K), fill=0, width=max(2, int(1.7 * K)))
+        d.line((12 * K, 13.2 * K, 15.6 * K, 15.4 * K), fill=0, width=max(2, int(1.7 * K)))
+        d.line((6 * K, 21 * K, 4 * K, 23 * K), fill=255, width=max(2, int(1.8 * K))); d.line((18 * K, 21 * K, 20 * K, 23 * K), fill=255, width=max(2, int(1.8 * K)))
+    return _ss_mask(size + 1, size + 1, fn, 3)
+
+def sunset_icon_mask(size):
+    k = size / 24.0
+    def fn(d, s):
+        K = k * s
+        d.pieslice((6.4 * K, 8.6 * K, 17.6 * K, 19.8 * K), 180, 360, fill=255)
+        d.line((1.5 * K, 14.2 * K, 22.5 * K, 14.2 * K), fill=255, width=max(2, int(1.6 * K)))
+        for a in (-150, -90, -30):
+            r = math.radians(a)
+            d.line((12 * K + math.cos(r) * 7.6 * K, 13.4 * K + math.sin(r) * 7.6 * K, 12 * K + math.cos(r) * 9.8 * K, 13.4 * K + math.sin(r) * 9.8 * K), fill=255, width=max(2, int(1.6 * K)))
+        d.polygon([(9.4 * K, 6.6 * K), (12 * K, 3.6 * K), (14.6 * K, 6.6 * K)], fill=255)
+    return _ss_mask(size + 1, size + 1, fn, 3)
+
+def _mean_lum(bgr):
+    f = bgr.astype(np.float32) / 255.0
+    return float((0.2126 * f[..., 2] + 0.7152 * f[..., 1] + 0.0722 * f[..., 0]).mean())
+
+def glass_circle(scr, cx, cy, r, strength=1.0):
+    x0, y0, x1, y1 = int(cx - r - 4), int(cy - r - 4), int(cx + r + 5), int(cy + r + 5)
+    reg = scr[y0:y1, x0:x1].copy()
+    blur = cv2.GaussianBlur(reg, (0, 0), max(2.0, r * 0.32))
+    glass = blur * 0.62 + np.array([30, 34, 44], np.float32) * 0.38 + 6
+    w, h = x1 - x0, y1 - y0; lx, ly = cx - x0, cy - y0
+    m = _ss_mask(w, h, lambda d, s: d.ellipse(((lx - r) * s, (ly - r) * s, (lx + r) * s - 1, (ly + r) * s - 1), fill=255), 3)
+    m_in = _ss_mask(w, h, lambda d, s: d.ellipse(((lx - r + 1.4) * s, (ly - r + 1.4) * s, (lx + r - 1.4) * s - 1, (ly + r - 1.4) * s - 1), fill=255), 3)
+    scr[y0:y1, x0:x1] += (glass - reg) * m[..., None] * strength
+    put(scr, np.clip(m - m_in, 0, 1), x0, y0, (255, 255, 255), 0.12)
+
+def glass_time(scr, text, font, cx, cy, tint):
+    """iOS-26 jesa glass stencil time: piche ka wallpaper halka blur + tint, kinaron par chamak/saya."""
+    H, W = scr.shape[:2]
+    m, ox, oy, bb = text_tile(text, font)
+    ch = digit_h(font)
+    x = cx - (bb[0] + bb[2]) / 2.0 - ox; y = cy + ch / 2.0 - oy
+    M = np.zeros((H, W, 1), np.float32); put(M, m, x, y, (1.0,)); M = M[..., 0]
+    tint = np.array(tint, np.float32)
+    if tint.mean() < 120: tint = tint * 0.3 + 255 * 0.7      # bright wallpaper: halka frosted glass
+    blur = cv2.GaussianBlur(scr, (0, 0), 6)
+    # bahar ka saya
+    sh = cv2.GaussianBlur(M, (0, 0), 7)
+    sh = cv2.warpAffine(sh, np.float32([[1, 0, 1], [0, 1, 5]]), (W, H))
+    scr *= (1 - 0.30 * sh * (1 - M))[..., None]
+    lift = 0.34
+    glass = blur * 0.80 + tint[None, None, :] * lift + 6
+    scr += (glass - scr) * (M * 0.96)[..., None]
+    # kinare: bevel (upar-left roshan, neeche-right gehra)
+    Mb = cv2.GaussianBlur(M, (0, 0), 1.5)
+    gx = cv2.Sobel(Mb, cv2.CV_32F, 1, 0, ksize=3) / 8.0; gy = cv2.Sobel(Mb, cv2.CV_32F, 0, 1, ksize=3) / 8.0
+    d = (gx + gy) * 0.7071
+    inside = np.clip((M - 0.15) / 0.5, 0, 1)
+    hi = np.clip(d * 5.0, 0, 1) * inside; lo = np.clip(-d * 5.0, 0, 1) * inside
+    scr += (255 - scr) * (hi * 0.78)[..., None]
+    scr *= (1 - 0.34 * lo)[..., None]
+    rim = np.clip(M - cv2.erode(M, np.ones((3, 3), np.uint8)), 0, 1)
+    scr += (255 - scr) * (rim * 0.16)[..., None]
+    np.clip(scr, 0, 255, out=scr)
+
+# ---------------- sunset ----------------
+def sunset_str(dt):
+    n = dt.timetuple().tm_yday
+    g = 2 * math.pi / 365.0 * (n - 1)
+    eq = 229.18 * (0.000075 + 0.001868 * math.cos(g) - 0.032077 * math.sin(g) - 0.014615 * math.cos(2 * g) - 0.040849 * math.sin(2 * g))
+    dec = 0.006918 - 0.399912 * math.cos(g) + 0.070257 * math.sin(g) - 0.006758 * math.cos(2 * g) + 0.000907 * math.sin(2 * g) - 0.002697 * math.cos(3 * g) + 0.00148 * math.sin(3 * g)
+    la = math.radians(CITY_LAT)
+    c = (math.cos(math.radians(90.833)) / (math.cos(la) * math.cos(dec))) - math.tan(la) * math.tan(dec)
+    c = max(-1.0, min(1.0, c)); ha = math.degrees(math.acos(c))
+    mins = 720 - 4 * (CITY_LON - ha) - eq + TZ_HOURS * 60
+    mins = int(round(mins)) % 1440
+    h, m = mins // 60, mins % 60
+    return f"{h % 12 or 12}:{m:02d}", ("PM" if h >= 12 else "AM")
+
+# ---------------- one phone screen ----------------
+def render_screen(w_bgr, now_dt, level, widgets):
+    scr_bgr = resize_exact(w_bgr, SW, SH)
+    scr = cv2.cvtColor(scr_bgr, cv2.COLOR_BGR2RGB).astype(np.float32)
+    H, W = SH, SW
+    p = lambda v: v * PT
+    time_str = FIXED_TIME if TIME_MODE == "fixed" else f"{now_dt.hour % 12 or 12}:{now_dt.strftime('%M')}"
+    date_str = now_dt.strftime("%a ") + str(now_dt.day) + now_dt.strftime(" %b")
+    zx0, zx1, zy0, zy1 = int(0.18 * W), int(0.82 * W), int(0.07 * H), int(0.22 * H)
+    tint = zone_text_rgb(scr_bgr, zx0, zy0, zx1 - zx0, zy1 - zy0) if TEXT_STYLE == "tinted" else zone_plain_rgb(scr_bgr, zx0, zy0, zx1 - zx0, zy1 - zy0)
+    top_dark = _mean_lum(scr_bgr[:int(0.06 * H)]) > STATUS_DARK_LUM
+    bot_dark = _mean_lum(scr_bgr[int(0.97 * H):]) > STATUS_DARK_LUM
+    ic = (20, 20, 22) if top_dark else (255, 255, 255)
+    ic_b = (20, 20, 22) if bot_dark else (255, 255, 255)
+    wt = (20, 20, 22) if _mean_lum(scr_bgr[int(0.76 * H):int(0.86 * H)]) > 0.62 else (255, 255, 255)
+
+    # bottom: glass buttons
+    by, br = 1337, 53
+    glass_circle(scr, 139, by, br); glass_circle(scr, W - 139, by, br)
+    fl = flashlight_mask(int(round(p(25)))); put(scr, fl, 139 - fl.shape[1] / 2, by - fl.shape[0] / 2, (255, 255, 255), 0.97)
+    cm = camera_mask(int(round(p(25)))); put(scr, cm, W - 139 - cm.shape[1] / 2, by - cm.shape[0] / 2, (255, 255, 255), 0.97)
+
+    # widgets (home screen)
+    if widgets:
+        f_t = ImageFont.truetype(FONT_STATUS, 31); f_s = ImageFont.truetype(FONT_STATUS, 25)
+        temp = random.randint(*TEMP_RANGE); hi_t = temp + random.randint(2, 5); lo_t = temp - random.randint(5, 9)
+        cond = random.choice(["Mostly Sunny", "Sunny", "Clear", "Mostly Clear"])
+        sm = sun_mask(30); put(scr, sm, 60, 1169 - 15, wt, 0.98)
+        draw_text(scr, f"{temp}°", f_t, 100, 1169 + digit_h(f_t) / 2.0, wt, 0.98, align="l")
+        draw_text(scr, cond, f_s, 61, 1201 + digit_h(f_s) / 2.0, wt, 0.98, align="l")
+        draw_text(scr, f"H:{hi_t}° L:{lo_t}°", f_s, 61, 1233 + digit_h(f_s) / 2.0, wt, 0.98, align="l")
+        glass_circle(scr, 448, 1201, 54); glass_circle(scr, 614, 1201, 54)
+        am = alarm_mask(28); put(scr, am, 448 - am.shape[1] / 2, 1201 - 31, wt, 0.98)
+        f_o = ImageFont.truetype(FONT_STATUS, 25)
+        draw_text(scr, "OFF", f_o, 448, 1201 + 20 + digit_h(f_o) / 2.0, wt, 0.98)
+        sm2 = sunset_icon_mask(24); put(scr, sm2, 614 - sm2.shape[1] / 2, 1201 - 36, wt, 0.98)
+        st, ap = sunset_str(now_dt)
+        f_ss = ImageFont.truetype(FONT_STATUS, 27); f_ap = ImageFont.truetype(FONT_STATUS, 20)
+        draw_text(scr, st, f_ss, 614, 1201 + 7 + digit_h(f_ss) / 2.0, wt, 0.98)
+        draw_text(scr, ap, f_ap, 614, 1201 + 30 + digit_h(f_ap) / 2.0, wt, 0.98)
+
+    # date + glass time
+    f_date = fit_font(FONT_DATE, "Wed 14 Oct", 0.29 * W)
+    f_time = fit_font(FONT_TIME, "5:42", 0.614 * W)
+    draw_text(scr, date_str, f_date, W / 2.0, 159 + digit_h(f_date) / 2.0, tint, 0.97, shadow=0.15)
+    glass_time(scr, time_str, f_time, W / 2.0, 272, tint)
+
+    # dynamic island
+    iw, ih = 238, 63; ix, iy = (W - iw) / 2.0, 18
+    isl = _ss_mask(iw + 2, ih + 2, lambda d, s: d.rounded_rectangle((0, 0, iw * s - 1, ih * s - 1), radius=ih / 2 * s, fill=255), 4)
+    if _mean_lum(scr_bgr[:int(0.05 * H)]) < 0.05:
+        put(scr, isl, ix - 1, iy - 1, (30, 30, 32), 0.9)      # kali wallpaper par halki outline
+        isl2 = _ss_mask(iw, ih, lambda d, s: d.rounded_rectangle((0, 0, iw * s - 1, ih * s - 1), radius=ih / 2 * s, fill=255), 4)
+        put(scr, isl2, ix, iy, (0, 0, 0), 1.0)
+    else:
+        put(scr, isl, ix, iy, (0, 0, 0), 1.0)
+
+    # status bar
+    yc = 51
+    f_c = ImageFont.truetype(FONT_STATUS, 25)
+    draw_text(scr, CARRIER_TEXT, f_c, 100, yc + digit_h(f_c) / 2.0, ic, 0.97, align="l")
+    pw, ph = 49, 24
+    px0, py0 = W - 64 - pw, yc - ph / 2.0
+    pill = _ss_mask(pw + 2, ph + 2, lambda d, s: d.rounded_rectangle((0, 0, pw * s - 1, ph * s - 1), radius=7.5 * s, fill=255), 4)
+    put(scr, pill, px0, py0, ic, 0.96)
+    cap = _ss_mask(6, 10, lambda d, s: d.rounded_rectangle((0, 0, 3 * s, 8 * s), radius=1.5 * s, fill=255), 4); put(scr, cap, px0 + pw + 1, yc - 4.5, ic, 0.55)
+    f_n = ImageFont.truetype(FONT_NUM, 20)
+    draw_text(scr, str(int(level)), f_n, px0 + pw / 2.0, yc + digit_h(f_n) / 2.0, (18, 18, 20) if ic[0] > 128 else (240, 240, 240), 0.95)
+    wm = wifi_mask(); wx = px0 - 12 - wm.shape[1]; put(scr, wm, wx, yc - wm.shape[0] / 2.0 + 1, ic, 1.0)
+    sm = signal_mask(); sx = wx - 14 - sm.shape[1]; put(scr, sm, sx, yc - sm.shape[0] / 2.0, ic, 1.0)
+    ln = _ss_mask(104, 6, lambda d, s: d.rounded_rectangle((0, 0, 100 * s, 3 * s), radius=1.5 * s, fill=255), 4)
+    put(scr, ln, W - 64 - 100 + 8, 76, ic, 0.42)
+
+    # home indicator
+    hw, hh = 259, 6
+    hm = _ss_mask(hw + 2, hh + 2, lambda d, s: d.rounded_rectangle((0, 0, hw * s - 1, hh * s - 1), radius=hh / 2 * s, fill=255), 4)
+    put(scr, hm, (W - hw) / 2.0, 1453, ic_b, 0.96)
+    np.clip(scr, 0, 255, out=scr)
+    return scr
+
+# ---------------- background + compositing ----------------
+def make_background():
+    ys = np.arange(CH, dtype=np.float32)
+    C = np.stack([np.interp(ys, _BGY, [c[i] for c in _BGC]) for i in range(3)], 1)
+    E = np.stack([np.interp(ys, _BGY, [c[i] for c in _BGE]) for i in range(3)], 1)
+    t = np.abs((np.arange(CW, dtype=np.float32) - 829.0) / 829.0) ** 1.8
+    bg = C[:, None, :] + (E - C)[:, None, :] * t[None, :, None]
+    return np.clip(bg, 0, 255).astype(np.float32)
+
+_BGCACHE = {}
+def render_mockup(w1_bgr, w2_bgr, now_dt, lv1, lv2):
+    if "bg" not in _BGCACHE: _BGCACHE["bg"] = make_background()
+    out = _BGCACHE["bg"].copy()
+    mask = rr_mask(SW, SH, (0, 0, SW, SH), RAD, 4)
+    scrs = [render_screen(w1_bgr, now_dt, lv1, False), render_screen(w2_bgr, now_dt, lv2, WIDGETS)]
+    for scr, (px, py) in zip(scrs, (POS_L, POS_R)):
+        a = np.zeros((CH, CW), np.float32); a[py:py + SH, px:px + SW] = mask
+        s1 = cv2.GaussianBlur(a, (0, 0), 34); s1 = cv2.warpAffine(s1, np.float32([[1, 0, 0], [0, 1, 28]]), (CW, CH)) * 0.42
+        s2 = cv2.GaussianBlur(a, (0, 0), 9); s2 = cv2.warpAffine(s2, np.float32([[1, 0, 0], [0, 1, 7]]), (CW, CH)) * 0.30
+        sh = 1 - (1 - s1) * (1 - s2)
+        out *= (1 - sh[..., None] * 0.75)
+        put(out, mask, px, py, (0, 0, 0), 1.0)
+        reg = out[py:py + SH, px:px + SW]
+        reg += (scr - reg) * mask[..., None]
+    # title + labels
+    f_ti = fit_font(FONT_TITLE, TITLE_TEXT, 553)
+    draw_text(out, TITLE_TEXT, f_ti, 829, 221 + digit_h(f_ti) / 2.0, (255, 255, 255), 0.96, shadow=0.20)
+    f_lb = fit_font(FONT_TITLE, "Lock Screen", 199)
+    for txt, cx in ((LABEL_LEFT, POS_L[0] + SW / 2.0), (LABEL_RIGHT, POS_R[0] + SW / 2.0)):
+        draw_text(out, txt, f_lb, cx, 1946 + digit_h(f_lb) / 2.0, (255, 255, 255), 0.96, shadow=0.10)
+    if GRAIN > 0: out += np.random.normal(0, GRAIN, out.shape[:2]).astype(np.float32)[..., None]
+    return cv2.cvtColor(np.clip(out, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+
+def smart_groups(files, feats, n):
+    pool = list(files); groups = []
+    while len(pool) >= n:
+        seed = pool.pop(0); grp = [seed]
+        while len(grp) < n:
+            cen = np.mean([feats[g]["lab"] for g in grp], axis=0)
+            nxt = min(pool, key=lambda q: float(np.linalg.norm(feats[q]["lab"] - cen)))
+            pool.remove(nxt); grp.append(nxt)
+        groups.append(grp)
+    return groups, pool
+def get_max_seq(dirs):
+    m = 0
+    for d in dirs:
+        if os.path.exists(d):
+            for r, sd, fs in os.walk(d):
+                for f in fs:
+                    n, _ = os.path.splitext(f)
+                    if n.isdigit(): m = max(m, int(n))
+    return m
+
+def resize_exact(img, target_w=1080, target_h=1920):
+    h, w = img.shape[:2]
+    r = w / h
+    target_ratio = target_w / target_h
+    if r > target_ratio:
+        nw = int(h * target_ratio)
+        img = img[:, (w - nw) // 2: (w - nw) // 2 + nw]
+    else:
+        nh = int(w / target_ratio)
+        img = img[(h - nh) // 2: (h - nh) // 2 + nh, :]
+    return cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+
+def apply_hd_enhance(img):
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l_denoised = cv2.bilateralFilter(l, d=5, sigmaColor=30, sigmaSpace=30)
+    a_denoised = cv2.GaussianBlur(a, (0, 0), 0.8)
+    b_denoised = cv2.GaussianBlur(b, (0, 0), 0.8)
+    blur1 = cv2.GaussianBlur(l_denoised, (0, 0), 1.0)
+    sharp1 = cv2.addWeighted(l_denoised, 1.35, blur1, -0.35, 0)
+    blur2 = cv2.GaussianBlur(sharp1, (0, 0), 2.5)
+    sharp2 = cv2.addWeighted(sharp1, 1.15, blur2, -0.15, 0)
+    l_final = np.clip(sharp2, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(cv2.merge([l_final, a_denoised, b_denoised]), cv2.COLOR_LAB2BGR)
+
+_SRGB_BYTES = None
+def save_optimized(cv2_img, output_path):
+    global _SRGB_BYTES
+    rgb = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(rgb)
+    try:
+        if _SRGB_BYTES is None:
+            _SRGB_BYTES = cms.ImageCmsProfile(cms.createProfile('sRGB')).tobytes()
+        pil_img.save(output_path, format='JPEG', quality=87, subsampling=0, icc_profile=_SRGB_BYTES, optimize=True)
+    except Exception:
+        pil_img.save(output_path, format='JPEG', quality=87, subsampling=0, optimize=True)
+
+def draw_ink(draw, text, font, cx, cy):
+    """Text ko is tarah rakho ke us ka INK box (font metrics nahi) centre (cx, cy) pe aaye."""
+    l, t, r, btm = font.getbbox(text)
+    draw.text((cx - (l + r) / 2, cy - (t + btm) / 2), text, font=font, fill=255)
+
+
+def _contrast(l1, l2):
+    hi, lo = max(l1, l2), min(l1, l2)
+    return (hi + 0.05) / (lo + 0.05)
+
+def _lin(c):
+    c = np.asarray(c, dtype=np.float32)
+    return np.where(c <= 0.03928, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+def _rel_lum_rgb01(r, g, b):
+    return float(0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b))
+
+def zone_text_rgb(canvas_bgr, x, y, w, h):
+    """iPhone lock-screen widget style: text ka rang us screen ke wallpaper ke apne rang se banta hai.
+    Zone ka asal (numaya) rang nikalo -> dark hisse pe halka pastel shade, roshan hisse pe gehra shade.
+    Phir contrast check: agar text saaf na dikhe to shade tab tak adjust hota hai jab tak TINT_MIN_CONTRAST na mile.
+    Wallpaper me koi rang hi na ho (grey) to safed/kala."""
+    zone = canvas_bgr[y:y + h, x:x + w].reshape(-1, 3).astype(np.float32) / 255.0
+    b, g, r = zone[:, 0], zone[:, 1], zone[:, 2]
+    mx = zone.max(axis=1); mn = zone.min(axis=1)
+    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    mean_lum = float(lum.mean())
+    bg_rl = _rel_lum_rgb01(float(r.mean()), float(g.mean()), float(b.mean()))
+    dark_bg = mean_lum < LUM_SPLIT
+    wgt = sat * (0.35 + 0.65 * np.clip(1 - np.abs(lum - 0.5) * 2, 0, 1))
+    wsum = float(wgt.sum())
+    if wsum < 1e-3 or float((sat * wgt).sum() / wsum) < 0.10:
+        v = 255 if dark_bg else 17
+        return (v, v, v)
+    # Hue ko circular average se nikalo (red wrap-around ka masla na ho)
+    hh = np.array([colorsys.rgb_to_hls(float(rr), float(gg), float(bb))[0] for rr, gg, bb in zip(r[::7], g[::7], b[::7])], dtype=np.float32)
+    ww = wgt[::7]
+    hue = (np.arctan2((np.sin(hh * 2 * np.pi) * ww).sum(), (np.cos(hh * 2 * np.pi) * ww).sum()) / (2 * np.pi)) % 1.0
+    sat_t = float(np.clip((sat * wgt).sum() / wsum * 1.0 + 0.25, 0.45, 0.85))
+    best = None
+    steps = [0.86, 0.90, 0.94, 0.97] if dark_bg else [0.26, 0.20, 0.15, 0.10]
+    for L in steps:
+        rr, gg, bb = colorsys.hls_to_rgb(float(hue), L, sat_t)
+        c = _contrast(_rel_lum_rgb01(rr, gg, bb), bg_rl)
+        best = (rr, gg, bb)
+        if c >= TINT_MIN_CONTRAST: break
+    else:
+        # phir bhi saaf nahi: safed/kala me badal do
+        best = (1, 1, 1) if dark_bg else (0.07, 0.07, 0.07)
+    return (int(best[0] * 255), int(best[1] * 255), int(best[2] * 255))
+
+def zone_plain_rgb(canvas_bgr, x, y, w, h):
+    """White mode: hamesha safed text; sirf bohat roshan wallpaper pe kala (warna nazar na aaye)."""
+    zone = canvas_bgr[y:y + h, x:x + w].astype(np.float32) / 255.0
+    lum = float((0.2126 * zone[..., 2] + 0.7152 * zone[..., 1] + 0.0722 * zone[..., 0]).mean())
+    return (17, 17, 17) if lum > BRIGHT_SPLIT else (255, 255, 255)
+
+# ---------------- SMART: wallpaper features / grouping / background ----------------
+def thumb_bgr(path, size=96):
+    """Choti thumbnail (fast) — rang/roshni nikalne ke liye. Na khule to None."""
+    try:
+        with Image.open(path) as im:
+            try: im.draft('RGB', (size * 2, size * 2))
+            except Exception: pass
+            im.load()
+            if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                im = Image.alpha_composite(Image.new("RGBA", im.size, (0, 0, 0, 255)), im.convert("RGBA"))
+            im = im.convert('RGB'); im.thumbnail((size, size))
+            return np.array(im)[:, :, ::-1].copy()
+    except Exception:
+        t = safe_imread(path)
+        if t is None: return None
+        hh, ww = t.shape[:2]; sc = size / max(hh, ww)
+        return cv2.resize(t, (max(1, int(ww * sc)), max(1, int(hh * sc))), interpolation=cv2.INTER_AREA)
+
+def color_features(bgr):
+    """lum (0..1), sat (0..1), hue (0..1 ya None), lab-ish vector, top/bottom lum."""
+    f = bgr.astype(np.float32) / 255.0
+    b, g, r = f[..., 0], f[..., 1], f[..., 2]
+    mx = f.max(axis=2); mn = f.min(axis=2)
+    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    wgt = sat * (0.3 + 0.7 * np.clip(1 - np.abs(lum - 0.5) * 2, 0, 1)) + 1e-6
+    hs = np.array([colorsys.rgb_to_hls(float(a), float(c), float(d))[0] for a, c, d in zip(r.ravel()[::5], g.ravel()[::5], b.ravel()[::5])], dtype=np.float32)
+    ws = wgt.ravel()[::5]
+    sx, cx = float((np.sin(hs * 2 * np.pi) * ws).sum()), float((np.cos(hs * 2 * np.pi) * ws).sum())
+    mean_sat = float(sat.mean())
+    hue = (np.arctan2(sx, cx) / (2 * np.pi)) % 1.0 if mean_sat > 0.08 else None
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).reshape(-1, 3).astype(np.float32).mean(axis=0)
+    return {"lum": float(lum.mean()), "sat": mean_sat, "hue": hue, "lab": lab}
+
+
+def pick_background(designs, bgf, grp_feats, recent):
+    """Wallpapers ki roshni + rang ke hisab se sab se munasib background.
+    Score = (screens aur background me roshni ka farq = screens ubhar kar dikhein) + (rang ka mail) - (haal hi me use hua)."""
+    g_lum = float(np.mean([f["lum"] for f in grp_feats]))
+    g_sat = float(np.mean([f["sat"] for f in grp_feats]))
+    hues = [f["hue"] for f in grp_feats if f["hue"] is not None]
+    g_hue = None
+    if hues:
+        sx = sum(np.sin(h * 2 * np.pi) for h in hues); cx = sum(np.cos(h * 2 * np.pi) for h in hues)
+        g_hue = (np.arctan2(sx, cx) / (2 * np.pi)) % 1.0
+    best, best_s = None, -1e9
+    for name in designs:
+        if name not in bgf: continue
+        bf = bgf[name]
+        contrast = min(abs(bf["lum"] - g_lum) / 0.35, 1.0)
+        if g_hue is not None and bf["hue"] is not None and g_sat > 0.12:
+            dh = abs(g_hue - bf["hue"]); dh = min(dh, 1 - dh)
+            harmony = 1.0 - min(dh / 0.30, 1.0) if dh < 0.30 else max(0.0, 1.0 - abs(dh - 0.5) / 0.12) * 0.8  # analogous ya complementary
+        else:
+            harmony = 0.6   # grey/neutral: sab theek
+        sc = 0.55 * contrast + 0.45 * harmony
+        if name in recent:
+            sc -= 0.35 * (1.0 - recent.index(name) / max(1, len(recent)) * 0.5)
+        if sc > best_s: best, best_s = name, sc
+    return best
+
+def read_recent():
+    try:
+        with open(BG_RECENT, "r") as fh: return [l.strip() for l in fh if l.strip()]
+    except Exception:
+        return []
+
+def write_recent(lst):
+    try:
+        with open(BG_RECENT, "w") as fh: fh.write("\n".join(lst[-4:]))
+    except Exception:
+        pass
+
+
+def list_inputs():
+    """Har tarah ki image: extension ya file ke andar ka asal format (hidden .naam wali files bhi). Video/temp files skip."""
+    skip_names = {'.nomedia', '.bg_rotation.txt', '.bg_recent.txt', '.ff_tmp_read.png'}
+    out = []
+    for f in os.listdir(I):
+        p = os.path.join(I, f)
+        if not os.path.isfile(p) or f in skip_names or "_temp" in f or f.endswith(('.del', '.tmp', '.part', '.crdownload')): continue
+        if f.lower().endswith(IMG_EXTS):
+            out.append(f); continue
+        if os.path.splitext(f)[1].lower() in ('.mp4', '.mov', '.mkv', '.avi', '.webm', '.3gp', '.txt', '.json', '.py', '.zip'): continue
+        t = sniff_type(p)   # naam ajeeb ho (bina extension) magar andar image ho
+        if t in ("jpeg", "png", "webp") or t.startswith("heif/avif"): out.append(f)
+    return out
+
+
+
+def process_pair(f1, f2, idx, t_now, is_hd, lv):
+    p1, p2 = os.path.join(I, f1), os.path.join(I, f2)
+    r1, r2 = safe_imread(p1), safe_imread(p2)
+    if r1 is None or r2 is None:
+        return 'unreadable', idx, t_now
+    w1, w2 = (resize_exact(r1) if crop_916 else r1), (resize_exact(r2) if crop_916 else r2)  # Size: Crop 9:16 ya Original
+    if is_hd: w1, w2 = apply_hd_enhance(w1), apply_hd_enhance(w2)
+    fin = render_mockup(w1, w2, datetime.now(), lv[0], lv[1])
+    mock_path = os.path.join(O, f"{idx}.jpg")
+    wp1, wp2 = os.path.join(R, f"{idx + 1}.jpg"), os.path.join(R, f"{idx + 2}.jpg")
+    save_optimized(fin, mock_path); os.utime(mock_path, (t_now + 60, t_now + 60))
+    save_optimized(w1, wp1); os.utime(wp1, (t_now + 120, t_now + 120))
+    save_optimized(w2, wp2); os.utime(wp2, (t_now + 180, t_now + 180))
+    def ok(path):
+        try:
+            if not os.path.exists(path) or os.path.getsize(path) < 100: return False
+            with Image.open(path) as im: im.verify()
+            return True
+        except Exception:
+            return False
+    if not (ok(mock_path) and ok(wp1) and ok(wp2)): raise IOError("save verify failed")
+    safe_scan(mock_path); safe_scan(wp1); safe_scan(wp2)
+    gallery_copy_outputs([(mock_path, t_now + 60), (wp1, t_now + 120), (wp2, t_now + 180)])
+    for q in (p1, p2):
+        try: os.remove(q)
+        except Exception: pass
+    return 'ok', idx + 3, t_now + 180
+
+action = sys.argv[1] if len(sys.argv) >= 2 else 'process'
+
+if action == 'process':
+    display_header()
+    os.makedirs(O, exist_ok=True); os.makedirs(R, exist_ok=True)
+    if not os.path.isdir(I):
+        print(f" {C2}✖ Input folder nahi mila: {P_NUM}_wallpapers{ENDC}"); sys.exit()
+    imgs = list_inputs()
+    imgs.sort(key=lambda f: os.path.getctime(os.path.join(I, f)))
+    if len(imgs) < 2:
+        print(f" {C2}✖ {P_NUM}_wallpapers me kam az kam 2 images chahiye (Lock + Home).{ENDC}"); sys.exit()
+    print(f" {C5}✿ {BOLD}S e l e c t  M o d e{ENDC}")
+    print(f" {C1}[1]{ENDC} HD Mode (Galaxy AI Enhance) - {C4}[DEFAULT]{ENDC}")
+    print(f" {C1}[2]{ENDC} Normal (Fast KB Pack)")
+    is_hd = (input(f"\n {C4}➜ {ENDC}").strip() != '2')
+
+    print(f" {C5}✿ {BOLD}S e l e c t  S i z e{ENDC}")
+    print(f" {C1}[1]{ENDC} Original Size - {C4}[DEFAULT]{ENDC}")
+    print(f" {C1}[2]{ENDC} Crop 9:16")
+
+    size_choice = input(f"\n {C4}➜ {ENDC}").strip()
+    crop_916 = (size_choice == '2')
+    for _ff in (FONT_TIME, FONT_DATE, FONT_STATUS, FONT_NUM, FONT_TITLE):
+        if not os.path.exists(_ff):
+            print(f" {C2}✖ Font file missing: fonts/{os.path.basename(_ff)}{ENDC}"); sys.exit()
+    print(f" {C4}✔ Lock + Home mockup engine ready!{ENDC}")
+
+    feats, unreadable = {}, []
+    for f in tqdm(imgs, desc=" \U0001f50e Analyzing ", bar_format=f" {C1}{{desc}}{ENDC} {C5}|{ENDC}{{bar:20}}{C5}|{ENDC} {C4}{{n_fmt}}/{{total_fmt}}{ENDC}"):
+        t = thumb_bgr(os.path.join(I, f))
+        if t is None: unreadable.append(f); continue
+        feats[f] = color_features(t)
+    imgs = [f for f in imgs if f in feats]
+    groups, leftover = smart_groups(imgs, feats, 2)
+    # har pair me kala/gehra wallpaper Lock Screen (left), roshan wala Home Screen (right)
+    groups = [sorted(g, key=lambda f: feats[f]["lum"]) for g in groups]
+
+    s_idx = get_max_seq([O, R, W_H]) + 1
+    cur_t = time.time()
+    if os.path.exists(T_F):
+        try:
+            with open(T_F, "r") as fh:
+                lt = float(fh.read().strip())
+                if lt > cur_t: cur_t = lt
+        except: pass
+    print("")
+    desc_text = "✨ HD Mode " if is_hd else "⚙️ Normal "
+    processed_count, skip_log = 0, []
+    set_wakelock(True)
+    for (f1, f2) in tqdm(groups, desc=desc_text, bar_format=f" {C1}{{desc}}{ENDC} {C5}|{ENDC}{{bar:20}}{C5}|{ENDC} {C4}{{n_fmt}}/{{total_fmt}}{ENDC}"):
+        lv = (random.randint(*BATTERY_RANGE), random.randint(*BATTERY_RANGE))
+        success, last_err = False, None
+        for attempt in range(3):
+            try:
+                status, new_idx, new_t = process_pair(f1, f2, s_idx, cur_t, is_hd, lv)
+                if status == 'ok':
+                    s_idx, cur_t = new_idx, new_t; processed_count += 1; success = True; break
+                last_err = "padhi nahi gayi: " + READ_ERR.get(os.path.join(I, f1), READ_ERR.get(os.path.join(I, f2), "?")); break
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {str(e)[:50]}"
+                for q in (os.path.join(O, f"{s_idx}.jpg"), os.path.join(R, f"{s_idx + 1}.jpg"), os.path.join(R, f"{s_idx + 2}.jpg")):
+                    if os.path.exists(q):
+                        try: os.remove(q)
+                        except: pass
+                gc.collect(); time.sleep(0.3)
+        if not success: skip_log.append(f"{f1} + {f2} ({last_err})")
+        gc.collect()
+    set_wakelock(False)
+    if processed_count > 0:
+        try:
+            with open(T_F, "w") as fh: fh.write(str(cur_t))
+        except: pass
+        print(f"\n {C4}✔ {processed_count} Mockup + {processed_count * 2} Wallpapers ready!{ENDC}")
+    else:
+        print(f"\n {C5}✔ Sab already set hai.{ENDC}")
+    if leftover:
+        print(f" {C5}ℹ {len(leftover)} wallpaper akeli reh gayi (jodi chahiye) — agle run me nayi image ke saath pair hogi.{ENDC}")
+    for u in unreadable: skip_log.append(f"{u} ({READ_ERR.get(os.path.join(I, u), '?')})")
+    if skip_log:
+        print(f" {C2}⚠ {len(skip_log)} skip (agle run me retry):{ENDC}")
+        for s in skip_log[:8]: print(f"   {C2}- {s}{ENDC}")
+    print("")
+
+if action == 'del':
+    import shutil
+    BACKUP = f"/storage/emulated/0/.mockup_backup_{P_NUM}"
+    def _files(d):
+        if not os.path.isdir(d): return []
+        return [f for f in os.listdir(d) if os.path.isfile(os.path.join(d, f))]
+    def _backup_and_clear(d, tag):
+        files = _files(d)
+        if not files:
+            print(f" {C5}ℹ {tag}: pehle se khaali hai.{ENDC}"); return 0
+        bd = os.path.join(BACKUP, tag)
+        if os.path.isdir(bd): shutil.rmtree(bd, ignore_errors=True)
+        os.makedirs(bd, exist_ok=True)
+        n = 0
+        for f in files:
+            try:
+                shutil.copy2(os.path.join(d, f), os.path.join(bd, f))
+                os.remove(os.path.join(d, f)); n += 1
+            except Exception: pass
+        print(f" {C4}✔ {tag}: {n} files delete (backup ban gaya).{ENDC}")
+        return n
+    display_header()
+    print(f" {C5}✿ {BOLD}D e l e t e  M e n u{ENDC}")
+    print(f" {C1}[1]{ENDC} Tayaar Maal (Mockups + Ready Wallpapers)")
+    print(f" {C1}[2]{ENDC} Sirf Mockups")
+    print(f" {C1}[3]{ENDC} Input Wallpapers")
+    print(f" {C1}[4]{ENDC} Warehouse (Ready_Upload_Batches)")
+    print(f" {C1}[5]{ENDC} Backup se Wapas lao (Restore)")
+    print(f" {C1}[0]{ENDC} Cancel")
+    ch = input(f"\n {C4}➜ {ENDC}").strip()
+    if ch == '1':
+        _backup_and_clear(O, "Mockups"); _backup_and_clear(R, "Ready")
+    elif ch == '2':
+        _backup_and_clear(O, "Mockups")
+    elif ch == '3':
+        _backup_and_clear(I, "Input")
+    elif ch == '4':
+        if os.path.isdir(W_H) and os.listdir(W_H):
+            bd = os.path.join(BACKUP, "Batches")
+            if os.path.isdir(bd): shutil.rmtree(bd, ignore_errors=True)
+            try:
+                shutil.copytree(W_H, bd)
+                for name in os.listdir(W_H):
+                    p = os.path.join(W_H, name)
+                    if os.path.isdir(p): shutil.rmtree(p, ignore_errors=True)
+                    else: os.remove(p)
+                print(f" {C4}✔ Warehouse saaf (backup ban gaya).{ENDC}")
+            except Exception as e:
+                print(f" {C2}✖ Warehouse masla: {e}{ENDC}")
+        else:
+            print(f" {C5}ℹ Warehouse pehle se khaali hai.{ENDC}")
+    elif ch == '5':
+        if not os.path.isdir(BACKUP):
+            print(f" {C2}✖ Koi backup nahi mila.{ENDC}")
+        else:
+            total = 0
+            for tag, d in (("Mockups", O), ("Ready", R), ("Input", I)):
+                bd = os.path.join(BACKUP, tag)
+                if not os.path.isdir(bd): continue
+                os.makedirs(d, exist_ok=True)
+                for f in os.listdir(bd):
+                    src = os.path.join(bd, f); dst = os.path.join(d, f)
+                    if os.path.isfile(src) and not os.path.exists(dst):
+                        try: shutil.move(src, dst); total += 1
+                        except Exception: pass
+            bd = os.path.join(BACKUP, "Batches")
+            if os.path.isdir(bd):
+                os.makedirs(W_H, exist_ok=True)
+                for name in os.listdir(bd):
+                    src = os.path.join(bd, name); dst = os.path.join(W_H, name)
+                    if not os.path.exists(dst):
+                        try: shutil.move(src, dst); total += 1
+                        except Exception: pass
+            if total: print(f" {C4}✔ Restore ho gaya: {total} items wapas.{ENDC}")
+            else: print(f" {C5}ℹ Wapas lane ko kuch nahi (ya sab pehle se mojood hai).{ENDC}")
+    else:
+        print(f" {C5}ℹ Cancel.{ENDC}")
+    try: safe_scan_dir(B)
+    except Exception: pass
+    print("")
+
+if action == 'batch':
+    import shutil
+    display_header()
+    files = []
+    for d in (O, R):
+        if os.path.isdir(d):
+            files += [(os.path.join(d, f), f) for f in os.listdir(d) if os.path.isfile(os.path.join(d, f))]
+    if not files:
+        print(f" {C2}✖ Batch ke liye Mockups/Ready me kuch nahi hai.{ENDC}")
+    else:
+        os.makedirs(W_H, exist_ok=True)
+        bname = "Batch_" + datetime.now().strftime("%d-%b_%I-%M%p")
+        bd = os.path.join(W_H, bname)
+        os.makedirs(bd, exist_ok=True)
+        n = 0
+        for src, f in files:
+            try: shutil.copy2(src, os.path.join(bd, f)); n += 1
+            except Exception: pass
+        print(f" {C4}✔ {bname}: {n} files copy ho gayi (Ready_Upload_Batches).{ENDC}")
+        try: safe_scan_dir(B)
+        except Exception: pass
+    print("")
