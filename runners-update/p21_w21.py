@@ -1,13 +1,17 @@
-# ===================== PROJECT 21 : VIVO LIVE PHOTO MAKER =====================
+# ===================== PROJECT 21 : VIVO LIVE PHOTO MAKER — TEST BUILD v4 =====================
 # Input: VIDEO (kisi bhi lambai ki) -> Output: Vivo-format Live Photo JORA (NAME.jpg + NAME.mp4)
 #          + 1 Mockup (live photo ke darmiyan wale frame par lockscreen design)
+# TEST v4: har video par jora (A) ke sath ek SINGLE-FILE Live Photo (B: <even>_live.jpg —
+#          JPG ke andar hi MP4, sirf standard Google XMP + MP4 ke aakhir me Vivo uuid box)
+#          bhi banta hai, aur dono formats ki test copies DCIM/Camera me IMG_ naam se
+#          bhi jati hain — taake ek hi run me pata chal jaye gallery kis ko Live manti hai.
 # Vivo format (asal Vivo camera file se reverse-engineer shuda): photo aur video ALAG files,
 #          ek hi naam — dono ke andar ek hi "livephoto" ID chhupa hota hai (JPG ke aakhir me
 #          591-byte trailer, MP4 ke aakhir me uuid box "vivoMediaExtInfo"); gallery isi ID se
 #          dono ko jor kar Live Photo chalati hai. Clip = darmiyan wale 3 second, CRF 0 LOSSLESS.
 # Koi sawal nahi poochta — process bilkul automatic hai. Sirf ffmpeg lazmi hai.
 import os, sys, time, shutil, subprocess, gc, re, struct
-from datetime import datetime
+from datetime import datetime, timedelta
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 from tqdm import tqdm
@@ -252,6 +256,81 @@ def build_vivo_jpg(still_jpg, live_id, out_path):
         fh.write(jpeg)
         fh.write(trailer)
 
+# --- TEST v4 (B): SINGLE-FILE Live Photo — JPG ke andar MP4 ---
+# JPG me SIRF standard Google XMP (Camera:MotionPhoto) — koi VCamera XMP nahi, koi JPG
+# trailer nahi. EOI ke baad wahi lossless clip (aakhir me Vivo uuid box, apni alag fresh ID).
+XMP_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
+
+def build_motion_xmp(mp4_len, ts_us):
+    """Standard Google Motion Photo XMP packet — sirf lazmi set, kuch extra nahi."""
+    return ('<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">\n'
+            ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
+            '  <rdf:Description rdf:about=""\n'
+            '    xmlns:Camera="http://ns.google.com/photos/1.0/camera/"\n'
+            '    xmlns:GContainer="http://ns.google.com/photos/1.0/container/"\n'
+            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"\n'
+            '    Camera:MotionPhoto="1"\n'
+            '    Camera:MotionPhotoVersion="1"\n'
+            f'    Camera:MotionPhotoPresentationTimestampUs="{ts_us}">\n'
+            '   <GContainer:Directory>\n'
+            '    <rdf:Seq>\n'
+            '     <rdf:li rdf:parseType="Resource">\n'
+            '      <Item:Mime>image/jpeg</Item:Mime>\n'
+            '      <Item:Semantic>Primary</Item:Semantic>\n'
+            '      <Item:Length>0</Item:Length>\n'
+            '      <Item:Padding>0</Item:Padding>\n'
+            '     </rdf:li>\n'
+            '     <rdf:li rdf:parseType="Resource">\n'
+            '      <Item:Mime>video/mp4</Item:Mime>\n'
+            '      <Item:Semantic>MotionPhoto</Item:Semantic>\n'
+            f'      <Item:Length>{mp4_len}</Item:Length>\n'
+            '      <Item:Padding>0</Item:Padding>\n'
+            '     </rdf:li>\n'
+            '    </rdf:Seq>\n'
+            '   </GContainer:Directory>\n'
+            '  </rdf:Description>\n'
+            ' </rdf:RDF>\n'
+            '</x:xmpmeta>').encode("utf-8")
+
+def build_single_file(still_jpg, vivo_mp4, ts_us, out_path):
+    """Still JPEG (SOI ke foran baad XMP APP1) + EOI ke baad poora Vivo MP4.
+    Item:Length = appended MP4 ki kul lambai (uuid box samet)."""
+    mp4_len = os.path.getsize(vivo_mp4)
+    packet = build_motion_xmp(mp4_len, ts_us)
+    seg_len = 2 + len(XMP_HEADER) + len(packet)
+    if seg_len > 65533:
+        raise RuntimeError("XMP segment bohat bara hai")
+    app1 = b"\xff\xe1" + struct.pack(">H", seg_len) + XMP_HEADER + packet
+    with open(still_jpg, "rb") as fh:
+        jpeg = fh.read()
+    if jpeg[:2] != b"\xff\xd8":
+        raise RuntimeError("still JPEG nahi hai")
+    with open(out_path, "wb") as out:
+        out.write(jpeg[:2])       # SOI
+        out.write(app1)           # XMP APP1
+        out.write(jpeg[2:])       # baqi JPEG (EOI samet)
+        with open(vivo_mp4, "rb") as fh:
+            shutil.copyfileobj(fh, out)
+
+# --- TEST v4: DCIM/Camera test copies (IMG_ naam, camera style) ---
+DCIM_DIR = "/storage/emulated/0/DCIM/Camera"
+def dcim_test_drop(pair_jpg, pair_mp4, live_jpg):
+    """(A) jora aur (B) single-file — dono ki copies DCIM/Camera me IMG_<time> naam se,
+    har copy ke foran baad scan. Koi bhi masla ho to sirf ek note, run rukta nahi."""
+    try:
+        os.makedirs(DCIM_DIR, exist_ok=True)
+        now = datetime.now()
+        stem_a = "IMG_" + now.strftime("%Y%m%d_%H%M%S")
+        stem_b = "IMG_" + (now + timedelta(seconds=1)).strftime("%Y%m%d_%H%M%S")
+        for src, name in ((pair_jpg, stem_a + ".jpg"), (pair_mp4, stem_a + ".mp4"),
+                          (live_jpg, stem_b + ".jpg")):
+            d = os.path.join(DCIM_DIR, name)
+            shutil.copyfile(src, d)
+            safe_scan(d)
+            print(f" {C5}\u2139 (TEST) DCIM copy: {name}{ENDC}")
+    except Exception as e:
+        print(f" {C2}\u26a0 (TEST) DCIM copy nahi ho saki: {str(e)[:60]}{ENDC}")
+
 def get_max_seq(dirs):
     mx = 0
     for d in dirs:
@@ -320,17 +399,26 @@ def process_one(f, idx, t_now):
         image_time = max(1, int(round((clip_dur / 2) * probe_fps(raw_p))))
         build_vivo_jpg(still_jpg, live_id, ready_jpg)
         build_vivo_mp4(clip_mp4, live_id, image_time, ready_mp4)
+        # TEST (B) single-file: wahi clip, apni ALAG fresh ID ke Vivo uuid box ke sath,
+        # still JPEG ke andar (sirf standard Google XMP, koi trailer nahi)
+        live_path = os.path.join(R, f"{idx + 1}_live.jpg")
+        live_mp4_stage = os.path.join(stage, "live.mp4")
+        build_vivo_mp4(clip_mp4, gen_live_id(), image_time, live_mp4_stage)
+        ts_us = int(round((clip_dur / 2) * 1000000))
+        build_single_file(still_jpg, live_mp4_stage, ts_us, live_path)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     mt, wt = t_now + 60, t_now + 120
     os.utime(mock_path, (mt, mt))
     os.utime(ready_jpg, (wt, wt))
     os.utime(ready_mp4, (wt, wt))
-    for p in (mock_path, ready_jpg, ready_mp4):   # save verify
+    os.utime(live_path, (wt, wt))
+    for p in (mock_path, ready_jpg, ready_mp4, live_path):   # save verify
         if not os.path.exists(p) or os.path.getsize(p) < 100:
             raise IOError("save verify failed: " + p)
-    safe_scan(mock_path); safe_scan(ready_jpg); safe_scan(ready_mp4)
-    gallery_copy_outputs([(mock_path, mt), (ready_jpg, wt), (ready_mp4, wt)])
+    safe_scan(mock_path); safe_scan(ready_jpg); safe_scan(ready_mp4); safe_scan(live_path)
+    gallery_copy_outputs([(mock_path, mt), (ready_jpg, wt), (ready_mp4, wt), (live_path, wt)])
+    dcim_test_drop(ready_jpg, ready_mp4, live_path)
     try: os.remove(raw_p)
     except Exception: pass
     return idx + 2, wt
@@ -375,7 +463,7 @@ if action == 'process':
             with open(T_F, "w") as fh: fh.write(str(cur_t))
         except Exception:
             pass
-        print(f"\n {C4}\u2714 {done} Vivo Live Photo + Mockup ready! (har video: 1 mockup + 1 Live Photo jora \u2014 JPG + MP4){ENDC}")
+        print(f"\n {C4}\u2714 {done} Vivo Live Photo + Mockup ready! (TEST v4 \u2014 har video: 1 mockup + (A) Live Photo jora JPG + MP4 + (B) single-file _live.jpg; dono ki test copies DCIM/Camera me bhi gayi){ENDC}")
     else:
         print(f"\n {C2}\u2716 Koi Live Photo nahi bani.{ENDC}")
     if skip_log:
