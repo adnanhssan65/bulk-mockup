@@ -1,22 +1,26 @@
-# ===================== PROJECT 21 : LIVE PHOTO MAKER — TEST BUILD v5 (ALL METHODS) =====================
-# Input: VIDEO (kisi bhi lambai ki) -> Output: 1 Mockup + SIX Live Photo tareeqay (TEST)
-# TEST v5: v4 ke dono formats (vivo jora, vivobox single) phone par FAIL hue — is liye
-#          ab har video par SAARE mashhoor tareeqay ek sath bante hain, har ek ki test
-#          copy DCIM/Camera me IMG_ naam se jati hai, aur run ke aakhir me TEST_MAP.txt
-#          (Ready Wallpapers me) bata deta hai konsa IMG naam kis tareeqay ka hai —
-#          gallery jis ko Live mane, wahi tareeqa jeetega:
-#   1) ios     : <n>_ios.jpg + <n>_ios.mov  — asal Apple format (livephoto_engine.py:
-#                JPG MakerNote UUID + MOV content.identifier + still-image-time track)
-#   2) vivo    : <n>_vivo.jpg + <n>_vivo.mp4 — v3 wala Vivo jora (trailer + uuid box, ek ID)
-#   3) clone   : <n>_clone.jpg + <n>_clone.mp4 — DCIM/Camera ki ASAL camera jori ki
-#                saakht (APP segments + trailer) clone karke, sirf ID badal kar; donor
-#                na mile to sirf ye tareeqa skip hota hai
-#   4) google  : <n>_google.jpg — saf Google Motion Photo (sirf standard XMP, andar
-#                MP4, koi Vivo data nahi) — ummeed: gallery khud convert kar legi
-#   5) vivobox : <n>_vivobox.jpg — Google XMP + andar MP4 jiske aakhir me Vivo uuid box
-#   6) oppo    : <n>_oppo.jpg — andar MP4 + Oppo XMP (OpCamera:OLivePhotoVersion=2)
+# ===================== PROJECT 21 : LIVE PHOTO MAKER — TEST BUILD v6 (SAMSUNG) =====================
+# Input: VIDEO (kisi bhi lambai ki) -> Output: 1 Mockup + 2 Samsung Motion Photo tareeqay (TEST)
+# TEST v6: phone par sirf SAMSUNG Galaxy S23+ ki Motion Photos gallery ke Live tab me
+#          ati hain (wo bhi Vivo MediaKit ki convert ki hui) — v1-v5 ke saare tareeqay
+#          (ios / vivo / clone / google / vivobox / oppo) FAIL hue. Un sab me jo cheez
+#          GHAIB thi wo hai Samsung ki asal SEF saakht. Is liye ab har video par sirf
+#          DO tareeqay bante hain, dono PAKKI Samsung construction me:
+#   1) samsung     : <n>_samsung.jpg — asal Samsung mpv3 file: JPEG ke andar minimal
+#                    EXIF (Make 'samsung', Model 'SM-S918B') + Google XMP (MotionPhoto),
+#                    EOI ke baad [MotionPhoto_Data block][MP4][MotionPhoto_Version
+#                    block 'mpv3'][SEFH footer] — Samsung ki SEF tartib.
+#   2) samsungvivo : <n>_samsungvivo.jpg — bilkul wahi Samsung file, sirf XMP me
+#                    Vivo MediaKit ke converted-state nishan bhi: VCamera:
+#                    VMotionPhotoVersion="1" + VMediaKitVersion="1.0.0.7"
+#                    (phone par jo files Live mani gayin, un me yahi do nishan the).
+# Samsung format ki spec: reviventura/LivePhotoTools docs/FORMATS.md;
+# construction aviv926/MotionPhoto2 (SamsungTags.py) se port ki gayi hai — MIT
+# license, poora text LICENSE.txt me hai.
 # Clip EK hi dafa encode hoti hai (darmiyan wale 3 second, CRF 0 LOSSLESS) aur usi ke
-#          bytes har tareeqay me dobara istemal hote hain — phone par run tez rehta hai.
+#          bytes dono tareeqon me istemal hote hain — phone par run tez rehta hai.
+# Har tareeqay ki test copy DCIM/Camera me IMG_ naam se jati hai aur run ke aakhir me
+#          TEST_MAP.txt (Ready Wallpapers me) bata deta hai konsa IMG naam kis
+#          tareeqay ka hai — gallery jis ko Live mane, wahi tareeqa jeetega.
 # Koi sawal nahi poochta — process bilkul automatic hai. Sirf ffmpeg lazmi hai.
 # PATCH (v4 + drop-fetch): process se pehle TermuxMod drop folder ki videos khud input
 #          me MOVE ho jati hain (app sirf images fetch karta hai, videos nahi).
@@ -25,8 +29,6 @@ from datetime import datetime, timedelta
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 from tqdm import tqdm
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # --- MULTI-COLORS ---
 C1 = '\033[95m'; C2 = '\033[91m'; C3 = '\033[93m'; C4 = '\033[92m'
@@ -46,6 +48,7 @@ SCREEN_MASK = os.path.join(B, "screen_mask.png")
 SCREEN = (90, 114, 990, 1806)   # template ke andar screen ka rect (make_template se match)
 VID_EXTS = ('.mp4', '.mov', '.m4v')
 LIVE_SECONDS = 3.0              # Live Photo ki clip lambai (video ke darmiyan wale 3 second)
+DCIM_DIR = "/storage/emulated/0/DCIM/Camera"
 
 def display_header():
     print(f"{HG2}{HL * 56}{ENDC}")
@@ -68,7 +71,7 @@ def set_wakelock(enable=True):
         pass
 
 # --- SCAN (family standard) ---
-# Har file save hote hi foran, ONE BY ONE aur usi order me scan (pehle mockup, phir JPG).
+# Har file save hote hi foran, ONE BY ONE aur usi order me scan (pehle mockup, phir files).
 def safe_scan(path, timeout_sec=5):
     try:
         subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL,
@@ -84,7 +87,7 @@ def safe_scan_dir(path, timeout_sec=20):
         pass
 
 # --- Gallery copies (TermuxMod) — set ki tartib me ---
-# Pehli file (mockup) Mockups me, baqi files (Live Photo JPG + MP4 ka jora) Ready Wallpapers me —
+# Pehli file (mockup) Mockups me, baqi files (Live Photo JPGs) Ready Wallpapers me —
 # har copy par usi file ka tracker time + foran scan.
 # Folder mojood na ho to khamoshi se skip — folder banana app ka kaam hai.
 TM_ROOT = "/storage/emulated/0/TermuxMod"
@@ -146,7 +149,6 @@ FFMPEG_MSG = (f" {C2}\u2716 ffmpeg nahi mila! Live Photo banane ke liye ffmpeg l
               f"   Pehle Termux me ye command chalao:  pkg install -y ffmpeg\n"
               f"   (ffmpeg not found \u2014 install it first, then run again.){ENDC}")
 
-# --- Vivo Live Photo builder (JPG trailer + MP4 uuid box, shared livephoto ID) ---
 def ffmpeg_exe():
     e = shutil.which("ffmpeg")
     if e:
@@ -178,19 +180,6 @@ def probe_pix_fmt(path):
                 if pf in line:
                     return pf
     return "yuv420p"
-
-def probe_fps(path):
-    """Source ka frame rate (imageTime = beech wale frame ka number nikalne ke liye). Default 30."""
-    _, _, err = _ffrun([ffmpeg_exe(), "-hide_banner", "-i", path])
-    m = re.search(r"([\d.]+)\s*fps", err)
-    if m:
-        try:
-            v = float(m.group(1))
-            if 1 <= v <= 240:
-                return v
-        except Exception:
-            pass
-    return 30.0
 
 def probe_has_audio(path):
     _, _, err = _ffrun([ffmpeg_exe(), "-hide_banner", "-i", path])
@@ -237,260 +226,127 @@ def extract_still_jpeg(src, t, out_jpg):
     with Image.open(io.BytesIO(png)) as im:
         im.convert("RGB").save(out_jpg, "JPEG", quality=100, subsampling=0, optimize=True)
 
-# --- Vivo pehchan ke bytes (asal Vivo camera file se liye gaye, bilkul wese ke wese) ---
-VIVO_MAGIC = bytes([0x1b, 0x2a, 0x39, 0x48, 0x57, 0x66, 0x75, 0x84, 0x93, 0xa2, 0xb3])
-# JPG trailer ka DEGS stream-info hissa — asal camera ke stream sizes; sirf maloomati hai,
-# jora ID se banta hai, is liye ye bytes har file me bilkul yahi rehte hain.
-VIVO_DEGS = (b'\x00\x02\xfe\x01\xff\xff\xfe\x02\xff\xff\xfe\x03\x00\x01\x00\x00\xfe\x04\x00\x00\x00\x00'
-             b'\xfe\x05\x00\x00\x00\x00\xfe\x06\x00\x00\x00\x01\xfe\x07\x00\x00\x0f\xf0\xfe\x08\x00\x00\x08\xf8'
-             b'\xfen\x00\x00\x01Y\xfe\x0b\x00\x00\x00Z\xfe\x0c\x00\x00\x00\x00')
-
-def gen_live_id():
-    """28 hex chars: millis timestamp (13) + random hex (7) + 00000000 — bilkul Vivo camera jesa."""
-    return str(int(time.time() * 1000)) + os.urandom(4).hex()[:7] + "00000000"
-
-def vivo_mp4_json(live_id, image_time):
-    """MP4 uuid box ke andar wala JSON — key order bilkul asal file jesa."""
-    return ('{"com.android.camera.takenmodel":"vivo X200 Pro","com.android.camera.camerafacing":"0",'
-            f'"com.android.camera.imageTime":{image_time},"com.android.camera.moduleid":"photo",'
-            f'"com.android.camera.livephoto":"{live_id}","version":2200,'
-            '"com.android.camera.faceInfo":{}}').encode("utf-8")
-
-def vivo_jpg_json(live_id):
-    """JPG trailer ke andar wala JSON — key order bilkul asal file jesa."""
-    return ('{"com.android.camera.joint.fullview.orientation":0,"com.android.camera.fisheye":-1,'
-            '"com.android.camera.takenmodel":"vivo X200 Pro","com.android.camera.watermarkVersion":null,'
-            '"com.android.camera.camerafacing":"0","com.android.camera.moduleid":"photo",'
-            f'"com.android.camera.livephoto":"{live_id}","version":2200,'
-            '"com.android.camera.project":"PD2405F_EX","com.android.camera.joint.fullview":false}').encode("utf-8")
-
-def _cameralbum_tail(live_id, len_field):
-    return (struct.pack(">I", len_field) + b"cameralbum!" + b"\x00\x00\x00" + b"/"
-            + live_id.encode("ascii") + b"\xff\xff\xff\xff" + VIVO_MAGIC)
-
-def build_vivo_mp4(clip_mp4, live_id, image_time, out_path):
-    """Clip ke aakhir me Vivo uuid box (usertype 'vivoMediaExtInfo') jor do.
-    Length field = len(JSON) - 2 (asal file par verify shuda: 269 -> 267 = 0x10b)."""
-    jb = vivo_mp4_json(live_id, image_time)
-    payload = b"vivo" + jb + _cameralbum_tail(live_id, len(jb) - 2)
-    box = struct.pack(">I", 8 + 16 + len(payload)) + b"uuid" + b"vivoMediaExtInfo" + payload
-    with open(clip_mp4, "rb") as fh:
-        data = fh.read()
-    with open(out_path, "wb") as fh:
-        fh.write(data)
-        fh.write(box)
-
-def build_vivo_jpg(still_jpg, live_id, out_path):
-    """Still JPEG ke EOI ke baad 591-byte Vivo trailer jor do (asal file: trailer kul 591 bytes).
-    Length field = len(JSON) (asal file par verify shuda: 411 = 0x19b)."""
-    jb = vivo_jpg_json(live_id)
-    trailer = (b"streamdata" + b"DEGS" + VIVO_DEGS + b"DEGE" + b"streaminfo"
-               + b"\x00\x06\x00\x01\x06\x00\x00\x00H" + b"streamcount" + b"\x00\x01"
-               + b"vivo" + jb + _cameralbum_tail(live_id, len(jb)))
-    with open(still_jpg, "rb") as fh:
-        jpeg = fh.read()
-    if jpeg[:2] != b"\xff\xd8":
-        raise RuntimeError("still JPEG nahi hai")
-    with open(out_path, "wb") as fh:
-        fh.write(jpeg)
-        fh.write(trailer)
-
-# --- SINGLE-FILE Live Photos — JPG ke andar MP4 (google / vivobox / oppo) ---
-# JPG me XMP APP1 (tareeqay ke mutabiq packet) — koi VCamera XMP nahi, koi JPG trailer
-# nahi. EOI ke baad MP4 ke bytes (vivobox me aakhir me Vivo uuid box wali shakal).
+# --- Samsung Motion Photo builder (SEF) — TEST v6 ---
+# Saakht (JPEG ke liye):
+#   [ JPEG: SOI + EXIF APP1 + XMP APP1 + baqi image ... EOI ]
+#   [ MotionPhoto_Data block : id(4) | nameLength(4, LE) | "MotionPhoto_Data" | MP4 bytes ]
+#   [ MotionPhoto_Version block : id(4) | nameLength(4, LE) | "MotionPhoto_Version" | "mpv3" ]
+#   [ SEFH footer : "SEFH" | version 107 (LE) | count (LE) |
+#                   ( id | offsetBack | length ) x count | indexLength (LE) | "SEFT" ]
+# offsetBack = SEFH ke start se peeche gin kar us block ke start tak ka faasla.
+# Google XMP: Primary ka Item:Padding = MotionPhoto_Data block ke header ki lambai (24),
+# MotionPhoto ka Item:Length = MP4 ke start se file ke aakhir tak (video + trailer dono).
+# Spec: reviventura/LivePhotoTools docs/FORMATS.md; construction aviv926/MotionPhoto2
+# ke SamsungTags.py se port (MIT — LICENSE.txt dekho).
+SEF_VERSION = 107
+SEF_TAGS = (("MotionPhoto_Data", b"\x00\x00\x30\x0a"),
+            ("MotionPhoto_Version", b"\x00\x00\x31\x0a"))
+SEF_DATA_HEADER = 4 + 4 + len("MotionPhoto_Data")   # 24 — XMP Primary Padding yahi hai
 XMP_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
 
-def build_motion_xmp(mp4_len, ts_us):
-    """Standard Google Motion Photo XMP packet — sirf lazmi set, kuch extra nahi."""
+def _app1_segment(payload):
+    ln = 2 + len(payload)
+    if ln > 65533:
+        raise RuntimeError("APP1 segment bohat bara hai")
+    return b"\xff\xe1" + struct.pack(">H", ln) + payload
+
+def build_exif_app1(now):
+    """Minimal EXIF APP1 segment: Make 'samsung', Model 'SM-S918B', DateTime = abhi ka waqt.
+    TIFF little-endian; IFD0 ke 3 entries (tag tartib me), 4 byte se bare values
+    IFD ke baad wali data jagah me rehte hain."""
+    dt = now.strftime("%Y:%m:%d %H:%M:%S").encode("ascii") + b"\x00"   # 20 bytes
+    vals = [(0x010F, b"samsung\x00"), (0x0110, b"SM-S918B\x00"), (0x0132, dt)]
+    data_base = 8 + 2 + 12 * len(vals) + 4
+    body, extra = b"", b""
+    for tag, raw in vals:
+        if len(raw) <= 4:
+            field = raw.ljust(4, b"\x00")
+        else:
+            field = struct.pack("<I", data_base + len(extra))
+            extra += raw
+            if len(extra) % 2:
+                extra += b"\x00"
+        body += struct.pack("<HHI", tag, 2, len(raw)) + field
+    tiff = (b"II" + struct.pack("<H", 42) + struct.pack("<I", 8)
+            + struct.pack("<H", len(vals)) + body + struct.pack("<I", 0) + extra)
+    return _app1_segment(b"Exif\x00\x00" + tiff)
+
+def build_samsung_xmp(item_length, ts_us, vivo=False):
+    """Samsung/Google Motion Photo XMP packet (GCamera set + Container directory).
+    vivo=True ho to usi rdf:Description me Vivo MediaKit ke converted-state attrs
+    bhi shamil hote hain — bilkul wese jese phone ki mani gayi files me mile."""
+    vc_ns = ('\n    xmlns:VCamera="http://ns.vivo.com/photos/1.0/camera/"') if vivo else ''
+    vc_attrs = ('\n    VCamera:VMotionPhotoVersion="1"'
+                '\n    VCamera:VMediaKitVersion="1.0.0.7"') if vivo else ''
     return ('<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">\n'
             ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
             '  <rdf:Description rdf:about=""\n'
-            '    xmlns:Camera="http://ns.google.com/photos/1.0/camera/"\n'
-            '    xmlns:GContainer="http://ns.google.com/photos/1.0/container/"\n'
-            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"\n'
-            '    Camera:MotionPhoto="1"\n'
-            '    Camera:MotionPhotoVersion="1"\n'
-            f'    Camera:MotionPhotoPresentationTimestampUs="{ts_us}">\n'
-            '   <GContainer:Directory>\n'
+            '    xmlns:GCamera="http://ns.google.com/photos/1.0/camera/"\n'
+            '    xmlns:Container="http://ns.google.com/photos/1.0/container/"\n'
+            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"'
+            + vc_ns + '\n'
+            '    GCamera:MotionPhoto="1"\n'
+            '    GCamera:MotionPhotoVersion="1"\n'
+            f'    GCamera:MotionPhotoPresentationTimestampUs="{ts_us}"'
+            + vc_attrs + '>\n'
+            '   <Container:Directory>\n'
             '    <rdf:Seq>\n'
             '     <rdf:li rdf:parseType="Resource">\n'
-            '      <Item:Mime>image/jpeg</Item:Mime>\n'
-            '      <Item:Semantic>Primary</Item:Semantic>\n'
-            '      <Item:Length>0</Item:Length>\n'
-            '      <Item:Padding>0</Item:Padding>\n'
+            '      <Container:Item Item:Mime="image/jpeg" Item:Semantic="Primary" '
+            f'Item:Length="0" Item:Padding="{SEF_DATA_HEADER}"/>\n'
             '     </rdf:li>\n'
             '     <rdf:li rdf:parseType="Resource">\n'
-            '      <Item:Mime>video/mp4</Item:Mime>\n'
-            '      <Item:Semantic>MotionPhoto</Item:Semantic>\n'
-            f'      <Item:Length>{mp4_len}</Item:Length>\n'
-            '      <Item:Padding>0</Item:Padding>\n'
+            '      <Container:Item Item:Mime="video/mp4" Item:Semantic="MotionPhoto" '
+            f'Item:Length="{item_length}" Item:Padding="0"/>\n'
             '     </rdf:li>\n'
             '    </rdf:Seq>\n'
-            '   </GContainer:Directory>\n'
+            '   </Container:Directory>\n'
             '  </rdf:Description>\n'
             ' </rdf:RDF>\n'
             '</x:xmpmeta>').encode("utf-8")
 
-def build_oppo_xmp(mp4_len):
-    """Oppo/ColorOS Motion Photo XMP packet — OpCamera pehchan + GContainer directory.
-    (Research: OPPO live photo = single file, OpCamera:OLivePhotoVersion="2",
-    OpCamera:MotionPhotoOwner="oplus", sath Google container items.)"""
-    return ('<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">\n'
-            ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
-            '  <rdf:Description rdf:about=""\n'
-            '    xmlns:OpCamera="http://ns.oplus.com/photos/1.0/camera/"\n'
-            '    xmlns:GContainer="http://ns.google.com/photos/1.0/container/"\n'
-            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"\n'
-            '    OpCamera:OLivePhotoVersion="2"\n'
-            '    OpCamera:MotionPhotoOwner="oplus">\n'
-            '   <GContainer:Directory>\n'
-            '    <rdf:Seq>\n'
-            '     <rdf:li rdf:parseType="Resource">\n'
-            '      <Item:Mime>image/jpeg</Item:Mime>\n'
-            '      <Item:Semantic>Primary</Item:Semantic>\n'
-            '      <Item:Length>0</Item:Length>\n'
-            '      <Item:Padding>0</Item:Padding>\n'
-            '     </rdf:li>\n'
-            '     <rdf:li rdf:parseType="Resource">\n'
-            '      <Item:Mime>video/mp4</Item:Mime>\n'
-            '      <Item:Semantic>MotionPhoto</Item:Semantic>\n'
-            f'      <Item:Length>{mp4_len}</Item:Length>\n'
-            '      <Item:Padding>0</Item:Padding>\n'
-            '     </rdf:li>\n'
-            '    </rdf:Seq>\n'
-            '   </GContainer:Directory>\n'
-            '  </rdf:Description>\n'
-            ' </rdf:RDF>\n'
-            '</x:xmpmeta>').encode("utf-8")
+def build_sef_tail(clip_bytes):
+    """JPEG ke EOI ke baad lagne wala Samsung hissa: dono SEF blocks + SEFH footer.
+    (MotionPhoto2 ke SamsungTags.video_footer ki JPEG wali shakal, byte-for-byte.)"""
+    blocks = []
+    for name, tid in SEF_TAGS:
+        payload = clip_bytes if name == "MotionPhoto_Data" else b"mpv3"
+        blocks.append(tid + struct.pack("<i", len(name)) + name.encode("ascii") + payload)
+    tail = b"".join(blocks)
+    sefh = b"SEFH" + struct.pack("<i", SEF_VERSION) + struct.pack("<i", len(blocks))
+    offsets, run = [], 0
+    for blk in reversed(blocks):
+        run += len(blk)
+        offsets.append(run)
+    offsets.reverse()
+    for (name, tid), blk, off in zip(SEF_TAGS, blocks, offsets):
+        sefh += tid + struct.pack("<i", off) + struct.pack("<i", len(blk))
+    sefh += struct.pack("<i", len(sefh)) + b"SEFT"
+    return tail + sefh
 
-def build_single_file(still_jpg, mp4_path, packet, out_path):
-    """Still JPEG (SOI ke foran baad XMP APP1) + EOI ke baad poora MP4.
-    Item:Length (packet ke andar) = appended MP4 ki kul lambai (uuid box samet)."""
-    seg_len = 2 + len(XMP_HEADER) + len(packet)
-    if seg_len > 65533:
-        raise RuntimeError("XMP segment bohat bara hai")
-    app1 = b"\xff\xe1" + struct.pack(">H", seg_len) + XMP_HEADER + packet
+def build_samsung_file(still_jpg, clip_mp4, ts_us, vivo, out_path):
+    """Key photo (SOI ke foran baad EXIF APP1 + XMP APP1) + EOI ke baad Samsung SEF tail.
+    Item:Length = tail ki lambai − 24 (yani MP4 ke start se file ke aakhir tak)."""
+    with open(clip_mp4, "rb") as fh:
+        clip = fh.read()
+    tail = build_sef_tail(clip)
+    item_length = len(tail) - SEF_DATA_HEADER
+    xmp = _app1_segment(XMP_HEADER + build_samsung_xmp(item_length, ts_us, vivo))
+    exif = build_exif_app1(datetime.now())
     with open(still_jpg, "rb") as fh:
         jpeg = fh.read()
     if jpeg[:2] != b"\xff\xd8":
         raise RuntimeError("still JPEG nahi hai")
-    with open(out_path, "wb") as out:
-        out.write(jpeg[:2])       # SOI
-        out.write(app1)           # XMP APP1
-        out.write(jpeg[2:])       # baqi JPEG (EOI samet)
-        with open(mp4_path, "rb") as fh:
-            shutil.copyfileobj(fh, out)
+    with open(out_path, "wb") as fh:
+        fh.write(jpeg[:2])    # SOI
+        fh.write(exif)        # EXIF APP1
+        fh.write(xmp)         # XMP APP1
+        fh.write(jpeg[2:])    # baqi JPEG (EOI samet)
+        fh.write(tail)        # Samsung SEF tail
 
-# --- TEST v5 (1): iOS jora — asal Apple format (vendored engine: livephoto_engine.py) ---
-def build_ios_pair(still_jpg, clip_mp4, clip_dur, stage, out_jpg, out_mov):
-    """Key photo me Apple MakerNote (content-identifier UUID) + clip ka stream-copy
-    remux .mov me, usi UUID ke content.identifier ke sath + still-image-time track.
-    Clip dobara encode NAHI hoti — wahi CRF 0 encode sirf remux hoti hai."""
-    import uuid as _uuid
-    import livephoto_engine as lp
-    content_id = str(_uuid.uuid4()).upper()
-    now = datetime.now().astimezone()
-    with open(still_jpg, "rb") as fh:
-        jpeg = fh.read()
-    with open(out_jpg, "wb") as fh:
-        fh.write(lp.insert_exif(jpeg, lp.build_exif(content_id, now)))
-    tmp_mov = os.path.join(stage, "ios_stage1.mov")
-    cmd = [ffmpeg_exe(), "-y", "-v", "error", "-i", clip_mp4,
-           "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1", "-map_chapters", "-1",
-           "-c", "copy"] + lp._mov_output_args(content_id, now, tmp_mov)
-    rc, _, err = _ffrun(cmd)
-    if rc != 0 or not os.path.exists(tmp_mov):
-        raise RuntimeError("iOS remux failed: " + err[-300:])
-    lp.add_still_image_time(tmp_mov, out_mov, clip_dur / 2)
-
-# --- TEST v5 (3): CLONE jora — asal camera jori ki saakht clone karke ---
-DCIM_DIR = "/storage/emulated/0/DCIM/Camera"
-_DONOR_ID_RE = re.compile(rb"livephoto\W+([0-9a-f]{28})")
-
-_DONOR_CACHE = []   # donor poori run me EK hi dafa dhoonda jata hai (pehli clone koshish par)
-def find_donor():
-    """DCIM/Camera ki sab se nayi asal camera jori (JPG) dhoondo: IMG_*.jpg jiske
-    andar 'streamdata' trailer + 28-hex livephoto ID ho aur sath usi naam ki .mp4 ho.
-    Mile to (path, bytes, donor_id) warna None. Nateeja cache ho jata hai taake is
-    run ki apni test copies donor na ban jayen."""
-    if _DONOR_CACHE:
-        return _DONOR_CACHE[0]
-    got = _find_donor_scan()
-    _DONOR_CACHE.append(got)
-    return got
-
-def _find_donor_scan():
-    try:
-        names = [f for f in os.listdir(DCIM_DIR)
-                 if f.startswith("IMG_") and f.lower().endswith(".jpg")]
-        paths = []
-        for f in names:
-            p = os.path.join(DCIM_DIR, f)
-            stem = os.path.splitext(p)[0]
-            if os.path.exists(stem + ".mp4") or os.path.exists(stem + ".MP4"):
-                paths.append(p)
-        paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-        for p in paths:
-            with open(p, "rb") as fh:
-                data = fh.read()
-            if b"streamdata" not in data:
-                continue
-            m = _DONOR_ID_RE.search(data)
-            if m:
-                return p, data, m.group(1)
-    except Exception:
-        pass
-    return None
-
-def _jpeg_segments(data):
-    """SOI ke baad SOS se pehle ke segments: [(marker, poora segment bytes)] + SOS offset."""
-    segs, pos = [], 2
-    while pos + 4 <= len(data) and data[pos] == 0xFF:
-        marker = data[pos + 1]
-        if marker == 0xDA:
-            return segs, pos
-        if marker == 0x01 or 0xD0 <= marker <= 0xD9:
-            pos += 2
-            continue
-        ln = struct.unpack(">H", data[pos + 2:pos + 4])[0]
-        segs.append((marker, data[pos:pos + 2 + ln]))
-        pos += 2 + ln
-    return segs, None
-
-def build_clone_pair(still_jpg, clip_mp4, image_time, out_jpg, out_mp4):
-    """Donor JPG ke SAARE APPn segments + post-EOI trailer bilkul wese ke wese, beech me
-    HAMARI key photo ka scan data; donor ki ID har jagah ek nayi fresh ID se badal do.
-    MP4 = hamari clip + Vivo uuid box (wahi fresh ID). Donor na mile to False."""
-    d = find_donor()
-    if not d:
-        print(f" {C5}\u2139 (TEST) clone skip — DCIM/Camera me asal camera jori (donor) nahi mili{ENDC}")
-        return False
-    _, donor_data, donor_id = d
-    fresh = gen_live_id()
-    dsegs, _ = _jpeg_segments(donor_data)
-    donor_apps = [seg for (m, seg) in dsegs if 0xE0 <= m <= 0xEF]
-    if not donor_apps:
-        raise RuntimeError("donor JPG me APP segments nahi mile")
-    with open(still_jpg, "rb") as fh:
-        ours = fh.read()
-    osegs, sos_pos = _jpeg_segments(ours)
-    if sos_pos is None:
-        raise RuntimeError("key photo me SOS nahi mila")
-    eoi = ours.find(b"\xff\xd9", sos_pos)
-    if eoi < 0:
-        raise RuntimeError("key photo me EOI nahi mila")
-    rest = b"".join(seg for (m, seg) in osegs if not (0xE0 <= m <= 0xEF)) + ours[sos_pos:eoi + 2]
-    trailer = donor_data[donor_data.rfind(b"\xff\xd9") + 2:]
-    out = b"\xff\xd8" + b"".join(donor_apps) + rest + trailer
-    out = out.replace(donor_id, fresh.encode("ascii"))
-    with open(out_jpg, "wb") as fh:
-        fh.write(out)
-    build_vivo_mp4(clip_mp4, fresh, image_time, out_mp4)
-    return True
-
-# --- TEST v5: DCIM/Camera test copies + TEST_MAP ---
-# Har tareeqay ki copy DCIM/Camera me IMG_<time> naam se (jora ek hi stem par, singles
-# apne alag stem par, har tareeqa +1 second) — run ke aakhir me mapping TEST_MAP.txt me.
+# --- TEST: DCIM/Camera test copies + TEST_MAP ---
+# Har tareeqay ki copy DCIM/Camera me IMG_<time> naam se (har tareeqa +1 second) —
+# run ke aakhir me mapping TEST_MAP.txt me.
 TEST_MAP = []   # (method, ready names, dcim names)
 _DCIM_NEXT = [None]   # agle group ke liye sab se pehle wala khaali second (takrao rokne ko)
 def dcim_test_drop(entries):
@@ -578,17 +434,15 @@ def process_one(f, idx, t_now):
     os.makedirs(stage, exist_ok=True)
     n = idx + 1
     mock_path = os.path.join(O, f"{idx}.jpg")
-    variants = []   # [(method, [paths])] — tartib: ios, vivo, clone, google, vivobox, oppo
+    variants = []   # [(method, [paths])] — tartib: samsung, samsungvivo
     try:
         clip_mp4 = os.path.join(stage, "clip.mp4")
         still_jpg = os.path.join(stage, "still.jpg")
-        make_clip(raw_p, start, dur, clip_mp4)          # EK hi encode — sab tareeqay yahi bytes
+        make_clip(raw_p, start, dur, clip_mp4)          # EK hi encode — dono tareeqay yahi bytes
         extract_still_jpeg(raw_p, still_abs, still_jpg)
         build_mockup(still_jpg, mock_path)
         clip_dur = dur if dur else total
-        image_time = max(1, int(round((clip_dur / 2) * probe_fps(raw_p))))
         ts_us = int(round((clip_dur / 2) * 1000000))
-        clip_len = os.path.getsize(clip_mp4)
 
         def _try(method, fn):
             try:
@@ -598,48 +452,18 @@ def process_one(f, idx, t_now):
             except Exception as e:
                 print(f" {C2}\u26a0 (TEST) {method} nahi bana: {str(e)[:70]}{ENDC}")
 
-        def _ios():
-            pj, pm = os.path.join(R, f"{n}_ios.jpg"), os.path.join(R, f"{n}_ios.mov")
-            build_ios_pair(still_jpg, clip_mp4, clip_dur, stage, pj, pm)
-            return [pj, pm]
-
-        def _vivo():
-            pj, pm = os.path.join(R, f"{n}_vivo.jpg"), os.path.join(R, f"{n}_vivo.mp4")
-            live_id = gen_live_id()
-            build_vivo_jpg(still_jpg, live_id, pj)
-            build_vivo_mp4(clip_mp4, live_id, image_time, pm)
-            return [pj, pm]
-
-        def _clone():
-            pj, pm = os.path.join(R, f"{n}_clone.jpg"), os.path.join(R, f"{n}_clone.mp4")
-            if build_clone_pair(still_jpg, clip_mp4, image_time, pj, pm):
-                return [pj, pm]
-            return None
-
-        def _google():
-            p = os.path.join(R, f"{n}_google.jpg")
-            build_single_file(still_jpg, clip_mp4, build_motion_xmp(clip_len, ts_us), p)
+        def _samsung():
+            p = os.path.join(R, f"{n}_samsung.jpg")
+            build_samsung_file(still_jpg, clip_mp4, ts_us, False, p)
             return [p]
 
-        def _vivobox():
-            p = os.path.join(R, f"{n}_vivobox.jpg")
-            staged = os.path.join(stage, "vivobox.mp4")
-            build_vivo_mp4(clip_mp4, gen_live_id(), image_time, staged)
-            build_single_file(still_jpg, staged,
-                              build_motion_xmp(os.path.getsize(staged), ts_us), p)
+        def _samsungvivo():
+            p = os.path.join(R, f"{n}_samsungvivo.jpg")
+            build_samsung_file(still_jpg, clip_mp4, ts_us, True, p)
             return [p]
 
-        def _oppo():
-            p = os.path.join(R, f"{n}_oppo.jpg")
-            build_single_file(still_jpg, clip_mp4, build_oppo_xmp(clip_len), p)
-            return [p]
-
-        _try("ios", _ios)
-        _try("vivo", _vivo)
-        _try("clone", _clone)
-        _try("google", _google)
-        _try("vivobox", _vivobox)
-        _try("oppo", _oppo)
+        _try("samsung", _samsung)
+        _try("samsungvivo", _samsungvivo)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     if not variants:
@@ -702,9 +526,9 @@ if action == 'process':
             with open(T_F, "w") as fh: fh.write(str(cur_t))
         except Exception:
             pass
-        print(f"\n {C4}\u2714 {done} video(s) tayyar! (TEST v5 \u2014 har video: 1 mockup + 6 tareeqay: ios / vivo / clone / google / vivobox / oppo; test copies DCIM/Camera me bhi gayi){ENDC}")
+        print(f"\n {C4}\u2714 {done} video(s) tayyar! (TEST v6 \u2014 har video: 1 mockup + 2 tareeqay: samsung / samsungvivo; test copies DCIM/Camera me bhi gayi){ENDC}")
         if TEST_MAP:
-            lines = [f"Project 21 — TEST v5 method map ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})",
+            lines = [f"Project 21 — TEST v6 method map ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})",
                      "Gallery me jo IMG naam Live Photo bana, wahi tareeqa jeeta:", ""]
             lines += [f"{m}: {r}  ->  DCIM: {d}" for (m, r, d) in TEST_MAP]
             try:
