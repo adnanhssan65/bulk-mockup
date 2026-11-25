@@ -664,6 +664,17 @@ public final class BulkDropFolders {
             new File(dropDir, BulkMirror.MOCKUPS_SUB), true);
         copied += syncOneMirror(ctx, n, BulkProjects.readyDir(n),
             new File(dropDir, BulkMirror.READY_SUB), false);
+        // v148: mirror tayyar — ab gallery copies ko APP KHUD
+        // MediaStore me register kare (termux-media-scan Mod ki
+        // sign ki wajah se kaam nahi karta). Yehi ek hook dono
+        // rastron ko cover karta hai: post-run thread bhi
+        // syncMirrorForProject hi bulata hai, or Dashboard/Add/
+        // Projects wala syncNow bhi syncAllMirrors se yahin ata
+        // hai. Registration apne andar har exception nigal leti
+        // hai — mirror ka result is se kabhi mutasir nahi hota.
+        try {
+            BulkMediaRegister.registerProject(ctx, n);
+        } catch (Exception ignored) {}
         return copied;
     }
 
