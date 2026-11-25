@@ -1,14 +1,22 @@
-# ===================== PROJECT 21 : VIVO LIVE PHOTO MAKER — TEST BUILD v4 =====================
-# Input: VIDEO (kisi bhi lambai ki) -> Output: Vivo-format Live Photo JORA (NAME.jpg + NAME.mp4)
-#          + 1 Mockup (live photo ke darmiyan wale frame par lockscreen design)
-# TEST v4: har video par jora (A) ke sath ek SINGLE-FILE Live Photo (B: <even>_live.jpg —
-#          JPG ke andar hi MP4, sirf standard Google XMP + MP4 ke aakhir me Vivo uuid box)
-#          bhi banta hai, aur dono formats ki test copies DCIM/Camera me IMG_ naam se
-#          bhi jati hain — taake ek hi run me pata chal jaye gallery kis ko Live manti hai.
-# Vivo format (asal Vivo camera file se reverse-engineer shuda): photo aur video ALAG files,
-#          ek hi naam — dono ke andar ek hi "livephoto" ID chhupa hota hai (JPG ke aakhir me
-#          591-byte trailer, MP4 ke aakhir me uuid box "vivoMediaExtInfo"); gallery isi ID se
-#          dono ko jor kar Live Photo chalati hai. Clip = darmiyan wale 3 second, CRF 0 LOSSLESS.
+# ===================== PROJECT 21 : LIVE PHOTO MAKER — TEST BUILD v5 (ALL METHODS) =====================
+# Input: VIDEO (kisi bhi lambai ki) -> Output: 1 Mockup + SIX Live Photo tareeqay (TEST)
+# TEST v5: v4 ke dono formats (vivo jora, vivobox single) phone par FAIL hue — is liye
+#          ab har video par SAARE mashhoor tareeqay ek sath bante hain, har ek ki test
+#          copy DCIM/Camera me IMG_ naam se jati hai, aur run ke aakhir me TEST_MAP.txt
+#          (Ready Wallpapers me) bata deta hai konsa IMG naam kis tareeqay ka hai —
+#          gallery jis ko Live mane, wahi tareeqa jeetega:
+#   1) ios     : <n>_ios.jpg + <n>_ios.mov  — asal Apple format (livephoto_engine.py:
+#                JPG MakerNote UUID + MOV content.identifier + still-image-time track)
+#   2) vivo    : <n>_vivo.jpg + <n>_vivo.mp4 — v3 wala Vivo jora (trailer + uuid box, ek ID)
+#   3) clone   : <n>_clone.jpg + <n>_clone.mp4 — DCIM/Camera ki ASAL camera jori ki
+#                saakht (APP segments + trailer) clone karke, sirf ID badal kar; donor
+#                na mile to sirf ye tareeqa skip hota hai
+#   4) google  : <n>_google.jpg — saf Google Motion Photo (sirf standard XMP, andar
+#                MP4, koi Vivo data nahi) — ummeed: gallery khud convert kar legi
+#   5) vivobox : <n>_vivobox.jpg — Google XMP + andar MP4 jiske aakhir me Vivo uuid box
+#   6) oppo    : <n>_oppo.jpg — andar MP4 + Oppo XMP (OpCamera:OLivePhotoVersion=2)
+# Clip EK hi dafa encode hoti hai (darmiyan wale 3 second, CRF 0 LOSSLESS) aur usi ke
+#          bytes har tareeqay me dobara istemal hote hain — phone par run tez rehta hai.
 # Koi sawal nahi poochta — process bilkul automatic hai. Sirf ffmpeg lazmi hai.
 # PATCH (v4 + drop-fetch): process se pehle TermuxMod drop folder ki videos khud input
 #          me MOVE ho jati hain (app sirf images fetch karta hai, videos nahi).
@@ -287,9 +295,9 @@ def build_vivo_jpg(still_jpg, live_id, out_path):
         fh.write(jpeg)
         fh.write(trailer)
 
-# --- TEST v4 (B): SINGLE-FILE Live Photo — JPG ke andar MP4 ---
-# JPG me SIRF standard Google XMP (Camera:MotionPhoto) — koi VCamera XMP nahi, koi JPG
-# trailer nahi. EOI ke baad wahi lossless clip (aakhir me Vivo uuid box, apni alag fresh ID).
+# --- SINGLE-FILE Live Photos — JPG ke andar MP4 (google / vivobox / oppo) ---
+# JPG me XMP APP1 (tareeqay ke mutabiq packet) — koi VCamera XMP nahi, koi JPG trailer
+# nahi. EOI ke baad MP4 ke bytes (vivobox me aakhir me Vivo uuid box wali shakal).
 XMP_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
 
 def build_motion_xmp(mp4_len, ts_us):
@@ -323,11 +331,41 @@ def build_motion_xmp(mp4_len, ts_us):
             ' </rdf:RDF>\n'
             '</x:xmpmeta>').encode("utf-8")
 
-def build_single_file(still_jpg, vivo_mp4, ts_us, out_path):
-    """Still JPEG (SOI ke foran baad XMP APP1) + EOI ke baad poora Vivo MP4.
-    Item:Length = appended MP4 ki kul lambai (uuid box samet)."""
-    mp4_len = os.path.getsize(vivo_mp4)
-    packet = build_motion_xmp(mp4_len, ts_us)
+def build_oppo_xmp(mp4_len):
+    """Oppo/ColorOS Motion Photo XMP packet — OpCamera pehchan + GContainer directory.
+    (Research: OPPO live photo = single file, OpCamera:OLivePhotoVersion="2",
+    OpCamera:MotionPhotoOwner="oplus", sath Google container items.)"""
+    return ('<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">\n'
+            ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
+            '  <rdf:Description rdf:about=""\n'
+            '    xmlns:OpCamera="http://ns.oplus.com/photos/1.0/camera/"\n'
+            '    xmlns:GContainer="http://ns.google.com/photos/1.0/container/"\n'
+            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"\n'
+            '    OpCamera:OLivePhotoVersion="2"\n'
+            '    OpCamera:MotionPhotoOwner="oplus">\n'
+            '   <GContainer:Directory>\n'
+            '    <rdf:Seq>\n'
+            '     <rdf:li rdf:parseType="Resource">\n'
+            '      <Item:Mime>image/jpeg</Item:Mime>\n'
+            '      <Item:Semantic>Primary</Item:Semantic>\n'
+            '      <Item:Length>0</Item:Length>\n'
+            '      <Item:Padding>0</Item:Padding>\n'
+            '     </rdf:li>\n'
+            '     <rdf:li rdf:parseType="Resource">\n'
+            '      <Item:Mime>video/mp4</Item:Mime>\n'
+            '      <Item:Semantic>MotionPhoto</Item:Semantic>\n'
+            f'      <Item:Length>{mp4_len}</Item:Length>\n'
+            '      <Item:Padding>0</Item:Padding>\n'
+            '     </rdf:li>\n'
+            '    </rdf:Seq>\n'
+            '   </GContainer:Directory>\n'
+            '  </rdf:Description>\n'
+            ' </rdf:RDF>\n'
+            '</x:xmpmeta>').encode("utf-8")
+
+def build_single_file(still_jpg, mp4_path, packet, out_path):
+    """Still JPEG (SOI ke foran baad XMP APP1) + EOI ke baad poora MP4.
+    Item:Length (packet ke andar) = appended MP4 ki kul lambai (uuid box samet)."""
     seg_len = 2 + len(XMP_HEADER) + len(packet)
     if seg_len > 65533:
         raise RuntimeError("XMP segment bohat bara hai")
@@ -340,25 +378,148 @@ def build_single_file(still_jpg, vivo_mp4, ts_us, out_path):
         out.write(jpeg[:2])       # SOI
         out.write(app1)           # XMP APP1
         out.write(jpeg[2:])       # baqi JPEG (EOI samet)
-        with open(vivo_mp4, "rb") as fh:
+        with open(mp4_path, "rb") as fh:
             shutil.copyfileobj(fh, out)
 
-# --- TEST v4: DCIM/Camera test copies (IMG_ naam, camera style) ---
+# --- TEST v5 (1): iOS jora — asal Apple format (vendored engine: livephoto_engine.py) ---
+def build_ios_pair(still_jpg, clip_mp4, clip_dur, stage, out_jpg, out_mov):
+    """Key photo me Apple MakerNote (content-identifier UUID) + clip ka stream-copy
+    remux .mov me, usi UUID ke content.identifier ke sath + still-image-time track.
+    Clip dobara encode NAHI hoti — wahi CRF 0 encode sirf remux hoti hai."""
+    import uuid as _uuid
+    import livephoto_engine as lp
+    content_id = str(_uuid.uuid4()).upper()
+    now = datetime.now().astimezone()
+    with open(still_jpg, "rb") as fh:
+        jpeg = fh.read()
+    with open(out_jpg, "wb") as fh:
+        fh.write(lp.insert_exif(jpeg, lp.build_exif(content_id, now)))
+    tmp_mov = os.path.join(stage, "ios_stage1.mov")
+    cmd = [ffmpeg_exe(), "-y", "-v", "error", "-i", clip_mp4,
+           "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1", "-map_chapters", "-1",
+           "-c", "copy"] + lp._mov_output_args(content_id, now, tmp_mov)
+    rc, _, err = _ffrun(cmd)
+    if rc != 0 or not os.path.exists(tmp_mov):
+        raise RuntimeError("iOS remux failed: " + err[-300:])
+    lp.add_still_image_time(tmp_mov, out_mov, clip_dur / 2)
+
+# --- TEST v5 (3): CLONE jora — asal camera jori ki saakht clone karke ---
 DCIM_DIR = "/storage/emulated/0/DCIM/Camera"
-def dcim_test_drop(pair_jpg, pair_mp4, live_jpg):
-    """(A) jora aur (B) single-file — dono ki copies DCIM/Camera me IMG_<time> naam se,
-    har copy ke foran baad scan. Koi bhi masla ho to sirf ek note, run rukta nahi."""
+_DONOR_ID_RE = re.compile(rb"livephoto\W+([0-9a-f]{28})")
+
+_DONOR_CACHE = []   # donor poori run me EK hi dafa dhoonda jata hai (pehli clone koshish par)
+def find_donor():
+    """DCIM/Camera ki sab se nayi asal camera jori (JPG) dhoondo: IMG_*.jpg jiske
+    andar 'streamdata' trailer + 28-hex livephoto ID ho aur sath usi naam ki .mp4 ho.
+    Mile to (path, bytes, donor_id) warna None. Nateeja cache ho jata hai taake is
+    run ki apni test copies donor na ban jayen."""
+    if _DONOR_CACHE:
+        return _DONOR_CACHE[0]
+    got = _find_donor_scan()
+    _DONOR_CACHE.append(got)
+    return got
+
+def _find_donor_scan():
+    try:
+        names = [f for f in os.listdir(DCIM_DIR)
+                 if f.startswith("IMG_") and f.lower().endswith(".jpg")]
+        paths = []
+        for f in names:
+            p = os.path.join(DCIM_DIR, f)
+            stem = os.path.splitext(p)[0]
+            if os.path.exists(stem + ".mp4") or os.path.exists(stem + ".MP4"):
+                paths.append(p)
+        paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        for p in paths:
+            with open(p, "rb") as fh:
+                data = fh.read()
+            if b"streamdata" not in data:
+                continue
+            m = _DONOR_ID_RE.search(data)
+            if m:
+                return p, data, m.group(1)
+    except Exception:
+        pass
+    return None
+
+def _jpeg_segments(data):
+    """SOI ke baad SOS se pehle ke segments: [(marker, poora segment bytes)] + SOS offset."""
+    segs, pos = [], 2
+    while pos + 4 <= len(data) and data[pos] == 0xFF:
+        marker = data[pos + 1]
+        if marker == 0xDA:
+            return segs, pos
+        if marker == 0x01 or 0xD0 <= marker <= 0xD9:
+            pos += 2
+            continue
+        ln = struct.unpack(">H", data[pos + 2:pos + 4])[0]
+        segs.append((marker, data[pos:pos + 2 + ln]))
+        pos += 2 + ln
+    return segs, None
+
+def build_clone_pair(still_jpg, clip_mp4, image_time, out_jpg, out_mp4):
+    """Donor JPG ke SAARE APPn segments + post-EOI trailer bilkul wese ke wese, beech me
+    HAMARI key photo ka scan data; donor ki ID har jagah ek nayi fresh ID se badal do.
+    MP4 = hamari clip + Vivo uuid box (wahi fresh ID). Donor na mile to False."""
+    d = find_donor()
+    if not d:
+        print(f" {C5}\u2139 (TEST) clone skip — DCIM/Camera me asal camera jori (donor) nahi mili{ENDC}")
+        return False
+    _, donor_data, donor_id = d
+    fresh = gen_live_id()
+    dsegs, _ = _jpeg_segments(donor_data)
+    donor_apps = [seg for (m, seg) in dsegs if 0xE0 <= m <= 0xEF]
+    if not donor_apps:
+        raise RuntimeError("donor JPG me APP segments nahi mile")
+    with open(still_jpg, "rb") as fh:
+        ours = fh.read()
+    osegs, sos_pos = _jpeg_segments(ours)
+    if sos_pos is None:
+        raise RuntimeError("key photo me SOS nahi mila")
+    eoi = ours.find(b"\xff\xd9", sos_pos)
+    if eoi < 0:
+        raise RuntimeError("key photo me EOI nahi mila")
+    rest = b"".join(seg for (m, seg) in osegs if not (0xE0 <= m <= 0xEF)) + ours[sos_pos:eoi + 2]
+    trailer = donor_data[donor_data.rfind(b"\xff\xd9") + 2:]
+    out = b"\xff\xd8" + b"".join(donor_apps) + rest + trailer
+    out = out.replace(donor_id, fresh.encode("ascii"))
+    with open(out_jpg, "wb") as fh:
+        fh.write(out)
+    build_vivo_mp4(clip_mp4, fresh, image_time, out_mp4)
+    return True
+
+# --- TEST v5: DCIM/Camera test copies + TEST_MAP ---
+# Har tareeqay ki copy DCIM/Camera me IMG_<time> naam se (jora ek hi stem par, singles
+# apne alag stem par, har tareeqa +1 second) — run ke aakhir me mapping TEST_MAP.txt me.
+TEST_MAP = []   # (method, ready names, dcim names)
+_DCIM_NEXT = [None]   # agle group ke liye sab se pehle wala khaali second (takrao rokne ko)
+def dcim_test_drop(entries):
+    """entries: [(method, [ready file paths])] — tartib wahi jo tareeqon ki hai.
+    Har group ke IMG stems pichle groups se takrate nahi (second aage barha dete hain)."""
     try:
         os.makedirs(DCIM_DIR, exist_ok=True)
-        now = datetime.now()
-        stem_a = "IMG_" + now.strftime("%Y%m%d_%H%M%S")
-        stem_b = "IMG_" + (now + timedelta(seconds=1)).strftime("%Y%m%d_%H%M%S")
-        for src, name in ((pair_jpg, stem_a + ".jpg"), (pair_mp4, stem_a + ".mp4"),
-                          (live_jpg, stem_b + ".jpg")):
-            d = os.path.join(DCIM_DIR, name)
-            shutil.copyfile(src, d)
-            safe_scan(d)
-            print(f" {C5}\u2139 (TEST) DCIM copy: {name}{ENDC}")
+        base = datetime.now()
+        if _DCIM_NEXT[0] is not None and base < _DCIM_NEXT[0]:
+            base = _DCIM_NEXT[0]
+        def _stem_free(dt):
+            s = "IMG_" + dt.strftime("%Y%m%d_%H%M%S")
+            return not any(os.path.exists(os.path.join(DCIM_DIR, s + e))
+                           for e in (".jpg", ".mp4", ".mov"))
+        while not all(_stem_free(base + timedelta(seconds=k)) for k in range(len(entries))):
+            base += timedelta(seconds=1)
+        _DCIM_NEXT[0] = base + timedelta(seconds=len(entries))
+        for k, (method, srcs) in enumerate(entries):
+            stem = "IMG_" + (base + timedelta(seconds=k)).strftime("%Y%m%d_%H%M%S")
+            names = []
+            for src in srcs:
+                name = stem + os.path.splitext(src)[1].lower()
+                d = os.path.join(DCIM_DIR, name)
+                shutil.copyfile(src, d)
+                safe_scan(d)
+                names.append(name)
+                print(f" {C5}\u2139 (TEST) DCIM copy: {name}{ENDC}")
+            TEST_MAP.append((method, ", ".join(os.path.basename(s) for s in srcs),
+                             " + ".join(names)))
     except Exception as e:
         print(f" {C2}\u26a0 (TEST) DCIM copy nahi ho saki: {str(e)[:60]}{ENDC}")
 
@@ -415,41 +576,87 @@ def process_one(f, idx, t_now):
     if os.path.isdir(stage):
         shutil.rmtree(stage, ignore_errors=True)
     os.makedirs(stage, exist_ok=True)
+    n = idx + 1
+    mock_path = os.path.join(O, f"{idx}.jpg")
+    variants = []   # [(method, [paths])] — tartib: ios, vivo, clone, google, vivobox, oppo
     try:
         clip_mp4 = os.path.join(stage, "clip.mp4")
         still_jpg = os.path.join(stage, "still.jpg")
-        make_clip(raw_p, start, dur, clip_mp4)
+        make_clip(raw_p, start, dur, clip_mp4)          # EK hi encode — sab tareeqay yahi bytes
         extract_still_jpeg(raw_p, still_abs, still_jpg)
-        mock_path = os.path.join(O, f"{idx}.jpg")
-        ready_jpg = os.path.join(R, f"{idx + 1}.jpg")
-        ready_mp4 = os.path.join(R, f"{idx + 1}.mp4")
         build_mockup(still_jpg, mock_path)
-        # Vivo jora: ek hi livephoto ID photo aur video dono ke andar
-        live_id = gen_live_id()
         clip_dur = dur if dur else total
         image_time = max(1, int(round((clip_dur / 2) * probe_fps(raw_p))))
-        build_vivo_jpg(still_jpg, live_id, ready_jpg)
-        build_vivo_mp4(clip_mp4, live_id, image_time, ready_mp4)
-        # TEST (B) single-file: wahi clip, apni ALAG fresh ID ke Vivo uuid box ke sath,
-        # still JPEG ke andar (sirf standard Google XMP, koi trailer nahi)
-        live_path = os.path.join(R, f"{idx + 1}_live.jpg")
-        live_mp4_stage = os.path.join(stage, "live.mp4")
-        build_vivo_mp4(clip_mp4, gen_live_id(), image_time, live_mp4_stage)
         ts_us = int(round((clip_dur / 2) * 1000000))
-        build_single_file(still_jpg, live_mp4_stage, ts_us, live_path)
+        clip_len = os.path.getsize(clip_mp4)
+
+        def _try(method, fn):
+            try:
+                got = fn()
+                if got:
+                    variants.append((method, got))
+            except Exception as e:
+                print(f" {C2}\u26a0 (TEST) {method} nahi bana: {str(e)[:70]}{ENDC}")
+
+        def _ios():
+            pj, pm = os.path.join(R, f"{n}_ios.jpg"), os.path.join(R, f"{n}_ios.mov")
+            build_ios_pair(still_jpg, clip_mp4, clip_dur, stage, pj, pm)
+            return [pj, pm]
+
+        def _vivo():
+            pj, pm = os.path.join(R, f"{n}_vivo.jpg"), os.path.join(R, f"{n}_vivo.mp4")
+            live_id = gen_live_id()
+            build_vivo_jpg(still_jpg, live_id, pj)
+            build_vivo_mp4(clip_mp4, live_id, image_time, pm)
+            return [pj, pm]
+
+        def _clone():
+            pj, pm = os.path.join(R, f"{n}_clone.jpg"), os.path.join(R, f"{n}_clone.mp4")
+            if build_clone_pair(still_jpg, clip_mp4, image_time, pj, pm):
+                return [pj, pm]
+            return None
+
+        def _google():
+            p = os.path.join(R, f"{n}_google.jpg")
+            build_single_file(still_jpg, clip_mp4, build_motion_xmp(clip_len, ts_us), p)
+            return [p]
+
+        def _vivobox():
+            p = os.path.join(R, f"{n}_vivobox.jpg")
+            staged = os.path.join(stage, "vivobox.mp4")
+            build_vivo_mp4(clip_mp4, gen_live_id(), image_time, staged)
+            build_single_file(still_jpg, staged,
+                              build_motion_xmp(os.path.getsize(staged), ts_us), p)
+            return [p]
+
+        def _oppo():
+            p = os.path.join(R, f"{n}_oppo.jpg")
+            build_single_file(still_jpg, clip_mp4, build_oppo_xmp(clip_len), p)
+            return [p]
+
+        _try("ios", _ios)
+        _try("vivo", _vivo)
+        _try("clone", _clone)
+        _try("google", _google)
+        _try("vivobox", _vivobox)
+        _try("oppo", _oppo)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+    if not variants:
+        raise RuntimeError("koi bhi Live Photo tareeqa nahi bana")
     mt, wt = t_now + 60, t_now + 120
+    flat = [p for _, ps in variants for p in ps]
     os.utime(mock_path, (mt, mt))
-    os.utime(ready_jpg, (wt, wt))
-    os.utime(ready_mp4, (wt, wt))
-    os.utime(live_path, (wt, wt))
-    for p in (mock_path, ready_jpg, ready_mp4, live_path):   # save verify
+    for p in flat:
+        os.utime(p, (wt, wt))
+    for p in [mock_path] + flat:   # save verify
         if not os.path.exists(p) or os.path.getsize(p) < 100:
             raise IOError("save verify failed: " + p)
-    safe_scan(mock_path); safe_scan(ready_jpg); safe_scan(ready_mp4); safe_scan(live_path)
-    gallery_copy_outputs([(mock_path, mt), (ready_jpg, wt), (ready_mp4, wt), (live_path, wt)])
-    dcim_test_drop(ready_jpg, ready_mp4, live_path)
+    safe_scan(mock_path)
+    for p in flat:
+        safe_scan(p)
+    gallery_copy_outputs([(mock_path, mt)] + [(p, wt) for p in flat])
+    dcim_test_drop(variants)
     try: os.remove(raw_p)
     except Exception: pass
     return idx + 2, wt
@@ -495,7 +702,19 @@ if action == 'process':
             with open(T_F, "w") as fh: fh.write(str(cur_t))
         except Exception:
             pass
-        print(f"\n {C4}\u2714 {done} Vivo Live Photo + Mockup ready! (TEST v4 \u2014 har video: 1 mockup + (A) Live Photo jora JPG + MP4 + (B) single-file _live.jpg; dono ki test copies DCIM/Camera me bhi gayi){ENDC}")
+        print(f"\n {C4}\u2714 {done} video(s) tayyar! (TEST v5 \u2014 har video: 1 mockup + 6 tareeqay: ios / vivo / clone / google / vivobox / oppo; test copies DCIM/Camera me bhi gayi){ENDC}")
+        if TEST_MAP:
+            lines = [f"Project 21 — TEST v5 method map ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})",
+                     "Gallery me jo IMG naam Live Photo bana, wahi tareeqa jeeta:", ""]
+            lines += [f"{m}: {r}  ->  DCIM: {d}" for (m, r, d) in TEST_MAP]
+            try:
+                with open(os.path.join(R, "TEST_MAP.txt"), "w") as fh:
+                    fh.write("\n".join(lines) + "\n")
+            except Exception:
+                pass
+            print(f" {C5}\u2139 TEST MAP (konsa IMG naam = konsa tareeqa):{ENDC}")
+            for ln in lines[3:]:
+                print(f"   {C5}{ln}{ENDC}")
     else:
         print(f"\n {C2}\u2716 Koi Live Photo nahi bani.{ENDC}")
     if skip_log:
