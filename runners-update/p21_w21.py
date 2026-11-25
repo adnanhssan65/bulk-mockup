@@ -1,32 +1,38 @@
-# ===================== PROJECT 21 : LIVE PHOTO MAKER — TEST BUILD v6 (SAMSUNG) =====================
-# Input: VIDEO (kisi bhi lambai ki) -> Output: 1 Mockup + 2 Samsung Motion Photo tareeqay (TEST)
-# TEST v6: phone par sirf SAMSUNG Galaxy S23+ ki Motion Photos gallery ke Live tab me
-#          ati hain (wo bhi Vivo MediaKit ki convert ki hui) — v1-v5 ke saare tareeqay
-#          (ios / vivo / clone / google / vivobox / oppo) FAIL hue. Un sab me jo cheez
-#          GHAIB thi wo hai Samsung ki asal SEF saakht. Is liye ab har video par sirf
-#          DO tareeqay bante hain, dono PAKKI Samsung construction me:
-#   1) samsung     : <n>_samsung.jpg — asal Samsung mpv3 file: JPEG ke andar minimal
-#                    EXIF (Make 'samsung', Model 'SM-S918B') + Google XMP (MotionPhoto),
-#                    EOI ke baad [MotionPhoto_Data block][MP4][MotionPhoto_Version
-#                    block 'mpv3'][SEFH footer] — Samsung ki SEF tartib.
-#   2) samsungvivo : <n>_samsungvivo.jpg — bilkul wahi Samsung file, sirf XMP me
-#                    Vivo MediaKit ke converted-state nishan bhi: VCamera:
-#                    VMotionPhotoVersion="1" + VMediaKitVersion="1.0.0.7"
-#                    (phone par jo files Live mani gayin, un me yahi do nishan the).
+# ===================== PROJECT 21 : LIVE PHOTO MAKER — FINAL v7 (SAMSUNG) =====================
+# Input: VIDEO (kisi bhi lambai ki) -> Output: 1 Mockup + 1 Live Photo (Samsung Motion Photo)
+# FINAL v7: phone par sabit ho gaya (2026-11-25) ke Vivo gallery aur TikTok sirf
+#          SAMSUNG Galaxy S23+ wali Motion Photo saakht ko hi Live Photo mante
+#          hain — v1-v5 ke saare tareeqay (ios / vivo / clone / google / vivobox /
+#          oppo) FAIL hue the, un sab me Samsung ki asal SEF saakht ghaib thi.
+#          v6 TEST me Samsung construction pass hui; final me har video se sirf
+#          DO outputs bante hain:
+#   1) Mockup     : <n-1>.jpg (Mockups) — Live Photo ki key photo (bilkul beech
+#                   wala frame) par lockscreen design.
+#   2) Live Photo : <n>.jpg (Ready Wallpapers) — asal Samsung mpv3 file: JPEG ke
+#                   andar minimal EXIF (Make 'samsung', Model 'SM-S918B') +
+#                   Google XMP (MotionPhoto), EOI ke baad [MotionPhoto_Data
+#                   block][MP4][MotionPhoto_Version block 'mpv3'][SEFH footer]
+#                   — Samsung ki SEF tartib.
 # Samsung format ki spec: reviventura/LivePhotoTools docs/FORMATS.md;
 # construction aviv926/MotionPhoto2 (SamsungTags.py) se port ki gayi hai — MIT
 # license, poora text LICENSE.txt me hai.
-# Clip EK hi dafa encode hoti hai (darmiyan wale 3 second, CRF 0 LOSSLESS) aur usi ke
-#          bytes dono tareeqon me istemal hote hain — phone par run tez rehta hai.
-# Har tareeqay ki test copy DCIM/Camera me IMG_ naam se jati hai aur run ke aakhir me
-#          TEST_MAP.txt (Ready Wallpapers me) bata deta hai konsa IMG naam kis
-#          tareeqay ka hai — gallery jis ko Live mane, wahi tareeqa jeetega.
+# Clip EK hi dafa encode hoti hai (darmiyan wale 3 second, CRF 0 LOSSLESS).
+# HD mode Project 1 ki tarah hai, lekin setting se badal sakta hai: key photo
+#          par family wala apply_hd_enhance, aur clip ki encode par halka
+#          denoise + sharpen (ffmpeg hqdn3d + unsharp) — phir CRF 0, yani HD
+#          result bilkul lossless. Mode project folder ki .p21_mode file me
+#          save rehta hai (HD / NORMAL); file na ho ya parhi na jaye to
+#          default HD. Badalna ho to: python w21.py setting 21
+# Mockup ki ghari asal waqt dikhati hai: run ke pehle mockup par usi waqt ka
+#          time, har agle mockup par +1 minute; date bhi usi din ki asal.
 # Koi sawal nahi poochta — process bilkul automatic hai. Sirf ffmpeg lazmi hai.
-# PATCH (v4 + drop-fetch): process se pehle TermuxMod drop folder ki videos khud input
-#          me MOVE ho jati hain (app sirf images fetch karta hai, videos nahi).
+# Drop-fetch: process se pehle TermuxMod drop folder ki videos khud input me MOVE
+#          ho jati hain (app sirf images fetch karta hai, videos nahi).
 import os, sys, time, shutil, subprocess, gc, re, struct
 from datetime import datetime, timedelta
-from PIL import Image, ImageFile
+import numpy as np
+import cv2
+from PIL import Image, ImageFile, ImageDraw, ImageFont, ImageFilter
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 from tqdm import tqdm
 
@@ -48,7 +54,29 @@ SCREEN_MASK = os.path.join(B, "screen_mask.png")
 SCREEN = (90, 114, 990, 1806)   # template ke andar screen ka rect (make_template se match)
 VID_EXTS = ('.mp4', '.mov', '.m4v')
 LIVE_SECONDS = 3.0              # Live Photo ki clip lambai (video ke darmiyan wale 3 second)
-DCIM_DIR = "/storage/emulated/0/DCIM/Camera"
+FONT_DATE = os.path.join(B, "fonts", "NotoSans-Light.ttf")
+FONT_CLOCK = os.path.join(B, "fonts", "NotoSansDisplay-Light.ttf")
+HD_VFILTER = "hqdn3d=4:4:3:3,unsharp=5:5:1.0:5:5:0.0"   # clip ki HD safai + tezgi (encode se pehle)
+MODE_FILE = os.path.join(B, ".p21_mode")   # save shuda mode: "HD" ya "NORMAL"
+MODE = ["HD"]        # is run ka active mode (process ke start par file se parha jata hai)
+RUN_START = [None]   # process run ke start ka waqt — mockup ki ghari yahin se chalti hai
+MOCK_SEQ = [0]       # is run me ab tak bane mockups (har agla mockup +1 minute)
+
+def read_mode():
+    """Save shuda mode parho — file na ho, parhi na jaye ya andar ghalat likha
+    ho to default HD. Sirf saaf 'NORMAL' hi Normal deta hai."""
+    try:
+        with open(MODE_FILE, "r") as fh:
+            v = fh.read().strip().upper()
+        if v in ("HD", "NORMAL"):
+            return v
+    except Exception:
+        pass
+    return "HD"
+
+def save_mode(v):
+    with open(MODE_FILE, "w") as fh:
+        fh.write(v + "\n")
 
 def display_header():
     print(f"{HG2}{HL * 56}{ENDC}")
@@ -186,7 +214,8 @@ def probe_has_audio(path):
     return " Audio: " in err
 
 def make_clip(src, start, dur, out_mp4):
-    """Darmiyan wali ~3s clip — libx264 CRF 0 (mathematically LOSSLESS, quality bilkul asal jesi).
+    """Darmiyan wali ~3s clip — pehle HD filter (halka denoise + sharpen), phir
+    libx264 CRF 0 (mathematically LOSSLESS — HD result bilkul waisa hi rehta hai).
     Preset sirf size/speed ke liye hai; CRF 0 par quality hamesha lossless rehti hai.
     Source me awaz ho to wo bhi bilkul asal (-c:a copy) sath jati hai."""
     def _enc(with_audio):
@@ -199,6 +228,8 @@ def make_clip(src, start, dur, out_mp4):
         cmd += ["-map", "0:v:0"]
         if with_audio:
             cmd += ["-map", "0:a:0?"]
+        if MODE[0] == "HD":
+            cmd += ["-vf", HD_VFILTER]
         cmd += ["-c:v", "libx264", "-crf", "0",
                 "-preset", "fast", "-pix_fmt", probe_pix_fmt(src)]
         if with_audio:
@@ -214,8 +245,33 @@ def make_clip(src, start, dur, out_mp4):
     if rc != 0 or not os.path.exists(out_mp4):
         raise RuntimeError("clip encode failed: " + err[-400:])
 
+# --- HD enhance (Project 1 ke apply_hd_enhance ki hubahu copy — family standard) ---
+def apply_hd_enhance(img):
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+
+    # Luminance noise reduction (detail-preserving, edge-aware)
+    l_denoised = cv2.bilateralFilter(l, d=5, sigmaColor=30, sigmaSpace=30)
+
+    # Color/chroma noise reduction — light touch, strong blur here smears
+    # color across edges on already-low-quality source images
+    a_denoised = cv2.GaussianBlur(a, (0, 0), 0.8)
+    b_denoised = cv2.GaussianBlur(b, (0, 0), 0.8)
+
+    # Moderate two-pass sharpening on luminance only — strong sharpening
+    # amplifies compression noise on low quality inputs instead of detail
+    blur1 = cv2.GaussianBlur(l_denoised, (0, 0), 1.0)
+    sharp1 = cv2.addWeighted(l_denoised, 1.35, blur1, -0.35, 0)
+    blur2 = cv2.GaussianBlur(sharp1, (0, 0), 2.5)
+    sharp2 = cv2.addWeighted(sharp1, 1.15, blur2, -0.15, 0)
+
+    l_final = np.clip(sharp2, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(cv2.merge([l_final, a_denoised, b_denoised]), cv2.COLOR_LAB2BGR)
+
 def extract_still_jpeg(src, t, out_jpg):
-    """Time t wala frame — full resolution JPEG (q100, 4:4:4), bilkul pehle wali key photo jesa."""
+    """Time t wala frame — full resolution par nikalo; HD mode ho to family HD
+    enhance lagao, Normal mode me bilkul asal frame. Phir JPEG (q100, 4:4:4).
+    Yahi photo Live Photo me bhi jati hai aur mockup me bhi."""
     vf = "scale=in_color_matrix=auto:in_range=auto:out_range=full,format=rgb24"
     rc, png, err = _ffrun([ffmpeg_exe(), "-v", "error", "-ss", f"{t:.4f}", "-i", src,
                            "-frames:v", "1", "-vf", vf,
@@ -224,9 +280,17 @@ def extract_still_jpeg(src, t, out_jpg):
         raise RuntimeError("frame extract failed: " + err[-400:])
     import io
     with Image.open(io.BytesIO(png)) as im:
-        im.convert("RGB").save(out_jpg, "JPEG", quality=100, subsampling=0, optimize=True)
+        rgb_im = im.convert("RGB")
+    if MODE[0] != "HD":
+        rgb_im.save(out_jpg, "JPEG", quality=100, subsampling=0, optimize=True)
+        return
+    rgb = np.array(rgb_im)
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    hd = apply_hd_enhance(bgr)
+    Image.fromarray(cv2.cvtColor(hd, cv2.COLOR_BGR2RGB)).save(
+        out_jpg, "JPEG", quality=100, subsampling=0, optimize=True)
 
-# --- Samsung Motion Photo builder (SEF) — TEST v6 ---
+# --- Samsung Motion Photo builder (SEF) — FINAL v7 ---
 # Saakht (JPEG ke liye):
 #   [ JPEG: SOI + EXIF APP1 + XMP APP1 + baqi image ... EOI ]
 #   [ MotionPhoto_Data block : id(4) | nameLength(4, LE) | "MotionPhoto_Data" | MP4 bytes ]
@@ -271,24 +335,17 @@ def build_exif_app1(now):
             + struct.pack("<H", len(vals)) + body + struct.pack("<I", 0) + extra)
     return _app1_segment(b"Exif\x00\x00" + tiff)
 
-def build_samsung_xmp(item_length, ts_us, vivo=False):
-    """Samsung/Google Motion Photo XMP packet (GCamera set + Container directory).
-    vivo=True ho to usi rdf:Description me Vivo MediaKit ke converted-state attrs
-    bhi shamil hote hain — bilkul wese jese phone ki mani gayi files me mile."""
-    vc_ns = ('\n    xmlns:VCamera="http://ns.vivo.com/photos/1.0/camera/"') if vivo else ''
-    vc_attrs = ('\n    VCamera:VMotionPhotoVersion="1"'
-                '\n    VCamera:VMediaKitVersion="1.0.0.7"') if vivo else ''
+def build_samsung_xmp(item_length, ts_us):
+    """Samsung/Google Motion Photo XMP packet (GCamera set + Container directory)."""
     return ('<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">\n'
             ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
             '  <rdf:Description rdf:about=""\n'
             '    xmlns:GCamera="http://ns.google.com/photos/1.0/camera/"\n'
             '    xmlns:Container="http://ns.google.com/photos/1.0/container/"\n'
-            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"'
-            + vc_ns + '\n'
+            '    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"\n'
             '    GCamera:MotionPhoto="1"\n'
             '    GCamera:MotionPhotoVersion="1"\n'
-            f'    GCamera:MotionPhotoPresentationTimestampUs="{ts_us}"'
-            + vc_attrs + '>\n'
+            f'    GCamera:MotionPhotoPresentationTimestampUs="{ts_us}">\n'
             '   <Container:Directory>\n'
             '    <rdf:Seq>\n'
             '     <rdf:li rdf:parseType="Resource">\n'
@@ -324,14 +381,14 @@ def build_sef_tail(clip_bytes):
     sefh += struct.pack("<i", len(sefh)) + b"SEFT"
     return tail + sefh
 
-def build_samsung_file(still_jpg, clip_mp4, ts_us, vivo, out_path):
+def build_samsung_file(still_jpg, clip_mp4, ts_us, out_path):
     """Key photo (SOI ke foran baad EXIF APP1 + XMP APP1) + EOI ke baad Samsung SEF tail.
     Item:Length = tail ki lambai − 24 (yani MP4 ke start se file ke aakhir tak)."""
     with open(clip_mp4, "rb") as fh:
         clip = fh.read()
     tail = build_sef_tail(clip)
     item_length = len(tail) - SEF_DATA_HEADER
-    xmp = _app1_segment(XMP_HEADER + build_samsung_xmp(item_length, ts_us, vivo))
+    xmp = _app1_segment(XMP_HEADER + build_samsung_xmp(item_length, ts_us))
     exif = build_exif_app1(datetime.now())
     with open(still_jpg, "rb") as fh:
         jpeg = fh.read()
@@ -343,41 +400,6 @@ def build_samsung_file(still_jpg, clip_mp4, ts_us, vivo, out_path):
         fh.write(xmp)         # XMP APP1
         fh.write(jpeg[2:])    # baqi JPEG (EOI samet)
         fh.write(tail)        # Samsung SEF tail
-
-# --- TEST: DCIM/Camera test copies + TEST_MAP ---
-# Har tareeqay ki copy DCIM/Camera me IMG_<time> naam se (har tareeqa +1 second) —
-# run ke aakhir me mapping TEST_MAP.txt me.
-TEST_MAP = []   # (method, ready names, dcim names)
-_DCIM_NEXT = [None]   # agle group ke liye sab se pehle wala khaali second (takrao rokne ko)
-def dcim_test_drop(entries):
-    """entries: [(method, [ready file paths])] — tartib wahi jo tareeqon ki hai.
-    Har group ke IMG stems pichle groups se takrate nahi (second aage barha dete hain)."""
-    try:
-        os.makedirs(DCIM_DIR, exist_ok=True)
-        base = datetime.now()
-        if _DCIM_NEXT[0] is not None and base < _DCIM_NEXT[0]:
-            base = _DCIM_NEXT[0]
-        def _stem_free(dt):
-            s = "IMG_" + dt.strftime("%Y%m%d_%H%M%S")
-            return not any(os.path.exists(os.path.join(DCIM_DIR, s + e))
-                           for e in (".jpg", ".mp4", ".mov"))
-        while not all(_stem_free(base + timedelta(seconds=k)) for k in range(len(entries))):
-            base += timedelta(seconds=1)
-        _DCIM_NEXT[0] = base + timedelta(seconds=len(entries))
-        for k, (method, srcs) in enumerate(entries):
-            stem = "IMG_" + (base + timedelta(seconds=k)).strftime("%Y%m%d_%H%M%S")
-            names = []
-            for src in srcs:
-                name = stem + os.path.splitext(src)[1].lower()
-                d = os.path.join(DCIM_DIR, name)
-                shutil.copyfile(src, d)
-                safe_scan(d)
-                names.append(name)
-                print(f" {C5}\u2139 (TEST) DCIM copy: {name}{ENDC}")
-            TEST_MAP.append((method, ", ".join(os.path.basename(s) for s in srcs),
-                             " + ".join(names)))
-    except Exception as e:
-        print(f" {C2}\u26a0 (TEST) DCIM copy nahi ho saki: {str(e)[:60]}{ENDC}")
 
 def get_max_seq(dirs):
     mx = 0
@@ -398,24 +420,61 @@ def list_inputs():
     out.sort(key=lambda f: os.path.getctime(os.path.join(I, f)))
     return out
 
-def build_mockup(key_jpg, out_path):
-    """Live Photo ki key photo (darmiyan wala frame) ko lockscreen template me lagao."""
+def mockup_texts(show_dt):
+    """Mockup par chhapne wali date + ghari — reference wale andaaz me:
+    date 'Tue 25 Nov' (din ka chhota naam + tareekh + maheene ka chhota naam),
+    ghari '4:40' (ghanta baghair agle zero ke, minute do hindse)."""
+    date_str = f"{show_dt:%a} {show_dt.day} {show_dt:%b}"
+    clock_str = f"{show_dt.hour % 12 or 12}:{show_dt.minute:02d}"
+    return date_str, clock_str
+
+def draw_clock_layer(size, show_dt):
+    """Date + ghari ki transparent layer — make_template wali hi geometry, fonts
+    aur size (2x supersample par bana kar neeche scale, taake kinare naram rahen).
+    Template ke andar ab ye text baked NAHI hai; har mockup par asal waqt banta hai."""
+    SS = 2
+    W, H = size
+    layer = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    date_str, clock_str = mockup_texts(show_dt)
+    f_date = ImageFont.truetype(FONT_DATE, 47 * SS)
+    tw = d.textlength(date_str, font=f_date)
+    d.text((540 * SS - tw / 2, 256 * SS), date_str, font=f_date, fill=(255, 255, 255, 255))
+    size_1x = 200
+    while True:
+        f_clock = ImageFont.truetype(FONT_CLOCK, size_1x * SS)
+        if d.textlength(clock_str, font=f_clock) >= 600 * SS:
+            break
+        size_1x += 4
+    tw = d.textlength(clock_str, font=f_clock)
+    d.text((540 * SS - tw / 2, 322 * SS), clock_str, font=f_clock, fill=(255, 255, 255, 255))
+    return layer.resize((W, H), Image.LANCZOS)
+
+def build_mockup(key_jpg, out_path, show_dt):
+    """Live Photo ki key photo (enhanced still) ko lockscreen template me lagao,
+    upar asal date + ghari (show_dt) chhapo."""
     tpl = Image.open(TEMPLATE).convert("RGBA")
     mask_full = Image.open(SCREEN_MASK).convert("L")
     mask = mask_full.crop(SCREEN)
     sw, sh = SCREEN[2] - SCREEN[0], SCREEN[3] - SCREEN[1]
     with Image.open(key_jpg) as im:
         frame = im.convert("RGB")
-    # cover-fit: screen ko poora bharo, darmiyan se crop
+    # cover-fit: screen ko poora bharo, darmiyan se crop (behtareen resampling)
     scale = max(sw / frame.width, sh / frame.height)
     nw, nh = int(frame.width * scale + 0.5), int(frame.height * scale + 0.5)
     frame = frame.resize((nw, nh), Image.LANCZOS)
     x = (nw - sw) // 2; y = (nh - sh) // 2
     frame = frame.crop((x, y, x + sw, y + sh))
-    canvas = Image.new("RGB", (1080, 1920), (0, 0, 0))
+    if scale > 1.0:
+        # Frame screen se chhota tha (upscale) — andar wali tasveer par halki
+        # si tezgi, taake bari screen par dhundli na lage (sirf mockup par).
+        frame = frame.filter(ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
+    canvas = Image.new("RGB", tpl.size, (0, 0, 0))
     canvas.paste(frame, (SCREEN[0], SCREEN[1]), mask)
     canvas.paste(tpl, (0, 0), tpl)
-    canvas.save(out_path, quality=95)
+    layer = draw_clock_layer(tpl.size, show_dt)
+    canvas.paste(layer, (0, 0), layer)
+    canvas.save(out_path, quality=100, subsampling=0)
 
 def process_one(f, idx, t_now):
     raw_p = os.path.join(I, f)
@@ -434,53 +493,32 @@ def process_one(f, idx, t_now):
     os.makedirs(stage, exist_ok=True)
     n = idx + 1
     mock_path = os.path.join(O, f"{idx}.jpg")
-    variants = []   # [(method, [paths])] — tartib: samsung, samsungvivo
+    live_path = os.path.join(R, f"{n}.jpg")
     try:
         clip_mp4 = os.path.join(stage, "clip.mp4")
         still_jpg = os.path.join(stage, "still.jpg")
-        make_clip(raw_p, start, dur, clip_mp4)          # EK hi encode — dono tareeqay yahi bytes
+        make_clip(raw_p, start, dur, clip_mp4)          # EK hi encode (HD filter + CRF 0 lossless)
         extract_still_jpeg(raw_p, still_abs, still_jpg)
-        build_mockup(still_jpg, mock_path)
+        base = RUN_START[0] or datetime.now()
+        show_dt = base + timedelta(minutes=MOCK_SEQ[0])
+        MOCK_SEQ[0] += 1
+        build_mockup(still_jpg, mock_path, show_dt)
+        d_str, c_str = mockup_texts(show_dt)
+        print(f" {C5}\U0001f550 Mockup time: {c_str} ({d_str}){ENDC}")
         clip_dur = dur if dur else total
         ts_us = int(round((clip_dur / 2) * 1000000))
-
-        def _try(method, fn):
-            try:
-                got = fn()
-                if got:
-                    variants.append((method, got))
-            except Exception as e:
-                print(f" {C2}\u26a0 (TEST) {method} nahi bana: {str(e)[:70]}{ENDC}")
-
-        def _samsung():
-            p = os.path.join(R, f"{n}_samsung.jpg")
-            build_samsung_file(still_jpg, clip_mp4, ts_us, False, p)
-            return [p]
-
-        def _samsungvivo():
-            p = os.path.join(R, f"{n}_samsungvivo.jpg")
-            build_samsung_file(still_jpg, clip_mp4, ts_us, True, p)
-            return [p]
-
-        _try("samsung", _samsung)
-        _try("samsungvivo", _samsungvivo)
+        build_samsung_file(still_jpg, clip_mp4, ts_us, live_path)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
-    if not variants:
-        raise RuntimeError("koi bhi Live Photo tareeqa nahi bana")
     mt, wt = t_now + 60, t_now + 120
-    flat = [p for _, ps in variants for p in ps]
     os.utime(mock_path, (mt, mt))
-    for p in flat:
-        os.utime(p, (wt, wt))
-    for p in [mock_path] + flat:   # save verify
+    os.utime(live_path, (wt, wt))
+    for p in [mock_path, live_path]:   # save verify
         if not os.path.exists(p) or os.path.getsize(p) < 100:
             raise IOError("save verify failed: " + p)
     safe_scan(mock_path)
-    for p in flat:
-        safe_scan(p)
-    gallery_copy_outputs([(mock_path, mt)] + [(p, wt) for p in flat])
-    dcim_test_drop(variants)
+    safe_scan(live_path)
+    gallery_copy_outputs([(mock_path, mt), (live_path, wt)])
     try: os.remove(raw_p)
     except Exception: pass
     return idx + 2, wt
@@ -502,6 +540,8 @@ if action == 'process':
     if not vids:
         print(f" {C2}\u2716 {P_NUM}_wallpapers me koi video (.mp4/.mov/.m4v) nahi mili.{ENDC}"); sys.exit()
     print(f" {C4}\u2714 Live Photo engine ready! (ffmpeg mil gaya){ENDC}")
+    MODE[0] = read_mode()
+    print(f" {C5}\u2699\ufe0f Mode: {'HD' if MODE[0] == 'HD' else 'Normal'}{ENDC}")
     s_idx = get_max_seq([O, R, W_H]) + 1
     cur_t = time.time()
     if os.path.exists(T_F):
@@ -512,6 +552,8 @@ if action == 'process':
         except Exception:
             pass
     done, skip_log = 0, []
+    RUN_START[0] = datetime.now()   # mockup ki ghari is run ke start se chalegi
+    MOCK_SEQ[0] = 0
     set_wakelock(True)
     for f in tqdm(vids, desc="\U0001f3ac Live Photo ", bar_format=f" {C1}{{desc}}{{bar:20}}{ENDC} {C4}{{n_fmt}}/{{total_fmt}}{ENDC}"):
         try:
@@ -526,25 +568,32 @@ if action == 'process':
             with open(T_F, "w") as fh: fh.write(str(cur_t))
         except Exception:
             pass
-        print(f"\n {C4}\u2714 {done} video(s) tayyar! (TEST v6 \u2014 har video: 1 mockup + 2 tareeqay: samsung / samsungvivo; test copies DCIM/Camera me bhi gayi){ENDC}")
-        if TEST_MAP:
-            lines = [f"Project 21 — TEST v6 method map ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})",
-                     "Gallery me jo IMG naam Live Photo bana, wahi tareeqa jeeta:", ""]
-            lines += [f"{m}: {r}  ->  DCIM: {d}" for (m, r, d) in TEST_MAP]
-            try:
-                with open(os.path.join(R, "TEST_MAP.txt"), "w") as fh:
-                    fh.write("\n".join(lines) + "\n")
-            except Exception:
-                pass
-            print(f" {C5}\u2139 TEST MAP (konsa IMG naam = konsa tareeqa):{ENDC}")
-            for ln in lines[3:]:
-                print(f"   {C5}{ln}{ENDC}")
+        print(f"\n {C4}\u2714 {done} video(s) tayyar! (har video: 1 mockup + 1 Live Photo — Samsung format){ENDC}")
     else:
         print(f"\n {C2}\u2716 Koi Live Photo nahi bani.{ENDC}")
     if skip_log:
         print(f" {C2}\u26a0 {len(skip_log)} skip (video reh gayi, agle run me retry):{ENDC}")
         for s in skip_log[:8]:
             print(f"   {C2}- {s}{ENDC}")
+    print("")
+
+if action == 'setting':
+    display_header()
+    cur = read_mode()
+    print(f" {C5}\u273f {BOLD}S e t t i n g{ENDC}")
+    print(f" {C5}\u2139 Abhi wala mode: {'HD' if cur == 'HD' else 'Normal'}{ENDC}")
+    print(f" {C1}[1]{ENDC} HD Mode")
+    print(f" {C1}[2]{ENDC} Normal Mode")
+    print(f" {C1}[0]{ENDC} Cancel")
+    ch = input(f"\n {C4}\u279c {ENDC}").strip()
+    if ch == '1':
+        save_mode("HD")
+        print(f" {C4}\u2714 Mode save ho gaya: HD{ENDC}")
+    elif ch == '2':
+        save_mode("NORMAL")
+        print(f" {C4}\u2714 Mode save ho gaya: Normal{ENDC}")
+    else:
+        print(f" {C5}\u2139 Cancel.{ENDC}")
     print("")
 
 if action == 'del':
