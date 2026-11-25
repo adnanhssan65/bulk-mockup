@@ -1,9 +1,10 @@
-# ===================== PROJECT 21 : MOTION PHOTO MAKER =====================
-# Input: VIDEO (kisi bhi lambai ki) -> Output: Android Motion Photo (EK hi JPG — video usi ke andar)
-#          + 1 Mockup (motion photo ke darmiyan wale frame par lockscreen design)
-# Motion Photo = Google format: JPG me XMP (GCamera:MotionPhoto + Container directory)
-#          aur file ke aakhir me video ke darmiyan wale 3 second ki clip — CRF 0 LOSSLESS encode,
-#          quality me zara sa bhi farq nahi. Android gallery ise Live Photo samajhti hai.
+# ===================== PROJECT 21 : VIVO LIVE PHOTO MAKER =====================
+# Input: VIDEO (kisi bhi lambai ki) -> Output: Vivo-format Live Photo JORA (NAME.jpg + NAME.mp4)
+#          + 1 Mockup (live photo ke darmiyan wale frame par lockscreen design)
+# Vivo format (asal Vivo camera file se reverse-engineer shuda): photo aur video ALAG files,
+#          ek hi naam — dono ke andar ek hi "livephoto" ID chhupa hota hai (JPG ke aakhir me
+#          591-byte trailer, MP4 ke aakhir me uuid box "vivoMediaExtInfo"); gallery isi ID se
+#          dono ko jor kar Live Photo chalati hai. Clip = darmiyan wale 3 second, CRF 0 LOSSLESS.
 # Koi sawal nahi poochta — process bilkul automatic hai. Sirf ffmpeg lazmi hai.
 import os, sys, time, shutil, subprocess, gc, re, struct
 from datetime import datetime
@@ -30,7 +31,7 @@ TEMPLATE = os.path.join(B, "template.png")
 SCREEN_MASK = os.path.join(B, "screen_mask.png")
 SCREEN = (90, 114, 990, 1806)   # template ke andar screen ka rect (make_template se match)
 VID_EXTS = ('.mp4', '.mov', '.m4v')
-LIVE_SECONDS = 3.0              # Motion Photo ki clip lambai (video ke darmiyan wale 3 second)
+LIVE_SECONDS = 3.0              # Live Photo ki clip lambai (video ke darmiyan wale 3 second)
 
 def display_header():
     print(f"{HG2}{HL * 56}{ENDC}")
@@ -69,7 +70,7 @@ def safe_scan_dir(path, timeout_sec=20):
         pass
 
 # --- Gallery copies (TermuxMod) — set ki tartib me ---
-# Pehli file (mockup) Mockups me, dusri file (Motion Photo JPG) Ready Wallpapers me —
+# Pehli file (mockup) Mockups me, baqi files (Live Photo JPG + MP4 ka jora) Ready Wallpapers me —
 # har copy par usi file ka tracker time + foran scan.
 # Folder mojood na ho to khamoshi se skip — folder banana app ka kaam hai.
 TM_ROOT = "/storage/emulated/0/TermuxMod"
@@ -98,11 +99,11 @@ def ffmpeg_available():
     except Exception:
         return False
 
-FFMPEG_MSG = (f" {C2}\u2716 ffmpeg nahi mila! Motion Photo banane ke liye ffmpeg lazmi hai.\n"
+FFMPEG_MSG = (f" {C2}\u2716 ffmpeg nahi mila! Live Photo banane ke liye ffmpeg lazmi hai.\n"
               f"   Pehle Termux me ye command chalao:  pkg install -y ffmpeg\n"
               f"   (ffmpeg not found \u2014 install it first, then run again.){ENDC}")
 
-# --- Motion Photo builder (Google format: XMP + JPG ke aakhir me MP4) ---
+# --- Vivo Live Photo builder (JPG trailer + MP4 uuid box, shared livephoto ID) ---
 def ffmpeg_exe():
     e = shutil.which("ffmpeg")
     if e:
@@ -135,19 +136,49 @@ def probe_pix_fmt(path):
                     return pf
     return "yuv420p"
 
+def probe_fps(path):
+    """Source ka frame rate (imageTime = beech wale frame ka number nikalne ke liye). Default 30."""
+    _, _, err = _ffrun([ffmpeg_exe(), "-hide_banner", "-i", path])
+    m = re.search(r"([\d.]+)\s*fps", err)
+    if m:
+        try:
+            v = float(m.group(1))
+            if 1 <= v <= 240:
+                return v
+        except Exception:
+            pass
+    return 30.0
+
+def probe_has_audio(path):
+    _, _, err = _ffrun([ffmpeg_exe(), "-hide_banner", "-i", path])
+    return " Audio: " in err
+
 def make_clip(src, start, dur, out_mp4):
     """Darmiyan wali ~3s clip — libx264 CRF 0 (mathematically LOSSLESS, quality bilkul asal jesi).
-    Preset sirf size/speed ke liye hai; CRF 0 par quality hamesha lossless rehti hai."""
-    cmd = [ffmpeg_exe(), "-y", "-v", "error"]
-    if start:
-        cmd += ["-ss", f"{start:.4f}"]
-    cmd += ["-i", src]
-    if dur:
-        cmd += ["-t", f"{dur:.4f}"]
-    cmd += ["-map", "0:v:0", "-an", "-c:v", "libx264", "-crf", "0",
-            "-preset", "fast", "-pix_fmt", probe_pix_fmt(src),
-            "-f", "mp4", out_mp4]
-    rc, _, err = _ffrun(cmd)
+    Preset sirf size/speed ke liye hai; CRF 0 par quality hamesha lossless rehti hai.
+    Source me awaz ho to wo bhi bilkul asal (-c:a copy) sath jati hai."""
+    def _enc(with_audio):
+        cmd = [ffmpeg_exe(), "-y", "-v", "error"]
+        if start:
+            cmd += ["-ss", f"{start:.4f}"]
+        cmd += ["-i", src]
+        if dur:
+            cmd += ["-t", f"{dur:.4f}"]
+        cmd += ["-map", "0:v:0"]
+        if with_audio:
+            cmd += ["-map", "0:a:0?"]
+        cmd += ["-c:v", "libx264", "-crf", "0",
+                "-preset", "fast", "-pix_fmt", probe_pix_fmt(src)]
+        if with_audio:
+            cmd += ["-c:a", "copy"]
+        else:
+            cmd += ["-an"]
+        cmd += ["-f", "mp4", out_mp4]
+        return _ffrun(cmd)
+    want_audio = probe_has_audio(src)
+    rc, _, err = _enc(want_audio)
+    if (rc != 0 or not os.path.exists(out_mp4)) and want_audio:
+        rc, _, err = _enc(False)   # awaz copy me masla ho to baghair awaz dobara
     if rc != 0 or not os.path.exists(out_mp4):
         raise RuntimeError("clip encode failed: " + err[-400:])
 
@@ -163,54 +194,63 @@ def extract_still_jpeg(src, t, out_jpg):
     with Image.open(io.BytesIO(png)) as im:
         im.convert("RGB").save(out_jpg, "JPEG", quality=100, subsampling=0, optimize=True)
 
-def motion_xmp(video_len):
-    """Google Motion Photo XMP: GCamera tags + Container directory (byte-exact lengths ke sath).
-    MicroVideoOffset = file ke aakhir se video ki shuruaat tak ke bytes = video ki lambai
-    (video file ke bilkul aakhir me hai, uske baad kuch nahi)."""
-    xmp = (
-        '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="MotionPhoto">\n'
-        ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
-        '  <rdf:Description rdf:about=""'
-        ' xmlns:GCamera="http://ns.google.com/photos/1.0/camera/"'
-        ' xmlns:Container="http://ns.google.com/photos/1.0/container/"'
-        ' xmlns:Item="http://ns.google.com/photos/1.0/container/item/"'
-        ' GCamera:MotionPhoto="1"'
-        ' GCamera:MotionPhotoVersion="1"'
-        f' GCamera:MicroVideoOffset="{video_len}">\n'
-        '   <Container:Directory>\n'
-        '    <rdf:Seq>\n'
-        '     <rdf:li rdf:parseType="Resource">\n'
-        '      <Container:Item Item:Mime="image/jpeg" Item:Semantic="Primary" Item:Length="0" Item:Padding="0"/>\n'
-        '     </rdf:li>\n'
-        '     <rdf:li rdf:parseType="Resource">\n'
-        f'      <Container:Item Item:Mime="video/mp4" Item:Semantic="MotionPhoto" Item:Length="{video_len}" Item:Padding="0"/>\n'
-        '     </rdf:li>\n'
-        '    </rdf:Seq>\n'
-        '   </Container:Directory>\n'
-        '  </rdf:Description>\n'
-        ' </rdf:RDF>\n'
-        '</x:xmpmeta>'
-    )
-    return xmp.encode("utf-8")
+# --- Vivo pehchan ke bytes (asal Vivo camera file se liye gaye, bilkul wese ke wese) ---
+VIVO_MAGIC = bytes([0x1b, 0x2a, 0x39, 0x48, 0x57, 0x66, 0x75, 0x84, 0x93, 0xa2, 0xb3])
+# JPG trailer ka DEGS stream-info hissa — asal camera ke stream sizes; sirf maloomati hai,
+# jora ID se banta hai, is liye ye bytes har file me bilkul yahi rehte hain.
+VIVO_DEGS = (b'\x00\x02\xfe\x01\xff\xff\xfe\x02\xff\xff\xfe\x03\x00\x01\x00\x00\xfe\x04\x00\x00\x00\x00'
+             b'\xfe\x05\x00\x00\x00\x00\xfe\x06\x00\x00\x00\x01\xfe\x07\x00\x00\x0f\xf0\xfe\x08\x00\x00\x08\xf8'
+             b'\xfen\x00\x00\x01Y\xfe\x0b\x00\x00\x00Z\xfe\x0c\x00\x00\x00\x00')
 
-XMP_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"  # 29 bytes — standard XMP APP1 pehchan
+def gen_live_id():
+    """28 hex chars: millis timestamp (13) + random hex (7) + 00000000 — bilkul Vivo camera jesa."""
+    return str(int(time.time() * 1000)) + os.urandom(4).hex()[:7] + "00000000"
 
-def assemble_motion_photo(still_jpg, clip_mp4, out_path):
-    """Still JPEG me XMP (APP1) ghusao aur aakhir me MP4 chipka do = ek Motion Photo JPG."""
+def vivo_mp4_json(live_id, image_time):
+    """MP4 uuid box ke andar wala JSON — key order bilkul asal file jesa."""
+    return ('{"com.android.camera.takenmodel":"vivo X200 Pro","com.android.camera.camerafacing":"0",'
+            f'"com.android.camera.imageTime":{image_time},"com.android.camera.moduleid":"photo",'
+            f'"com.android.camera.livephoto":"{live_id}","version":2200,'
+            '"com.android.camera.faceInfo":{}}').encode("utf-8")
+
+def vivo_jpg_json(live_id):
+    """JPG trailer ke andar wala JSON — key order bilkul asal file jesa."""
+    return ('{"com.android.camera.joint.fullview.orientation":0,"com.android.camera.fisheye":-1,'
+            '"com.android.camera.takenmodel":"vivo X200 Pro","com.android.camera.watermarkVersion":null,'
+            '"com.android.camera.camerafacing":"0","com.android.camera.moduleid":"photo",'
+            f'"com.android.camera.livephoto":"{live_id}","version":2200,'
+            '"com.android.camera.project":"PD2405F_EX","com.android.camera.joint.fullview":false}').encode("utf-8")
+
+def _cameralbum_tail(live_id, len_field):
+    return (struct.pack(">I", len_field) + b"cameralbum!" + b"\x00\x00\x00" + b"/"
+            + live_id.encode("ascii") + b"\xff\xff\xff\xff" + VIVO_MAGIC)
+
+def build_vivo_mp4(clip_mp4, live_id, image_time, out_path):
+    """Clip ke aakhir me Vivo uuid box (usertype 'vivoMediaExtInfo') jor do.
+    Length field = len(JSON) - 2 (asal file par verify shuda: 269 -> 267 = 0x10b)."""
+    jb = vivo_mp4_json(live_id, image_time)
+    payload = b"vivo" + jb + _cameralbum_tail(live_id, len(jb) - 2)
+    box = struct.pack(">I", 8 + 16 + len(payload)) + b"uuid" + b"vivoMediaExtInfo" + payload
     with open(clip_mp4, "rb") as fh:
-        video = fh.read()
+        data = fh.read()
+    with open(out_path, "wb") as fh:
+        fh.write(data)
+        fh.write(box)
+
+def build_vivo_jpg(still_jpg, live_id, out_path):
+    """Still JPEG ke EOI ke baad 591-byte Vivo trailer jor do (asal file: trailer kul 591 bytes).
+    Length field = len(JSON) (asal file par verify shuda: 411 = 0x19b)."""
+    jb = vivo_jpg_json(live_id)
+    trailer = (b"streamdata" + b"DEGS" + VIVO_DEGS + b"DEGE" + b"streaminfo"
+               + b"\x00\x06\x00\x01\x06\x00\x00\x00H" + b"streamcount" + b"\x00\x01"
+               + b"vivo" + jb + _cameralbum_tail(live_id, len(jb)))
     with open(still_jpg, "rb") as fh:
         jpeg = fh.read()
     if jpeg[:2] != b"\xff\xd8":
         raise RuntimeError("still JPEG nahi hai")
-    xmp = motion_xmp(len(video))
-    payload = XMP_HEADER + xmp
-    app1 = b"\xff\xe1" + struct.pack(">H", len(payload) + 2) + payload
     with open(out_path, "wb") as fh:
-        fh.write(jpeg[:2])   # SOI
-        fh.write(app1)       # XMP segment
-        fh.write(jpeg[2:])   # asal JPEG (EOI tak)
-        fh.write(video)      # embedded MP4 — file ke bilkul aakhir me
+        fh.write(jpeg)
+        fh.write(trailer)
 
 def get_max_seq(dirs):
     mx = 0
@@ -271,19 +311,26 @@ def process_one(f, idx, t_now):
         make_clip(raw_p, start, dur, clip_mp4)
         extract_still_jpeg(raw_p, still_abs, still_jpg)
         mock_path = os.path.join(O, f"{idx}.jpg")
-        ready_jpg = os.path.join(R, f"{idx + 1}.JPG")
+        ready_jpg = os.path.join(R, f"{idx + 1}.jpg")
+        ready_mp4 = os.path.join(R, f"{idx + 1}.mp4")
         build_mockup(still_jpg, mock_path)
-        assemble_motion_photo(still_jpg, clip_mp4, ready_jpg)
+        # Vivo jora: ek hi livephoto ID photo aur video dono ke andar
+        live_id = gen_live_id()
+        clip_dur = dur if dur else total
+        image_time = max(1, int(round((clip_dur / 2) * probe_fps(raw_p))))
+        build_vivo_jpg(still_jpg, live_id, ready_jpg)
+        build_vivo_mp4(clip_mp4, live_id, image_time, ready_mp4)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     mt, wt = t_now + 60, t_now + 120
     os.utime(mock_path, (mt, mt))
     os.utime(ready_jpg, (wt, wt))
-    for p in (mock_path, ready_jpg):   # save verify
+    os.utime(ready_mp4, (wt, wt))
+    for p in (mock_path, ready_jpg, ready_mp4):   # save verify
         if not os.path.exists(p) or os.path.getsize(p) < 100:
             raise IOError("save verify failed: " + p)
-    safe_scan(mock_path); safe_scan(ready_jpg)
-    gallery_copy_outputs([(mock_path, mt), (ready_jpg, wt)])
+    safe_scan(mock_path); safe_scan(ready_jpg); safe_scan(ready_mp4)
+    gallery_copy_outputs([(mock_path, mt), (ready_jpg, wt), (ready_mp4, wt)])
     try: os.remove(raw_p)
     except Exception: pass
     return idx + 2, wt
@@ -303,7 +350,7 @@ if action == 'process':
     vids = list_inputs()
     if not vids:
         print(f" {C2}\u2716 {P_NUM}_wallpapers me koi video (.mp4/.mov/.m4v) nahi mili.{ENDC}"); sys.exit()
-    print(f" {C4}\u2714 Motion Photo engine ready! (ffmpeg mil gaya){ENDC}")
+    print(f" {C4}\u2714 Live Photo engine ready! (ffmpeg mil gaya){ENDC}")
     s_idx = get_max_seq([O, R, W_H]) + 1
     cur_t = time.time()
     if os.path.exists(T_F):
@@ -328,9 +375,9 @@ if action == 'process':
             with open(T_F, "w") as fh: fh.write(str(cur_t))
         except Exception:
             pass
-        print(f"\n {C4}\u2714 {done} Motion Photo + Mockup ready! (har video: 1 mockup + 1 Motion Photo JPG){ENDC}")
+        print(f"\n {C4}\u2714 {done} Vivo Live Photo + Mockup ready! (har video: 1 mockup + 1 Live Photo jora \u2014 JPG + MP4){ENDC}")
     else:
-        print(f"\n {C2}\u2716 Koi Motion Photo nahi bani.{ENDC}")
+        print(f"\n {C2}\u2716 Koi Live Photo nahi bani.{ENDC}")
     if skip_log:
         print(f" {C2}\u26a0 {len(skip_log)} skip (video reh gayi, agle run me retry):{ENDC}")
         for s in skip_log[:8]:
