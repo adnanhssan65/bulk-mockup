@@ -207,7 +207,7 @@ public class BulkV151Test {
         String src = findSource(HELPER);
         assertNotNull(src);
         String exec = window(src, "private static boolean executeInTerminalSession", 1500);
-        assertTrue(exec.contains("TermuxConstants.TERMUX_SERVICE.ACTION_SERVICE_EXECUTE"));
+        assertTrue(exec.contains("TermuxConstants.TERMUX_APP.TERMUX_SERVICE.ACTION_SERVICE_EXECUTE"));
         assertTrue(exec.contains("exec.setClass(a, TermuxService.class)"));
         assertTrue(exec.contains("TERMUX_SERVICE.EXTRA_ARGUMENTS"));
         assertTrue(exec.contains(

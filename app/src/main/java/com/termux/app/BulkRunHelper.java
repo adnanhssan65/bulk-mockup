@@ -240,15 +240,15 @@ public final class BulkRunHelper {
     private static boolean executeInTerminalSession(final Activity a, final String command) {
         if (command == null) return false;
         try {
-            Intent exec = new Intent(TermuxConstants.TERMUX_SERVICE.ACTION_SERVICE_EXECUTE,
+            Intent exec = new Intent(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.ACTION_SERVICE_EXECUTE,
                 Uri.fromFile(new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/bash")));
             exec.setClass(a, TermuxService.class);
-            exec.putExtra(TermuxConstants.TERMUX_SERVICE.EXTRA_ARGUMENTS,
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_ARGUMENTS,
                 new String[]{"-c", command});
-            exec.putExtra(TermuxConstants.TERMUX_SERVICE.EXTRA_WORKDIR,
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_WORKDIR,
                 TermuxConstants.TERMUX_HOME_DIR_PATH);
-            exec.putExtra(TermuxConstants.TERMUX_SERVICE.EXTRA_SESSION_ACTION,
-                String.valueOf(TermuxConstants.TERMUX_SERVICE
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_SESSION_ACTION,
+                String.valueOf(TermuxConstants.TERMUX_APP.TERMUX_SERVICE
                     .VALUE_EXTRA_SESSION_ACTION_SWITCH_TO_NEW_SESSION_AND_DONT_OPEN_ACTIVITY));
             a.startService(exec);
             return true;
