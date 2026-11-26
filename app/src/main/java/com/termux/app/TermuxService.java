@@ -612,6 +612,29 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         mShellManager.mTermuxSessions.add(newTermuxSession);
 
+        // v152 (owner phone test — v151 ki asal khami): plugin
+        // (ACTION_SERVICE_EXECUTE) session ka subprocess yahan
+        // NAHI banta — TerminalSession ka process sirf
+        // initializeEmulator() se spawn hota hai, jo sirf kisi
+        // TerminalView ke updateSize() par bulta hai.
+        // SWITCH_TO_NEW_SESSION_AND_DONT_OPEN_ACTIVITY me koi
+        // view kabhi attach nahi hota, is liye command session
+        // me pari rehti thi or chalti hi nahi thi jab tak owner
+        // terminal khol na le (BulkRunHelper ka Popup view).
+        // Plugin session ko bantay hi ek fixed size par
+        // initialize kar do: process foran khud chal pare ga;
+        // baad me view attach ho to updateSize asal size par
+        // sirf resize kare ga — process waisa hi chalta rahe
+        // ga or owner use terminal me live dekh sakta hai.
+        // Size: 48x24 — phone ki portrait terminal jitna
+        // (headless muddat me tqdm waghera isi width par
+        // bante hain); cell pixels ghair-zero mehfooz qeematain
+        // hain (sixel/escape hisab me istemal hote hain), asal
+        // metrics view attach hone par ajate hain.
+        if (executionCommand.isPluginExecutionCommand) {
+            newTermuxSession.getTerminalSession().updateSize(48, 24, 10, 20);
+        }
+
         // Remove the execution command from the pending plugin execution commands list since it has
         // now been processed
         if (executionCommand.isPluginExecutionCommand)

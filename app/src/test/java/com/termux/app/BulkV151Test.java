@@ -125,7 +125,7 @@ public class BulkV151Test {
         assertTrue(dispatch.contains("BulkRunSettings.isTerminalView(a)"));
         assertTrue(dispatch.contains("launchInTerminal(a, pipedCommand, onLaunched)"));
         assertTrue(dispatch.contains("executeInTerminalSession(a, pipedCommand)"));
-        assertTrue(dispatch.contains("showRunViewPanel(a, p, onLaunched)"));
+        assertTrue(dispatch.contains("showRunViewPanel(a, p, pipedCommand, onLaunched)"));
         // sync execution se PEHLE hai (warna terminal run ko
         // staged images phir nahi milengi — asal defect)
         int syncIdx = dispatch.indexOf("BulkDropFolders.syncNow");
@@ -220,7 +220,7 @@ public class BulkV151Test {
     public void showpiecePanelIsDisplayOnly() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String panel = window(src, "private static void showRunViewPanel", 2900);
+        String panel = window(src, "private static void showRunViewPanel", 3600);
         // maujooda console panel hi reuse hota hai
         assertTrue(panel.contains("buildConsolePanel(a, p.name, dialog"));
         assertTrue(panel.contains("BulkStrings.RUNNING_IN_TERMINAL"));
@@ -229,11 +229,14 @@ public class BulkV151Test {
         assertTrue(panel.contains("removeView(cv.runActions)"));
         // Terminal button wahi session kholta hai
         assertTrue(panel.contains("openTerminalView(a)"));
-        // display-only: na process, na popup engine, na jhoota Finished
+        // display-only: na process, na popup engine
         assertFalse(panel.contains("ProcessBuilder"));
         assertFalse(panel.contains("runLiveInPopup"));
-        assertFalse(panel.contains("RUN_DONE"));
         assertFalse(panel.contains("progress.offer"));
+        // v152: "Finished" ab SIRF sachche session-list signal
+        // par (panelWatchTick) — jhoota phir bhi nahi banta
+        assertTrue(panel.contains("panelWatchTick"));
+        assertTrue(panel.contains("BulkStrings.RUN_DONE"));
     }
 
     @Test
@@ -336,10 +339,10 @@ public class BulkV151Test {
     public void versionIs151() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 151"));
+        assertTrue(gradle.contains("versionCode 152"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v151"));
+        assertTrue(dash.contains("Termux Mod v152"));
         assertFalse(dash.contains("Termux Mod v150"));
     }
 }

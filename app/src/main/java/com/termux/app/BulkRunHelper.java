@@ -14,7 +14,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.termux.R;
+import com.termux.shared.shell.ShellUtils;
+import com.termux.shared.shell.command.ExecutionCommand;
 import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.shell.TermuxShellManager;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -199,7 +203,7 @@ public final class BulkRunHelper {
                 if (BulkRunSettings.isTerminalView(a)) {
                     launchInTerminal(a, pipedCommand, onLaunched);
                 } else if (executeInTerminalSession(a, pipedCommand)) {
-                    showRunViewPanel(a, p, onLaunched);
+                    showRunViewPanel(a, p, pipedCommand, onLaunched);
                 } else if (onLaunched != null) {
                     onLaunched.run();
                 }
@@ -276,23 +280,35 @@ public final class BulkRunHelper {
      *  - timer asal waqt se chalta hai (sirf display; koi
      *    process, koi output parse NAHI — counter is liye
      *    kabhi nahi dikhta, jhooti progress nahi banti)
-     *  - log wala hissa panel se hata diya (wo is panel ka
-     *    log hai hi nahi)
+     *  - text area me session ki ASAL screen ka snapshot
+     *    dikhta hai (v152): har tick emulator ke screen ka
+     *    text (TerminalBuffer) plain text me — na rang, na
+     *    cursor; ye session ka sachcha manzar hai, koi
+     *    parse/mirror nahi. TerminalView panel me NAHI
+     *    lagayi gayi — redraw session ke ek hi
+     *    TerminalSessionClient slot se milta hai jo service/
+     *    activity ke pas hai; dialog view use cheen kar
+     *    full-terminal hand-off khatre me dalta.
      *  - Background/Cancel wali row panel se POORI hata di —
      *    is panel ke pas koi process handle nahi, Cancel
      *    jhoot hota; Close ki jagah Terminal button hai —
      *    wahi chalti hui session khulta hai
-     *  - "Finished" kabhi NAHI dikhta: execute intent se
-     *    session ka koi handle wapas nahi milta, is liye
-     *    "session abhi chal raha hai" ka koi sachcha signal
-     *    is class ke pas hai hi nahi — jhooti completion
-     *    dikhane se behtar hai panel sirf Running + timer
-     *    par rahe. (Isi wajah se double-run guard bhi nahi
-     *    lagaya gaya — ghalat guard na-hone se bura hai.)
+     *  - "Finished" (RUN_DONE) SIRF sachche signal par
+     *    dikhta hai (v152, owner ki hidayat): panel har tick
+     *    TermuxService ki session list (TermuxShellManager)
+     *    dekhta hai — hamara session wahan naya banta hai or
+     *    khatam hone par service use list se hata deti hai
+     *    (onTermuxSessionExited); process rukne par
+     *    TerminalSession.isRunning() bhi false ho jata hai.
+     *    In me se koi signal na mile to panel hamesha
+     *    Running par rehta hai — jhoota Done kabhi nahi.
+     *    (Double-run guard phir bhi nahi lagaya gaya —
+     *    ghalat guard na-hone se bura hai.)
      *  - X / dismiss se run par ZERO asar (run service ke
      *    session me hai, is dialog se us ka koi lena dena nahi)
      */
     private static void showRunViewPanel(final Activity a, final BulkProjects.ProjectInfo p,
+                                         final String pipedCommand,
                                          final Runnable onLaunched) {
         final Dialog dialog = new Dialog(a);
         final ConsoleViews cv = buildConsolePanel(a, p.name, dialog,
@@ -300,14 +316,12 @@ public final class BulkRunHelper {
         cv.status.setText(BulkStrings.t(a, BulkStrings.RUNNING_IN_TERMINAL));
         // Background/Cancel wali row is panel se POORI hata do —
         // display-only panel ke pas koi process handle hai hi
-        // nahi, Cancel yahan jhoot hota. Log wala hissa bhi
-        // hata do (wo is panel ka log hai hi nahi). Sirf X
-        // (dismiss) or neeche Terminal button rehta hai.
+        // nahi, Cancel yahan jhoot hota. Text area (scroll) v152
+        // me REHTA hai — us me session ki asal screen ka
+        // snapshot dikhta hai. Sirf X (dismiss) or neeche
+        // Terminal button rehta hai.
         if (cv.runActions.getParent() instanceof ViewGroup) {
             ((ViewGroup) cv.runActions.getParent()).removeView(cv.runActions);
-        }
-        if (cv.scroll.getParent() instanceof ViewGroup) {
-            ((ViewGroup) cv.scroll.getParent()).removeView(cv.scroll);
         }
         cv.closeBtn.setVisibility(View.VISIBLE);
         cv.closeBtn.setText(BulkStrings.t(a, BulkStrings.TERMINAL));
@@ -323,6 +337,20 @@ public final class BulkRunHelper {
                 onLaunched.run();
             }
         });
+        // v152: Done-watch ka snapshot — panel khulne se pehle
+        // jo sessions mojood thay. Hamara session is ke BAAD
+        // bane ga (service intent abhi process hona hai), is
+        // liye list me jo NAYA session dikhe wohi hamara hai;
+        // command string ka match use aur pakka karta hai.
+        final Set<TermuxSession> watchSnapshot = new HashSet<>();
+        try {
+            TermuxShellManager sm0 = TermuxShellManager.getShellManager();
+            if (sm0 != null) watchSnapshot.addAll(sm0.mTermuxSessions);
+        } catch (Exception ignored) {}
+        final TermuxSession[] watchCandidate = {null};
+        final boolean[] watchSeenRunning = {false};
+        final boolean[] watchDone = {false};
+        final String[] lastSnapshot = {null};
         final long startMs = android.os.SystemClock.elapsedRealtime();
         final android.os.Handler uiHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
@@ -331,9 +359,151 @@ public final class BulkRunHelper {
             if (!shown.isShowing()) return;
             cv.timer.setText(BulkRunProgress.formatElapsed(
                 android.os.SystemClock.elapsedRealtime() - startMs));
-            uiHandler.postDelayed(poster[0], 500);
+            // v152: har tick par sachcha Done signal dekho —
+            // mil jaye to status "Finished" ho jata hai or
+            // timer wahi ruk jata hai (poster chain khatam).
+            if (!watchDone[0] && panelWatchTick(watchSnapshot,
+                    watchCandidate, watchSeenRunning, pipedCommand)) {
+                watchDone[0] = true;
+                cv.status.setText(BulkStrings.t(a, BulkStrings.RUN_DONE));
+            }
+            // v152 snapshot: candidate milte hi har tick
+            // session ki ASAL screen ka taaza tail text area
+            // me — Done wale tick par aakhri dafa bhi render
+            // hota hai, phir chain ruk jati hai. Text badla
+            // na ho to view ko nahi chhute (flicker nahi).
+            if (watchCandidate[0] != null) {
+                String snap = transcriptTail(
+                    sessionTranscriptText(watchCandidate[0]), 40);
+                if (!snap.equals(lastSnapshot[0])) {
+                    lastSnapshot[0] = snap;
+                    cv.out.setText(snap);
+                    cv.scroll.post(() ->
+                        cv.scroll.fullScroll(View.FOCUS_DOWN));
+                }
+            }
+            if (!watchDone[0]) uiHandler.postDelayed(poster[0], 500);
         };
         uiHandler.post(poster[0]);
+    }
+
+    /**
+     * v152: session ki asal terminal screen ka text
+     * (ShellUtils -> emulator -> TerminalBuffer) — wahi
+     * sachcha manzar jo owner full terminal me dekhta hai.
+     * Emulator abhi na bana ho ya koi bhi khami ho to khaali
+     * string (panel sirf timer/status par rahe ga).
+     */
+    static String sessionTranscriptText(final TermuxSession session) {
+        try {
+            if (session == null || session.getTerminalSession() == null) {
+                return "";
+            }
+            String t = ShellUtils.getTerminalSessionTranscriptText(
+                session.getTerminalSession(), false, false);
+            return t == null ? "" : t;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * v152: transcript ka aakhri hissa — zyada se zyada
+     * maxLines lines (panel ke text area ke liye). Khaali
+     * aakhri lines (trailing newlines) hata di jati hain.
+     * Khalis (pure) function — test isi par hota hai.
+     */
+    static String transcriptTail(String transcript, int maxLines) {
+        if (transcript == null || maxLines <= 0) return "";
+        String t = transcript.replace("\r\n", "\n").replace("\r", "\n");
+        while (t.endsWith("\n")) t = t.substring(0, t.length() - 1);
+        if (t.isEmpty()) return "";
+        String[] lines = t.split("\n", -1);
+        if (lines.length <= maxLines) return t;
+        StringBuilder sb = new StringBuilder();
+        for (int i = lines.length - maxLines; i < lines.length; i++) {
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(lines[i]);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * v152: panel ke Done-watch ka ek tick. TermuxService ki
+     * session list (TermuxShellManager.mTermuxSessions) hi
+     * wahid sachcha signal hai: hamara session wahan naya
+     * banta hai, or khatam hone par service use list se hata
+     * deti hai (TermuxService.onTermuxSessionExited);
+     * process rukne par TerminalSession.isRunning() bhi
+     * false ho jata hai (cleanupResources — view ho ya na
+     * ho). Signal na mile to hamesha false: panel Running
+     * par rahe ga, jhoota Done kabhi nahi bane ga.
+     *
+     * @return true jab run ka session sach-much khatam ho gaya ho
+     */
+    static boolean panelWatchTick(final Set<TermuxSession> snapshot,
+                                  final TermuxSession[] candidate,
+                                  final boolean[] seenRunning,
+                                  final String command) {
+        try {
+            TermuxShellManager sm = TermuxShellManager.getShellManager();
+            if (sm == null) return false;
+            List<TermuxSession> now = new ArrayList<>(sm.mTermuxSessions);
+            if (candidate[0] == null) {
+                for (TermuxSession s : now) {
+                    if (snapshot.contains(s)) continue;
+                    ExecutionCommand ec = s.getExecutionCommand();
+                    if (ec != null
+                        && argumentsContainCommand(ec.arguments, command)) {
+                        candidate[0] = s;
+                        break;
+                    }
+                }
+                if (candidate[0] == null) {
+                    for (TermuxSession s : now) {
+                        if (!snapshot.contains(s)) {
+                            candidate[0] = s;
+                            break;
+                        }
+                    }
+                }
+                if (candidate[0] == null) return false;
+            }
+            boolean gone = !now.contains(candidate[0]);
+            boolean running = false;
+            if (!gone) {
+                if (candidate[0].getTerminalSession().getPid() > 0) {
+                    seenRunning[0] = true;
+                }
+                running = candidate[0].getTerminalSession().isRunning();
+            }
+            return panelWatchIsDone(true, gone, seenRunning[0], running);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * v152: Done ka khalis (pure) faisla — candidate mila ho,
+     * or ya to wo session list se ghayab ho (service ne khatam
+     * karke hataya), ya chalte hue (pid ke sath) dikhne ke
+     * baad ab ruk gaya ho. Chal raha ho ya kabhi mila hi na
+     * ho to Done NAHI.
+     */
+    static boolean panelWatchIsDone(boolean candidateFound, boolean candidateGone,
+                                    boolean seenRunning, boolean candidateRunning) {
+        if (!candidateFound) return false;
+        if (candidateGone) return true;
+        return seenRunning && !candidateRunning;
+    }
+
+    /** v152: session ke arguments me hamari dispatched command string hai? */
+    static boolean argumentsContainCommand(String[] arguments, String command) {
+        if (arguments == null || command == null) return false;
+        for (String arg : arguments) {
+            if (command.equals(arg)) return true;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------ MANUAL popup
