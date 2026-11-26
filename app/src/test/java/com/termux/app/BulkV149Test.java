@@ -209,7 +209,9 @@ public class BulkV149Test {
 
     @Test
     public void orderFixDefaultIsOn() {
-        assertTrue(BulkMediaRegister.resolveEnabled(null));
+        // v151 (owner 2026-11-26): fresh-install default OFF me
+        // badal gaya — saved value ki izzat waisi hi hai.
+        assertFalse(BulkMediaRegister.resolveEnabled(null));
         assertTrue(BulkMediaRegister.resolveEnabled(Boolean.TRUE));
         assertFalse(BulkMediaRegister.resolveEnabled(Boolean.FALSE));
     }
@@ -466,9 +468,9 @@ public class BulkV149Test {
     public void versionIs150() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 150"));
+        assertTrue(gradle.contains("versionCode 151"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v150"));
+        assertTrue(dash.contains("Termux Mod v151"));
     }
 }

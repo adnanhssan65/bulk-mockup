@@ -69,7 +69,59 @@ public class BulkMoreSettingsActivity extends Activity {
         }));
         body.addView(orderFixRow());
         body.addView(scanWaqfaRow());
+        body.addView(runViewRow());
         return root;
+    }
+
+    /**
+     * v151 — Run View ki switch wali chhoti row (Order Fix
+     * wali row ki hi shakal). Halat BulkRunSettings ki
+     * persisted setting hai (default OFF = popup view).
+     * Switch sirf VIEW chunta hai: ON ho to Run par terminal
+     * samne ata hai, OFF ho to console popup showpiece ban
+     * kar dikhta hai — kaam dono haal me asal terminal
+     * session hi karta hai.
+     */
+    private LinearLayout runViewRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, BulkTheme.dp(this, 10));
+        row.setLayoutParams(lp);
+        row.setClickable(true);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.RUN_VIEW));
+        label.setTextSize(14);
+        label.setTypeface(medium());
+        label.setTextColor(BulkTheme.textMain(this));
+        texts.addView(label);
+        TextView sub = new TextView(this);
+        sub.setText(BulkStrings.t(this, BulkStrings.RUN_VIEW_SUB));
+        sub.setTextSize(11.5f);
+        sub.setTextColor(BulkTheme.textMuted(this));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = BulkTheme.dp(this, 2);
+        sub.setLayoutParams(slp);
+        texts.addView(sub);
+        row.addView(texts, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        final Switch sw = new Switch(this);
+        sw.setChecked(BulkRunSettings.isTerminalView(this));
+        sw.setOnCheckedChangeListener((button, on) ->
+            BulkRunSettings.setTerminalView(this, on));
+        row.addView(sw);
+        row.setOnClickListener(v -> sw.toggle());
+        return row;
     }
 
     /**

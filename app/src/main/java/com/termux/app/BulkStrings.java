@@ -193,6 +193,9 @@ public final class BulkStrings {
     public static final String REPLAY_POPUPS_HINT = "replay_popups_hint";
     public static final String ZIP_SHORTCUT_DONE = "zip_shortcut_done";
     public static final String RUN_SETTINGS = "run_settings";
+    public static final String RUN_VIEW = "run_view";
+    public static final String RUN_VIEW_SUB = "run_view_sub";
+    public static final String RUNNING_IN_TERMINAL = "running_in_terminal";
     public static final String ANSWER_MODE = "answer_mode";
     public static final String AUTO_OPTION = "auto_option";
     public static final String MANUAL_OPTION = "manual_option";
@@ -625,6 +628,10 @@ public final class BulkStrings {
         put(ZIP_SHORTCUT_DONE, "Folders & Home shortcut created",
             "Folders aur Home shortcut ban gaya");
         put(RUN_SETTINGS, "Run Settings", "Run Settings");
+        put(RUN_VIEW, "Show After Run: Popup / Terminal", "Run ke baad dikhao: Popup / Terminal");
+        put(RUN_VIEW_SUB, "When on, the terminal opens — when off, the popup shows; the terminal does the work either way",
+            "On ho to terminal khulta hai — off ho to popup dikhta hai; kaam dono haal me terminal hi karta hai");
+        put(RUNNING_IN_TERMINAL, "Running in the terminal", "Run terminal me ho raha hai");
         put(ANSWER_MODE, "Answer Mode", "Jawab Ka Tareeqa");
         put(AUTO_OPTION, "Auto — Saved Answers", "Auto — Save Shuda Jawab");
         put(MANUAL_OPTION, "Manual — Ask Every Time", "Manual — Har Bar Poochho");

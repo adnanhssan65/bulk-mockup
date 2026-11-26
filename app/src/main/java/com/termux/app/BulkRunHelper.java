@@ -2,6 +2,8 @@ package com.termux.app;
 
 import android.app.Activity;
 import android.app.Dialog;
+import android.content.Intent;
+import android.net.Uri;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -41,6 +43,20 @@ import java.util.Set;
  *    (BulkRunSettings.PromptProfile); unknown script par sirf Enter
  *    (script defaults) pipe hote hain. Terminal run ka rasta
  *    KHATAM — koi bhi Run ab TermuxActivity nahi kholta.
+ *  - v151 (owner 2026-11-26, AKHRI update): popup wala
+ *    ProcessBuilder ENGINE owner ke phone par 25–35s/image
+ *    sust nikla, terminal session wala ~1s/image. Ab Run ka
+ *    kaam HAR haal me asal terminal session karta hai —
+ *    startRun se popup engine kabhi nahi bulta. Run par jo
+ *    dikhta hai wo sirf VIEW hai: default maujooda console
+ *    popup, lekin DISPLAY-ONLY showpiece (timer + status;
+ *    kaam peeche naye terminal session me); More Settings ki
+ *    "Run View" switch ON ho to us ki jagah terminal samne
+ *    ata hai. Terminal sirf Run tap se — ZIP add par kabhi
+ *    nahi. Order Fix ka fresh default bhi OFF. (Popup engine
+ *    runLiveInPopup ab sirf Projects ke Delete console —
+ *    runCommandInPopup — me baqi hai; startRun se us tak
+ *    koi rasta nahi.)
  *
  * Jawab BulkRunSettings.answersFor se bante hain aur
  * BulkRunSettings.buildPipedCommand se command me pipe hote hain,
@@ -69,9 +85,11 @@ public final class BulkRunHelper {
         // hoti hai (cd $HOME/... + MOCKUP_BASE + python <script>).
         final String cmd = BulkProjects.effectiveCommand(p, "process");
         if (cmd == null) return;
-        // v137: har run CONSOLE POPUP me hi chalta hai — terminal
-        // kabhi nahi khulta (owner ki sakht hidayat: ZIP-added
-        // project add/run par app terminal me jump kar jati thi).
+        // v151: run ka ENGINE hamesha terminal session hai —
+        // dispatchRun sirf VIEW chunta hai (default popup
+        // showpiece, ya terminal samne). Terminal SIRF is Run
+        // tap se khulta hai — ZIP add/import par kabhi nahi
+        // (v137 wali ghalti nahi dohrayi jayegi).
         // Prompt profile asal script se banta hai: bundled 1..14
         // verified ADNAN; ZIP-added projects (15+) un ke script
         // khandan (ADNAN / SYSTEM) ke hisab se; unknown script par
@@ -85,7 +103,7 @@ public final class BulkRunHelper {
         }
         List<String> answers = BulkRunSettings.answersForProfile(
             profile, BulkRunSettings.hdAnswer(a), BulkRunSettings.sizeAnswer(a));
-        runLiveInPopup(a, p,
+        dispatchRun(a, p,
             BulkRunSettings.buildPipedCommand(cmd, answers), onLaunched);
     }
 
@@ -99,6 +117,167 @@ public final class BulkRunHelper {
                                          final String pipedCommand) {
         if (a == null || p == null || pipedCommand == null) return;
         runLiveInPopup(a, p, pipedCommand, null);
+    }
+
+    // ------------------------------------------------------------ v151: run ka rasta
+
+    /**
+     * v151 (owner 2026-11-26): Run ka ENGINE har haal me asal
+     * terminal session hai — popup wala ProcessBuilder rasta
+     * startRun se kabhi NAHI bulta. Ye dispatch sirf VIEW
+     * chunta hai:
+     *  - Terminal view (More Settings ki "Run View" switch ON):
+     *    pre-v137 wala hand-off — TermuxActivity samne, command
+     *    us ke session me type hoti hai.
+     *  - Popup view (default): command TermuxService ke zariye
+     *    NAYE terminal session me chalti hai (activity samne
+     *    nahi ati) aur maujooda console popup sirf SHOWPIECE
+     *    ban kar dikhta hai (display-only).
+     * Ye dispatch sirf startRun (aur us ke Manual jawab popup)
+     * se bulta hai — koi add/import flow isay NAHI bulata.
+     * Na sRunActive guard hai, na post-run mirror thread —
+     * mirror + registration Dashboard/Add/Projects ke sync
+     * wale hook se waise hi hoti rehti hai.
+     */
+    private static void dispatchRun(final Activity a, final BulkProjects.ProjectInfo p,
+                                    final String pipedCommand, final Runnable onLaunched) {
+        BulkLog.add(BulkStrings.format(a, BulkStrings.LOG_RUN_START, p.name));
+        if (BulkRunSettings.isTerminalView(a)) {
+            launchInTerminal(a, pipedCommand, onLaunched);
+        } else if (executeInTerminalSession(a, pipedCommand)) {
+            showRunViewPanel(a, p, onLaunched);
+        } else if (onLaunched != null) {
+            onLaunched.run();
+        }
+    }
+
+    /**
+     * Terminal view: pre-v137 wala launch rasta — wahi
+     * mechanism jo aaj bhi Batch/Delete (BulkProjectsActivity
+     * .runInTerminal) istemal karta hai: TermuxActivity ko
+     * EXTRA_RUN_COMMAND ke sath kholo; wo command ko session
+     * me type kar deti hai (ProjectsLauncher.runCommand).
+     */
+    private static void launchInTerminal(final Activity a, final String command,
+                                         final Runnable onLaunched) {
+        if (command == null) return;
+        try {
+            Intent intent = new Intent(a, TermuxActivity.class);
+            intent.putExtra(BulkDashboardActivity.EXTRA_RUN_COMMAND, command);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            a.startActivity(intent);
+            if (onLaunched != null) onLaunched.run();
+        } catch (Exception e) {
+            BulkTheme.showToast(a, "Terminal nahi khul saka.");
+        }
+    }
+
+    /**
+     * Popup view ka engine: TermuxService ko ACTION_SERVICE
+     * _EXECUTE — command NAYE asal terminal session me chalti
+     * hai (Runner.TERMINAL_SESSION), session current ban jata
+     * hai lekin activity samne NAHI ati (session action
+     * SWITCH_TO_NEW_SESSION_AND_DONT_OPEN_ACTIVITY). Owner
+     * jab chahe panel ke Terminal button se wahi session
+     * khol kar live dekh sakta hai.
+     */
+    private static boolean executeInTerminalSession(final Activity a, final String command) {
+        if (command == null) return false;
+        try {
+            Intent exec = new Intent(TermuxConstants.TERMUX_SERVICE.ACTION_SERVICE_EXECUTE,
+                Uri.fromFile(new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/bash")));
+            exec.setClass(a, TermuxService.class);
+            exec.putExtra(TermuxConstants.TERMUX_SERVICE.EXTRA_ARGUMENTS,
+                new String[]{"-c", command});
+            exec.putExtra(TermuxConstants.TERMUX_SERVICE.EXTRA_WORKDIR,
+                TermuxConstants.TERMUX_HOME_DIR_PATH);
+            exec.putExtra(TermuxConstants.TERMUX_SERVICE.EXTRA_SESSION_ACTION,
+                String.valueOf(TermuxConstants.TERMUX_SERVICE
+                    .VALUE_EXTRA_SESSION_ACTION_SWITCH_TO_NEW_SESSION_AND_DONT_OPEN_ACTIVITY));
+            a.startService(exec);
+            return true;
+        } catch (Exception e) {
+            BulkTheme.showToast(a, "Terminal nahi khul saka.");
+            return false;
+        }
+    }
+
+    /** Terminal view ko sirf samne lao (koi command nahi — session pehle se chal raha hai). */
+    private static void openTerminalView(final Activity a) {
+        try {
+            Intent intent = new Intent(a, TermuxActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            a.startActivity(intent);
+        } catch (Exception e) {
+            BulkTheme.showToast(a, "Terminal nahi khul saka.");
+        }
+    }
+
+    /**
+     * Popup view ka SHOWPIECE panel: maujooda console panel hi
+     * hai (wahi chrome, wahi status row) — lekin DISPLAY-ONLY:
+     *  - status line: "Run terminal me ho raha hai"
+     *  - timer asal waqt se chalta hai (sirf display; koi
+     *    process, koi output parse NAHI — counter is liye
+     *    kabhi nahi dikhta, jhooti progress nahi banti)
+     *  - log wala hissa panel se hata diya (wo is panel ka
+     *    log hai hi nahi)
+     *  - Background/Cancel wali row panel se POORI hata di —
+     *    is panel ke pas koi process handle nahi, Cancel
+     *    jhoot hota; Close ki jagah Terminal button hai —
+     *    wahi chalti hui session khulta hai
+     *  - "Finished" kabhi NAHI dikhta: execute intent se
+     *    session ka koi handle wapas nahi milta, is liye
+     *    "session abhi chal raha hai" ka koi sachcha signal
+     *    is class ke pas hai hi nahi — jhooti completion
+     *    dikhane se behtar hai panel sirf Running + timer
+     *    par rahe. (Isi wajah se double-run guard bhi nahi
+     *    lagaya gaya — ghalat guard na-hone se bura hai.)
+     *  - X / dismiss se run par ZERO asar (run service ke
+     *    session me hai, is dialog se us ka koi lena dena nahi)
+     */
+    private static void showRunViewPanel(final Activity a, final BulkProjects.ProjectInfo p,
+                                         final Runnable onLaunched) {
+        final Dialog dialog = new Dialog(a);
+        final ConsoleViews cv = buildConsolePanel(a, p.name, dialog,
+            () -> dialog.dismiss(), () -> {});
+        cv.status.setText(BulkStrings.t(a, BulkStrings.RUNNING_IN_TERMINAL));
+        // Background/Cancel wali row is panel se POORI hata do —
+        // display-only panel ke pas koi process handle hai hi
+        // nahi, Cancel yahan jhoot hota. Log wala hissa bhi
+        // hata do (wo is panel ka log hai hi nahi). Sirf X
+        // (dismiss) or neeche Terminal button rehta hai.
+        if (cv.runActions.getParent() instanceof ViewGroup) {
+            ((ViewGroup) cv.runActions.getParent()).removeView(cv.runActions);
+        }
+        if (cv.scroll.getParent() instanceof ViewGroup) {
+            ((ViewGroup) cv.scroll.getParent()).removeView(cv.scroll);
+        }
+        cv.closeBtn.setVisibility(View.VISIBLE);
+        cv.closeBtn.setText(BulkStrings.t(a, BulkStrings.TERMINAL));
+        cv.closeBtn.setOnClickListener(v -> {
+            dialog.dismiss();
+            openTerminalView(a);
+        });
+        final Dialog shown = BulkTheme.showPanelDialog(a, cv.panel);
+        final boolean[] launchedOnce = {false};
+        shown.setOnDismissListener(d -> {
+            if (onLaunched != null && !launchedOnce[0]) {
+                launchedOnce[0] = true;
+                onLaunched.run();
+            }
+        });
+        final long startMs = android.os.SystemClock.elapsedRealtime();
+        final android.os.Handler uiHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable[] poster = new Runnable[1];
+        poster[0] = () -> {
+            if (!shown.isShowing()) return;
+            cv.timer.setText(BulkRunProgress.formatElapsed(
+                android.os.SystemClock.elapsedRealtime() - startMs));
+            uiHandler.postDelayed(poster[0], 500);
+        };
+        uiHandler.post(poster[0]);
     }
 
     // ------------------------------------------------------------ MANUAL popup
@@ -149,7 +328,7 @@ public final class BulkRunHelper {
             List<String> answers = BulkRunSettings.answersForProfile(profile,
                 hdNormal[0] ? BulkRunSettings.ANSWER_NORMAL : BulkRunSettings.ANSWER_HD,
                 sizeCrop[0] ? BulkRunSettings.ANSWER_CROP : BulkRunSettings.ANSWER_ORIGINAL);
-            runLiveInPopup(a, p,
+            dispatchRun(a, p,
                 BulkRunSettings.buildPipedCommand(cmd, answers), onLaunched);
         });
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
@@ -863,8 +1042,11 @@ public final class BulkRunHelper {
         return text.length() <= maxChars ? text : text.substring(text.length() - maxChars);
     }
 
-    // v137: terminal launch wala rasta (launch) KHATAM — har Run
-    // console popup me hi chalta hai, ZIP-added projects bhi.
+    // v151: terminal launch wala rasta (launchInTerminal) WAPAS
+    // hai — upar "v151: run ka rasta" wale hisse me. v137 me ye
+    // is liye hataya gaya tha ke ZIP add par bhi app terminal me
+    // kood jati thi; ab ye sirf startRun ke dispatch se bulta
+    // hai, add/import flow se kabhi nahi.
 
     // ------------------------------------------------------------ small builders
 

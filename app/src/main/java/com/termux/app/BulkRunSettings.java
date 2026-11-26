@@ -44,6 +44,7 @@ public final class BulkRunSettings {
     private static final String KEY_MODE = "run_answer_mode";
     private static final String KEY_HD = "run_answer_hd";
     private static final String KEY_SIZE = "run_answer_size";
+    private static final String KEY_RUN_VIEW_TERMINAL = "run_view_terminal";
 
     private BulkRunSettings() {}
 
@@ -221,5 +222,33 @@ public final class BulkRunSettings {
 
     public static void setSizeAnswer(Context c, boolean crop) {
         prefs(c).edit().putString(KEY_SIZE, crop ? ANSWER_CROP : ANSWER_ORIGINAL).apply();
+    }
+
+    // ------------------------------------------------------------ v151: run view
+
+    /**
+     * v151 (owner 2026-11-26): Run ka kaam HAR haal me asal
+     * terminal session karta hai — ye setting sirf VIEW chunti
+     * hai: Run dabane par kya dikhe. ON = terminal samne aye;
+     * OFF (default) = maujooda console popup sirf showpiece ke
+     * tor par dikhe (display-only — kaam peeche terminal
+     * session hi karta hai). Faisla pure hai: stored value na
+     * ho (fresh install) to POPUP view; stored true ho tab hi
+     * terminal view.
+     */
+    public static boolean resolveTerminalView(Boolean stored) {
+        return stored != null && stored;
+    }
+
+    /** Run par terminal samne aye? Default NAHI — popup view (v151). */
+    public static boolean isTerminalView(Context c) {
+        SharedPreferences p = prefs(c);
+        Boolean stored = p.contains(KEY_RUN_VIEW_TERMINAL)
+            ? p.getBoolean(KEY_RUN_VIEW_TERMINAL, false) : null;
+        return resolveTerminalView(stored);
+    }
+
+    public static void setTerminalView(Context c, boolean terminal) {
+        prefs(c).edit().putBoolean(KEY_RUN_VIEW_TERMINAL, terminal).apply();
     }
 }

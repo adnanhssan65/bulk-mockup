@@ -246,10 +246,12 @@ public final class BulkMediaRegister {
 
     /**
      * Order Fix switch ka faisla (pure): saved value na ho
-     * (pehli dafa) to ON — switch default ON hai.
+     * (pehli dafa) to OFF — v151 se fresh-install default OFF
+     * hai (owner 2026-11-26: terminal runs ko Order Fix ki
+     * zaroorat nahi). Saved value hamesha izzat pati hai.
      */
     public static boolean resolveEnabled(Boolean stored) {
-        return stored == null || stored;
+        return stored != null && stored;
     }
 
     /**
@@ -499,9 +501,9 @@ public final class BulkMediaRegister {
 
     // ------------------------------------------------------------ Android glue
 
-    /** Item F: Order Fix switch abhi ON hai? (default ON) */
+    /** Item F: Order Fix switch abhi ON hai? (fresh default OFF — v151) */
     public static boolean isOrderFixEnabled(Context ctx) {
-        if (ctx == null) return true;
+        if (ctx == null) return false;
         try {
             SharedPreferences prefs =
                 ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -509,7 +511,7 @@ public final class BulkMediaRegister {
                 ? prefs.getBoolean(KEY_ENABLED, true) : null;
             return resolveEnabled(stored);
         } catch (Exception e) {
-            return true;
+            return false;
         }
     }
 
