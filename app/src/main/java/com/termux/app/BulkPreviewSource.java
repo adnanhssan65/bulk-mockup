@@ -1,5 +1,7 @@
 package com.termux.app;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
@@ -18,12 +20,28 @@ import java.util.Locale;
  *      wala preview asset: assets/bulk/previews/p<N>.jpg (ye asal
  *      runner outputs se bane hain).
  *   3) Warna PLACEHOLDER — neutral tile project number ke sath.
+ *
+ * v149 — PERSISTENT PREVIEW: previews bar bar ghayab ho jati
+ * theen (asal mockup delete hote hi DP bhi chali jati thi) or
+ * naye ZIP projects ki preview pehle run se pehle banti hi
+ * nahi thi. Ab loadBitmap ki tartib ye hai (loadOrder):
+ *   1) SAVED — app ke andar save shuda preview (bulk_previews/
+ *      p<N>.jpg), jo asal mockup istemal hone par khud ban jati
+ *      hai or ZIP-add par project ke template se bhi.
+ *   2) REAL — sab se nayi asal mockup (upar wala rule 1); ye
+ *      istemal ho to saved preview (dobara) likhi jati hai.
+ *   3) BUNDLED — andar wala asset (upar wala rule 2).
+ *   4) PLACEHOLDER.
+ * Kisi step par decode fail ho to faisla wahi nahi rukta —
+ * agli source par girta hai.
  */
 public final class BulkPreviewSource {
 
     public static final int KIND_REAL = 0;
     public static final int KIND_BUNDLED = 1;
     public static final int KIND_PLACEHOLDER = 2;
+    /** v149: app ke andar save shuda persistent preview. */
+    public static final int KIND_SAVED = 3;
 
     /** Sab se bara bundled project number (v147: 20/21 bhi bundled — 19 kabhi tha hi nahi). */
     public static final int LAST_BUNDLED_PROJECT = 21;
@@ -102,6 +120,49 @@ public final class BulkPreviewSource {
             return new Choice(KIND_BUNDLED, null);
         }
         return new Choice(KIND_PLACEHOLDER, null);
+    }
+
+    // ------------------------------------------------------------ v149: load order + template
+
+    /**
+     * loadBitmap ki candidate tartib (pure): SAVED (agar file
+     * hai) → REAL ya BUNDLED (choose() ke faisle se) →
+     * PLACEHOLDER hamesha aakhir me (caller us par null lata
+     * hai). Decode fail par caller is list ki agli kind par
+     * girta hai — koi step dead-end nahi.
+     */
+    public static List<Integer> loadOrder(boolean savedExists, Choice choice) {
+        List<Integer> out = new ArrayList<>();
+        if (savedExists) out.add(KIND_SAVED);
+        if (choice != null && choice.kind == KIND_REAL) out.add(KIND_REAL);
+        else if (choice != null && choice.kind == KIND_BUNDLED) out.add(KIND_BUNDLED);
+        out.add(KIND_PLACEHOLDER);
+        return out;
+    }
+
+    /** ZIP-add par template dhoondhne ki naam tartib (pehle root, phir assets/). */
+    public static final String[] TEMPLATE_NAMES = {
+        "mockup.png", "mockup.jpg", "template.jpg", "template.png"
+    };
+
+    /**
+     * Project folder se preview ke liye template file chuno
+     * (pure): pehle project root me TEMPLATE_NAMES ki tartib
+     * se, phir assets/ subfolder me usi tartib se. Mile to
+     * relative path ("mockup.png" ya "assets/template.jpg"),
+     * warna null.
+     */
+    public static String pickTemplate(Collection<String> rootNames,
+                                      Collection<String> assetsNames) {
+        for (String name : TEMPLATE_NAMES) {
+            if (rootNames != null && rootNames.contains(name)) return name;
+        }
+        for (String name : TEMPLATE_NAMES) {
+            if (assetsNames != null && assetsNames.contains(name)) {
+                return "assets/" + name;
+            }
+        }
+        return null;
     }
 
     // ------------------------------------------------------------ search filter

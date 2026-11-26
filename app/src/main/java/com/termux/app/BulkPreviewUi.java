@@ -19,6 +19,7 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -83,31 +84,151 @@ public final class BulkPreviewUi {
         return ok;
     }
 
+    // ------------------------------------------------------------ v149 saved preview
+
+    /** App ke andar save shuda persistent preview ki file (bulk_previews/p<N>.jpg). */
+    public static File savedPreviewFile(Context c, int number) {
+        if (c == null || number <= 0) return null;
+        try {
+            return new File(new File(c.getFilesDir(), "bulk_previews"),
+                "p" + number + ".jpg");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Asal mockup file se saved preview banao (width ≤720, JPEG q85). Kabhi throw nahi karta. */
+    private static void writeSavedPreview(Context c, int number, File mockFile) {
+        File saved = savedPreviewFile(c, number);
+        if (saved == null || mockFile == null || !mockFile.isFile()) return;
+        Bitmap bmp = decodeFile(mockFile, 720);
+        if (bmp == null) return;
+        saveScaledJpeg(bmp, saved);
+    }
+
+    /** Bitmap ko width ≤720 par scale karke JPEG q85 me save karo (temp + rename). */
+    private static void saveScaledJpeg(Bitmap bmp, File dest) {
+        try {
+            Bitmap out = bmp;
+            if (bmp.getWidth() > 720) {
+                int h = Math.max(1, Math.round(
+                    bmp.getHeight() * (720f / bmp.getWidth())));
+                out = Bitmap.createScaledBitmap(bmp, 720, h, true);
+            }
+            File parent = dest.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            File tmp = new File(parent, dest.getName() + ".tmp");
+            try (FileOutputStream fos = new FileOutputStream(tmp)) {
+                out.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+            }
+            if (!tmp.renameTo(dest)) {
+                try (FileOutputStream fos = new FileOutputStream(dest)) {
+                    out.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+                }
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * ZIP-add ke baad: saved preview na ho to project folder ke
+     * template asset (mockup.png / mockup.jpg / template.jpg /
+     * template.png — root pehle, phir assets/) se bana do, taake
+     * preview pehle run se pehle hi nazar aye. Template na mile
+     * to khali rehne do — pehla run rule 2 se bana de ga. Koi
+     * bhi fail import ko kabhi nahi rokta.
+     */
+    public static void ensureSavedPreviewFromTemplate(Context c, int number, File projectDir) {
+        try {
+            if (c == null || number <= 0
+                || projectDir == null || !projectDir.isDirectory()) return;
+            File saved = savedPreviewFile(c, number);
+            if (saved == null || saved.isFile()) return;
+            List<String> rootNames = fileNames(projectDir);
+            File assetsDir = new File(projectDir, "assets");
+            List<String> assetsNames = assetsDir.isDirectory()
+                ? fileNames(assetsDir) : null;
+            String rel = BulkPreviewSource.pickTemplate(rootNames, assetsNames);
+            if (rel == null) return;
+            File template = new File(projectDir, rel);
+            if (!template.isFile()) return;
+            Bitmap bmp = decodeFile(template, 720);
+            if (bmp == null) return;
+            saveScaledJpeg(bmp, saved);
+        } catch (Exception ignored) {}
+    }
+
+    private static List<String> fileNames(File dir) {
+        List<String> out = new ArrayList<>();
+        File[] kids = dir.listFiles();
+        if (kids != null) {
+            for (File k : kids) if (k.isFile()) out.add(k.getName());
+        }
+        return out;
+    }
+
     // ------------------------------------------------------------ bitmap
 
     /**
      * Preview bitmap (sampled, reqSize tak) — PLACEHOLDER par null.
      * Background thread se call karo (disk parhna hai); cache hit ho
      * to foran wapas.
+     *
+     * v149 tartib: SAVED → REAL → BUNDLED → placeholder. Kisi
+     * source ka decode fail ho to agli source par girte hain —
+     * placeholder sirf tab jab waqai kuch na mile. REAL istemal
+     * ho to saved preview (dobara) likhi jati hai taake asal
+     * mockups delete hone ke baad bhi DP mehfooz rahe.
      */
     public static Bitmap loadBitmap(Context c, int number, int reqSize) {
+        File saved = savedPreviewFile(c, number);
+        boolean savedExists = saved != null && saved.isFile();
         BulkPreviewSource.Choice choice = choiceFor(c, number);
-        if (choice.kind == BulkPreviewSource.KIND_PLACEHOLDER) return null;
-        String key;
-        File file = null;
-        if (choice.kind == BulkPreviewSource.KIND_REAL) {
-            file = new File(BulkProjects.mockupsDir(number), choice.fileName);
-            key = "real|" + file.getAbsolutePath() + "|" + file.lastModified() + "|" + reqSize;
-        } else {
-            key = "bundled|" + number + "|" + reqSize;
+        List<Integer> order = BulkPreviewSource.loadOrder(savedExists, choice);
+        for (int kind : order) {
+            Bitmap bmp = null;
+            if (kind == BulkPreviewSource.KIND_SAVED) {
+                String key = "saved|" + saved.getAbsolutePath() + "|"
+                    + saved.lastModified() + "|" + reqSize;
+                bmp = CACHE.get(key);
+                if (bmp == null) {
+                    bmp = decodeFile(saved, reqSize);
+                    if (bmp != null) {
+                        CACHE.put(key, bmp);
+                    } else {
+                        // Kharab saved file — hata do (agli source
+                        // par jao; dobara ban bhi sake gi)
+                        //noinspection ResultOfMethodCallIgnored
+                        saved.delete();
+                    }
+                }
+            } else if (kind == BulkPreviewSource.KIND_REAL) {
+                File file = new File(BulkProjects.mockupsDir(number), choice.fileName);
+                String key = "real|" + file.getAbsolutePath() + "|"
+                    + file.lastModified() + "|" + reqSize;
+                bmp = CACHE.get(key);
+                if (bmp == null) {
+                    bmp = decodeFile(file, reqSize);
+                    if (bmp != null) {
+                        CACHE.put(key, bmp);
+                        writeSavedPreview(c, number, file);
+                    }
+                } else if (saved != null && !saved.isFile()) {
+                    writeSavedPreview(c, number, file);
+                }
+            } else if (kind == BulkPreviewSource.KIND_BUNDLED) {
+                String key = "bundled|" + number + "|" + reqSize;
+                bmp = CACHE.get(key);
+                if (bmp == null) {
+                    bmp = decodeAsset(c,
+                        BulkPreviewSource.bundledAssetPath(number), reqSize);
+                    if (bmp != null) CACHE.put(key, bmp);
+                }
+            }
+            if (bmp != null) return bmp;
         }
-        Bitmap hit = CACHE.get(key);
-        if (hit != null) return hit;
-        Bitmap bmp = choice.kind == BulkPreviewSource.KIND_REAL
-            ? decodeFile(file, reqSize)
-            : decodeAsset(c, BulkPreviewSource.bundledAssetPath(number), reqSize);
-        if (bmp != null) CACHE.put(key, bmp);
-        return bmp;
+        return null;
     }
 
     private static Bitmap decodeFile(File f, int reqSize) {

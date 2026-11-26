@@ -373,6 +373,11 @@ public class BulkPermissionsActivity extends Activity {
                 isInstallOk(), BulkStrings.t(this, BulkStrings.ALLOW), this::fixInstall);
         }
 
+        // v149 Item H: Termux:API app ki ASAL mojoodgi — scan isi
+        // app se hota hai. Check har rebuild (har page open) par
+        // fresh PackageManager lookup hai (BulkApiCheck).
+        addApiRow();
+
         // v129: Auto-start par ✔/✖ wala jhoota status nahi — ye sirf
         // settings kholne wali nav row hai (asal ijazat phone ki
         // setting me hi milti hai, app use parh nahi sakta).
@@ -594,6 +599,80 @@ public class BulkPermissionsActivity extends Activity {
                 BulkFonts.applyToTree(this, panel);
             });
         }).start();
+    }
+
+    /**
+     * v149 Item H — Termux:API wali row (baqi rows ki hi shakal):
+     *   Laga hua ho → ✔ + sirf "Done"; na link, na fazool text.
+     *   Na laga ho  → ✖ + install karne ki hidayat, or row ke
+     *                 neeche download link WAZEH dikhta hai
+     *                 (tap par F-Droid wala page khulta hai);
+     *                 poori row bhi tappable hai.
+     * Halat har rebuild par BulkApiCheck se fresh parhi jati hai.
+     */
+    private void addApiRow() {
+        boolean ok = BulkApiCheck.isApiInstalled(this);
+        LinearLayout row = permCard();
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView status = new TextView(this);
+        status.setText(ok ? "✔ " : "✖ ");
+        status.setTextColor(ok ? BulkTheme.accent(this) : RED);
+        status.setTextSize(17);
+        top.addView(status);
+
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.PERM_API));
+        label.setTextColor(BulkTheme.textMain(this));
+        label.setTextSize(15);
+        label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        top.addView(label);
+
+        if (ok) {
+            TextView done = new TextView(this);
+            done.setText(BulkStrings.t(this, BulkStrings.PERM_API_DONE));
+            done.setTextColor(BulkTheme.accent(this));
+            done.setTextSize(13);
+            top.addView(done);
+        }
+        row.addView(top);
+
+        if (!ok) {
+            TextView hintView = new TextView(this);
+            hintView.setText(BulkStrings.t(this, BulkStrings.PERM_API_INSTALL));
+            hintView.setTextColor(BulkTheme.textMuted(this));
+            hintView.setTextSize(12);
+            hintView.setPadding(dp(26), dp(2), 0, 0);
+            row.addView(hintView);
+
+            // Download link — row ke neeche wazeh, tap par F-Droid page
+            TextView link = new TextView(this);
+            link.setText(BulkApiCheck.API_STORE_URL);
+            link.setTextColor(BulkTheme.accent(this));
+            link.setTextSize(12.5f);
+            link.setPaintFlags(link.getPaintFlags()
+                | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+            link.setPadding(dp(26), dp(4), 0, 0);
+            link.setClickable(true);
+            link.setOnClickListener(v -> openApiStorePage());
+            row.addView(link);
+
+            row.setClickable(true);
+            row.setOnClickListener(v -> openApiStorePage());
+        }
+
+        mRoot.addView(row);
+    }
+
+    /** Termux:API ka F-Droid page kholo — best effort, fail par khamoshi. */
+    private void openApiStorePage() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                Uri.parse(BulkApiCheck.API_STORE_URL)));
+        } catch (Exception ignored) {}
     }
 
     private void addRow(String name, String hint, boolean ok, String buttonText, Runnable fix) {

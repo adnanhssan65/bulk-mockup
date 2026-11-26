@@ -142,6 +142,12 @@ public final class BulkProjectInstaller {
         }
         appendAliases(n, script);
         appendConfLine(context, n);
+        // v149: add hote hi preview — project ke template asset
+        // se saved preview bana do (pehle run ka intezar nahi).
+        // Fail ho to bhi install par koi asar nahi.
+        try {
+            BulkPreviewUi.ensureSavedPreviewFromTemplate(context, n, target);
+        } catch (Exception ignored) {}
         Logger.logInfo(LOG_TAG, "Project " + n + " installed (" + script + ")");
     }
 

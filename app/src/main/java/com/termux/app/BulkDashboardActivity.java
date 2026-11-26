@@ -80,6 +80,10 @@ public class BulkDashboardActivity extends Activity {
         // Backup) — UI banne se pehle, taake naam/theme/font wapas
         // wali halat me hi lagu hon. Flag/file ki shart helper me hai.
         BulkSettingsBackup.autoRestoreIfNeeded(this);
+        // v149 revision: Scan Waqfa marker (TermuxMod/.scan_waqfa)
+        // har app start par saved setting se taaza — runners ko
+        // hamesha mojooda halat mile. Best-effort, kabhi crash nahi.
+        BulkScanWaqfa.syncMarker(this);
         setTitle(BulkPanelSettings.appName(this));
 
         if (!BulkMockupSetup.isSetupDone()) {
@@ -1131,7 +1135,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v148");
+        version.setText("Termux Mod v149");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));

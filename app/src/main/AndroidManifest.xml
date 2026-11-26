@@ -36,6 +36,14 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
+    <!-- v149 Item H: Permissions screen Termux:API app ki asal
+         mojoodgi PackageManager se check karti hai — Android 11+
+         ki package visibility ke liye ye query lazmi hai, warna
+         laga hua API app bhi "nahi laga" nazar ayega. -->
+    <queries>
+        <package android:name="com.termux.api" />
+    </queries>
+
     <application
         android:name=".app.TermuxApplication"
         android:allowBackup="false"

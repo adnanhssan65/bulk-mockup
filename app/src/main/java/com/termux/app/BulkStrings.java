@@ -124,6 +124,9 @@ public final class BulkStrings {
     public static final String ALLOW_ALL = "allow_all";
     public static final String ALLOW = "allow";
     public static final String OPEN = "open";
+    public static final String PERM_API = "perm_api";
+    public static final String PERM_API_INSTALL = "perm_api_install";
+    public static final String PERM_API_DONE = "perm_api_done";
     public static final String PERM_STORAGE_HINT = "perm_storage_hint";
     public static final String PERM_BATTERY = "perm_battery";
     public static final String PERM_BATTERY_HINT = "perm_battery_hint";
@@ -203,6 +206,9 @@ public final class BulkStrings {
     public static final String PROCESSING = "processing";
     public static final String RUN_DONE = "run_done";
     public static final String RUN_FAILED = "run_failed";
+    public static final String RUN_BACKGROUND = "run_background";
+    public static final String RUN_CANCELLED = "run_cancelled";
+    public static final String RUN_ALREADY_ACTIVE = "run_already_active";
     public static final String OPEN_FILE_MANAGER = "open_file_manager";
     public static final String EXPORT_PROJECT = "export_project";
     public static final String EXPORTING = "exporting";
@@ -320,6 +326,10 @@ public final class BulkStrings {
     // v145 — More Settings (sidebar ki teen rows ab is apni screen par)
     public static final String MORE_SETTINGS = "more_settings";
     public static final String MORE_SETTINGS_SUB = "more_settings_sub";
+    public static final String ORDER_FIX = "order_fix";
+    public static final String ORDER_FIX_SUB = "order_fix_sub";
+    public static final String SCAN_WAQFA = "scan_waqfa";
+    public static final String SCAN_WAQFA_SUB = "scan_waqfa_sub";
     public static final String CP_RESET = "cp_reset";
     public static final String CP_RESET_MSG = "cp_reset_msg";
     public static final String CP_RESET_DONE = "cp_reset_done";
@@ -334,6 +344,7 @@ public final class BulkStrings {
     public static final String LOG_RUN_START = "log_run_start";
     public static final String LOG_RUN_DONE = "log_run_done";
     public static final String LOG_RUN_FAIL = "log_run_fail";
+    public static final String LOG_RUN_CANCEL = "log_run_cancel";
     public static final String PERM_POPUP_TITLE = "perm_popup_title";
     public static final String PERM_POPUP_MSG = "perm_popup_msg";
     public static final String PERM_MANUAL_TAG = "perm_manual_tag";
@@ -505,6 +516,10 @@ public final class BulkStrings {
         put(ALLOW_ALL, "✔  ALLOW ALL", "✔  SAB EK SATH ALLOW KARO");
         put(ALLOW, "Allow", "Allow Karo");
         put(OPEN, "Open", "Kholo");
+        put(PERM_API, "Termux:API App", "Termux:API App");
+        put(PERM_API_INSTALL, "Install the Termux:API App — without it, scans do not work",
+            "Termux:API App install karo — baghair is ke scan nahi hota");
+        put(PERM_API_DONE, "Done", "Done");
         put(PERM_STORAGE_HINT, "To read and save your wallpapers.",
             "Wallpapers parhne/likhne ke liye.");
         put(PERM_BATTERY, "Battery", "Battery");
@@ -619,6 +634,10 @@ public final class BulkStrings {
         put(PROCESSING, "Processing…", "Process Ho Raha Hai…");
         put(RUN_DONE, "Finished ✔", "Ho Gaya ✔");
         put(RUN_FAILED, "Failed ✖", "Fail Ho Gaya ✖");
+        put(RUN_BACKGROUND, "Run in Background", "Background me chalao");
+        put(RUN_CANCELLED, "Cancelled", "Cancel Ho Gaya");
+        put(RUN_ALREADY_ACTIVE, "A run is already going — let it finish first",
+            "Ek run pehle se chal raha hai — pehle use khatam hone do");
         put(OPEN_FILE_MANAGER, "Open in File Manager", "File Manager Me Kholo");
         put(EXPORT_PROJECT, "Export Project", "Project Export Karo");
         put(EXPORTING, "Exporting…", "Export Ho Raha Hai…");
@@ -689,6 +708,7 @@ public final class BulkStrings {
         put(LOG_RUN_START, "▶ %s — run started", "▶ %s — run shuru");
         put(LOG_RUN_DONE, "✔ %s — run complete", "✔ %s — run mukammal");
         put(LOG_RUN_FAIL, "✖ %s — run failed", "✖ %s — run fail");
+        put(LOG_RUN_CANCEL, "✖ %s — run cancelled", "✖ %s — run cancel ho gaya");
         put(PERM_POPUP_TITLE, "Permission Needed", "Permission Chahiye");
         put(PERM_POPUP_MSG,
             "Without storage permission, wallpapers cannot be added or run. Please allow it from the Permissions screen.",
@@ -806,7 +826,7 @@ public final class BulkStrings {
         put(CHECK_HISTORY, "Shared history", "Shared history");
         put(CHECK_DELAYS, "Loading delays", "Loading delays");
         put(CHECK_WAKELOCK, "Wakelock stall", "Wakelock stall");
-        put(CHECK_SCAN, "Scan stall", "Scan stall");
+        put(CHECK_SCAN, "Scan (one-by-one)", "Scan (ek ek karke)");
         put(CHECK_GALLERY, "Gallery sequence", "Gallery sequence");
         put(CHECK_FIXED, "Fixed", "Fix kar diya");
         put(CHECK_OK, "Already OK", "Pehle se theek");
@@ -816,6 +836,12 @@ public final class BulkStrings {
         put(CHECK_GALLERY_CLAUDE, "Gallery sequence not applied — send this project to Muse, he will add it.",
             "Gallery sequence nahi laga — ye project Muse ko bhejo, wo laga de ga");
         put(MORE_SETTINGS, "More Settings", "More Settings");
+        put(ORDER_FIX, "Order Fix", "Order Fix");
+        put(ORDER_FIX_SUB, "When off, the app will not fix the gallery order of new files",
+            "Band karne par app nayi files ka gallery order fix nahi kare ga");
+        put(SCAN_WAQFA, "Scan Waqfa", "Scan Waqfa");
+        put(SCAN_WAQFA_SUB, "When off, the terminal runs at its old fast speed — the app fixes the order",
+            "OFF karne par terminal purani tez speed par chalta hai, order fix app kare ga");
         put(MORE_SETTINGS_SUB, "Backup, Export Project and Output Folder",
             "Backup, Export Project aur Output Folder");
         put(CP_RESET, "Reset to Defaults", "Defaults Par Wapas");

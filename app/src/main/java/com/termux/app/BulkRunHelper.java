@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
@@ -16,9 +17,12 @@ import com.termux.shared.termux.TermuxConstants;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Termux Mod (v127) — Run ka app-managed flow (Adnan 2026-11-23):
@@ -300,8 +304,32 @@ public final class BulkRunHelper {
      */
     private static void runLiveInPopup(final Activity a, final BulkProjects.ProjectInfo p,
                                        final String pipedCommand, final Runnable onLaunched) {
+        // v149 Item G: ek waqt me EK hi run. Background me chalta
+        // run ho to dusra run shuru NAHI hota — sirf chhota sa
+        // pegham. (Is se pehle koi guard nahi tha.)
+        if (sRunActive) {
+            Toast.makeText(a, BulkStrings.t(a, BulkStrings.RUN_ALREADY_ACTIVE),
+                Toast.LENGTH_LONG).show();
+            return;
+        }
+
         final Dialog dialog = new Dialog(a);
-        final ConsoleViews cv = buildConsolePanel(a, p.name, dialog);
+        // v149 Item G: process handle + cancel halat — worker thread
+        // procRef bharta hai, Cancel button use parh kar tree kill
+        // karta hai; Background sirf popup band karta hai (run
+        // chalti rehti hai — X or purana Close bhi hamesha yahi
+        // karte aye hain, process dismiss se kabhi nahi marti).
+        final Process[] procRef = {null};
+        final boolean[] cancelled = {false};
+        final boolean[] finished = {false};
+        final Runnable cancelRun = () -> {
+            if (finished[0] || cancelled[0]) return;
+            cancelled[0] = true;
+            Process proc = procRef[0];
+            if (proc != null) killProcessTree(proc);
+        };
+        final ConsoleViews cv = buildConsolePanel(a, p.name, dialog,
+            () -> dialog.dismiss(), cancelRun);
         final LinearLayout panel = cv.panel;
 
         final Dialog shown = BulkTheme.showPanelDialog(a, panel);
@@ -319,7 +347,6 @@ public final class BulkRunHelper {
         final BulkRunProgress progress = new BulkRunProgress();
         final StringBuilder tail = new StringBuilder();
         final long startMs = android.os.SystemClock.elapsedRealtime();
-        final boolean[] finished = {false};
         final int[] exitCode = {-1};
         sRunActive = true;
 
@@ -374,6 +401,7 @@ public final class BulkRunHelper {
                 pb.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
                 pb.redirectErrorStream(true);
                 Process proc = pb.start();
+                procRef[0] = proc;
                 // Jawab printf pipe se ja rahe hain — apna stdin band rakho
                 try { proc.getOutputStream().close(); } catch (Exception ignored) {}
                 // v131 (Item 3): bara reader buffer — drain kabhi
@@ -417,9 +445,12 @@ public final class BulkRunHelper {
             sRunActive = false;
             final long totalMs = android.os.SystemClock.elapsedRealtime() - startMs;
             final String totalText = BulkRunProgress.formatElapsed(totalMs);
-            // Home bonus (Item 4): final line me progress + kul waqt
-            String doneMsg = BulkStrings.format(a, exit == 0
-                ? BulkStrings.LOG_RUN_DONE : BulkStrings.LOG_RUN_FAIL, p.name);
+            // Home bonus (Item 4): final line me progress + kul waqt.
+            // v149 Item G: cancel par FAIL ki jagah sirf cancel line.
+            final int kind = completionKind(cancelled[0], exit);
+            String doneMsg = BulkStrings.format(a, kind == 0
+                ? BulkStrings.LOG_RUN_CANCEL
+                : (kind == 1 ? BulkStrings.LOG_RUN_DONE : BulkStrings.LOG_RUN_FAIL), p.name);
             if (progress.hasProgress()) {
                 doneMsg += " — " + progress.done() + "/" + progress.total()
                     + " • " + totalText;
@@ -437,8 +468,14 @@ public final class BulkRunHelper {
             a.runOnUiThread(() -> {
                 if (!shown.isShowing()) return;
                 cv.spinner.setVisibility(View.GONE);
-                cv.status.setText(BulkStrings.t(a, fExit == 0
-                    ? BulkStrings.RUN_DONE : BulkStrings.RUN_FAILED));
+                // v149 Item G: run khatam — Background/Cancel wali
+                // row chhupao, sirf Close rakho; halat ka lafz bhi
+                // cancel ko alag se pehchane
+                cv.runActions.setVisibility(View.GONE);
+                cv.closeBtn.setVisibility(View.VISIBLE);
+                cv.status.setText(BulkStrings.t(a, kind == 0
+                    ? BulkStrings.RUN_CANCELLED
+                    : (kind == 1 ? BulkStrings.RUN_DONE : BulkStrings.RUN_FAILED)));
                 cv.timer.setText(totalText);
                 if (progress.hasProgress()) {
                     if (cv.counterBlock.getVisibility() != View.VISIBLE) {
@@ -491,6 +528,104 @@ public final class BulkRunHelper {
         return sRunActive;
     }
 
+    // ------------------------------------------------------------ v149 Item G: cancel
+
+    /** Completion ka faisla (pure): 0 = cancel, 1 = done, 2 = fail. */
+    static int completionKind(boolean cancelled, int exitCode) {
+        if (cancelled) return 0;
+        return exitCode == 0 ? 1 : 2;
+    }
+
+    /**
+     * Process tree ki kill tartib (pure): ppid map (pid → walid
+     * pid) se root ke tamam descendants — sab se gehri nasal
+     * PEHLE (bachay walidain se pehle maren taake koi dobara na
+     * bane). Root khud list me NAHI (use aakhir me alag mara
+     * jata hai).
+     */
+    static List<Integer> treeKillOrder(Map<Integer, Integer> ppidByPid, int rootPid) {
+        List<Integer> order = new ArrayList<>();
+        if (ppidByPid == null || rootPid <= 0) return order;
+        Set<Integer> seen = new HashSet<>();
+        seen.add(rootPid);
+        List<List<Integer>> levels = new ArrayList<>();
+        List<Integer> level = new ArrayList<>();
+        level.add(rootPid);
+        while (true) {
+            List<Integer> next = new ArrayList<>();
+            for (Map.Entry<Integer, Integer> e : ppidByPid.entrySet()) {
+                if (e.getValue() != null && level.contains(e.getValue())
+                    && !seen.contains(e.getKey())) {
+                    seen.add(e.getKey());
+                    next.add(e.getKey());
+                }
+            }
+            if (next.isEmpty()) break;
+            levels.add(next);
+            level = next;
+        }
+        for (int i = levels.size() - 1; i >= 0; i--) order.addAll(levels.get(i));
+        return order;
+    }
+
+    /** Chalti process ka pid (reflection — Android par is ka public API nahi). Na mile to -1. */
+    private static int pidOf(Process proc) {
+        Class<?> c = proc.getClass();
+        while (c != null) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField("pid");
+                f.setAccessible(true);
+                return f.getInt(proc);
+            } catch (Exception e) {
+                c = c.getSuperclass();
+            }
+        }
+        return -1;
+    }
+
+    /** /proc se ppid map (pid → walid pid); comm ke andar ke spaces/parens se mehfooz parse. */
+    private static Map<Integer, Integer> readPpidMap() {
+        Map<Integer, Integer> out = new HashMap<>();
+        File[] dirs = new File("/proc").listFiles();
+        if (dirs == null) return out;
+        for (File d : dirs) {
+            int pid;
+            try { pid = Integer.parseInt(d.getName()); }
+            catch (Exception e) { continue; }
+            try {
+                String stat = BulkProjectInstaller.readText(new File(d, "stat"));
+                int close = stat.lastIndexOf(')');
+                if (close < 0) continue;
+                String[] parts = stat.substring(close + 2).trim().split("\\s+");
+                // ')' ke baad ke hisse: state, ppid, pgrp, ...
+                out.put(pid, Integer.parseInt(parts[1]));
+            } catch (Exception ignored) {}
+        }
+        return out;
+    }
+
+    /**
+     * Run ko saaf band karo: poora process tree (bash + python +
+     * us ke tamam bachay) SIGTERM se, phir destroy() backstop.
+     * Jo outputs ban chuke hain wo rehte hain — rollback koi
+     * nahi; consumed inputs wapas nahi ate.
+     */
+    static void killProcessTree(Process proc) {
+        if (proc == null) return;
+        try {
+            int pid = pidOf(proc);
+            if (pid > 0) {
+                for (int child : treeKillOrder(readPpidMap(), pid)) {
+                    try { android.os.Process.sendSignal(child, 15); }
+                    catch (Exception ignored) {}
+                }
+                try { android.os.Process.sendSignal(pid, 15); }
+                catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        try { proc.destroy(); } catch (Exception ignored) {}
+    }
+
     // ------------------------------------------------------------ console popup (Item 4 ext)
 
     /** Console popup ke views — poster inhe taaza karta hai. */
@@ -505,6 +640,10 @@ public final class BulkRunHelper {
         LinearLayout bar;
         ScrollView scroll;
         TextView out;
+        // v149 Item G: run ke dauran Background/Cancel wali row;
+        // run khatam hone par ye chhupati hai or Close nazar ata hai
+        LinearLayout runActions;
+        TextView closeBtn;
     }
 
     /**
@@ -516,7 +655,9 @@ public final class BulkRunHelper {
      * progress bar, monospace log (gehre inset par), Close button.
      */
     private static ConsoleViews buildConsolePanel(final Activity a, String title,
-                                                  final Dialog dialog) {
+                                                  final Dialog dialog,
+                                                  final Runnable onBackground,
+                                                  final Runnable onCancel) {
         ConsoleViews cv = new ConsoleViews();
         boolean light = BulkTheme.isLight(a);
 
@@ -653,13 +794,45 @@ public final class BulkRunHelper {
         cv.scroll.addView(cv.out);
         panel.addView(cv.scroll);
 
+        // v149 Item G: run ke dauran neeche DO button — "Background
+        // me chalao" (popup band, run chalti rehti hai; X bhi yahi
+        // karta hai) or "Cancel" (poora process tree saaf band).
+        // Run khatam hone par ye row chhup jati hai or sirf Close
+        // rehta hai (completion update runLiveInPopup me hai).
+        LinearLayout actions = new LinearLayout(a);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp.topMargin = BulkTheme.dp(a, 14);
+        actions.setLayoutParams(alp);
+        TextView bgBtn = BulkTheme.secondaryButton(a,
+            BulkStrings.t(a, BulkStrings.RUN_BACKGROUND),
+            v -> { if (onBackground != null) onBackground.run(); });
+        LinearLayout.LayoutParams bgp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        bgp.rightMargin = BulkTheme.dp(a, 5);
+        bgBtn.setLayoutParams(bgp);
+        actions.addView(bgBtn);
+        TextView cancelBtn = BulkTheme.secondaryButton(a,
+            BulkStrings.t(a, BulkStrings.CANCEL),
+            v -> { if (onCancel != null) onCancel.run(); });
+        LinearLayout.LayoutParams cnp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cnp.leftMargin = BulkTheme.dp(a, 5);
+        cancelBtn.setLayoutParams(cnp);
+        actions.addView(cancelBtn);
+        panel.addView(actions);
+        cv.runActions = actions;
+
         TextView close = BulkTheme.secondaryButton(a, BulkStrings.t(a, BulkStrings.CLOSE),
             v -> dialog.dismiss());
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         clp.topMargin = BulkTheme.dp(a, 14);
         close.setLayoutParams(clp);
+        close.setVisibility(View.GONE);
         panel.addView(close);
+        cv.closeBtn = close;
         return cv;
     }
 

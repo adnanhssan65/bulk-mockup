@@ -104,14 +104,32 @@ public class BulkV145Test {
         "                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
         "    except: pass",
         "",
-        "def safe_scan(path, timeout_sec=1):",
-        "    # Fire-and-forget: scan ko kabhi wait nahi karna — app ke andar run ho to",
-        "    # termux-media-scan wapas ane me dair karta hai aur har image par time zaya hota hai.",
-        "    # Scan pichay chal kar apna kaam khud pura kar leta hai, tartib launch order se rehti hai.",
+        "_WAQFA = None",
+        "def _waqfa_on():",
+        "    # Scan waqfa (v149): gallery copy ke scan ke baad chhota sa gap, taake",
+        "    # MediaStore ka record sahi tartib me lage. Marker TermuxMod/.scan_waqfa",
+        "    # me \"off\" (ya \"0\") ho to waqfa band; marker na ho ya kuch aur ho to ON.",
+        "    # Marker ek run me sirf ek dafa parha jata hai.",
+        "    global _WAQFA",
+        "    if _WAQFA is None:",
+        "        _WAQFA = True",
+        "        try:",
+        "            with open(\"/storage/emulated/0/TermuxMod/.scan_waqfa\") as _f:",
+        "                if _f.read().strip().lower() in (\"off\", \"0\"):",
+        "                    _WAQFA = False",
+        "        except Exception:",
+        "            pass",
+        "    return _WAQFA",
+        "",
+        "def safe_scan(path, timeout_sec=5):",
         "    try:",
-        "        subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
+        "        subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)",
+        "    except subprocess.TimeoutExpired:",
+        "        pass",
         "    except Exception:",
         "        pass",
+        "    if _waqfa_on() and \"/TermuxMod/Project \" in str(path):",
+        "        time.sleep(0.25)",
         "",
         "TM_ROOT = \"/storage/emulated/0/TermuxMod\"",
         "def gallery_pair_copy(mock_path, wall_path, mt, wt):",
@@ -175,7 +193,7 @@ public class BulkV145Test {
     // ------------------------------------------------------------ scenario 1: old style
 
     @Test
-    public void oldStyleRunnerGetsAllSixFixes() {
+    public void oldStyleRunnerGetsFixesScanAlreadyOk() {
         BulkProjectFixer.FixResult r = BulkProjectFixer.fixText(OLD_STYLE, 9);
         assertFalse(r.report.failed);
         assertTrue(r.report.changed);
@@ -183,6 +201,8 @@ public class BulkV145Test {
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.history);
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.delays);
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.wakelock);
+        // v149 revision: OLD_STYLE ka scan waiting form me hai lekin
+        // waqfa nahi — canonical form me waqfa bhi hai, is liye FIXED
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.scanTimeout);
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.gallery);
         assertFalse(r.report.galleryNeedsClaude);
@@ -202,11 +222,15 @@ public class BulkV145Test {
         // 4: wakelock fire-and-forget
         assertTrue(out.contains("subprocess.Popen([\"termux-wake-lock\" if enable else \"termux-wake-unlock\"]"));
         assertFalse(out.contains("os.system(\"termux-wake-lock"));
-        // 5: scan stall — body Popen fire-and-forget (P1 wali form), def bhi 1 par
-        assertTrue(out.contains("def safe_scan(path, timeout_sec=1)"));
+        // 5: scan (one-by-one) — waiting form raha + waqfa juda
+        assertTrue(out.contains("def safe_scan(path, timeout_sec=5)"));
         assertTrue(out.contains(
-            "subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
-        assertFalse(out.contains("subprocess.run([\"termux-media-scan\", path]"));
+            "subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)"));
+        assertFalse(out.contains("subprocess.Popen([\"termux-media-scan\", path]"));
+        assertTrue(out.contains("def _waqfa_on():"));
+        assertTrue(out.contains(
+            "if _waqfa_on() and \"/TermuxMod/Project \" in str(path):"));
+        assertTrue(out.contains("time.sleep(0.25)"));
         // 6: gallery helper + call, sahi tartib me (scan ke baad)
         assertTrue(out.contains("def gallery_pair_copy(mock_path, wall_path, mt, wt):"));
         int scanAt = out.indexOf("safe_scan(mock_path)");
@@ -242,15 +266,18 @@ public class BulkV145Test {
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.history);
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.delays);
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.wakelock);
+        // v149 revision: GROUP_STYLE ka scan waiting form me hai
+        // lekin waqfa nahi — waqfa FIX hota hai
         assertEquals(BulkProjectFixer.Status.FIXED, r.report.scanTimeout);
         assertEquals(BulkProjectFixer.Status.NOT_APPLIED, r.report.gallery);
         assertTrue("gallery skip par Claude wali note lazmi", r.report.galleryNeedsClaude);
         // mukhtalif variable naam ke sath base path fix
         assertTrue(r.text.contains(
             "BASE_DIR = os.environ.get(\"MOCKUP_BASE\", os.path.dirname(os.path.abspath(__file__)))"));
-        // safe_scan ka body Popen fire-and-forget ho gaya
+        // safe_scan ka waiting body raha + waqfa juda
         assertTrue(r.text.contains(
-            "subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
+            "subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)"));
+        assertFalse(r.text.contains("subprocess.Popen([\"termux-media-scan\", path]"));
         // bulk scan_group helper ko hath NAHI laga (na timeout juda, na Popen bana)
         assertTrue(r.text.contains(
             "subprocess.run([\"termux-media-scan\", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
@@ -282,11 +309,30 @@ public class BulkV145Test {
         "B = os.environ.get(\"MOCKUP_BASE\", os.path.dirname(os.path.abspath(__file__)))",
         "T_F = \"/storage/emulated/0/.mockup_time_tracker.txt\"",
         "",
+        "_WAQFA = None",
+        "def _waqfa_on():",
+        "    # Scan waqfa (v149): gallery copy ke scan ke baad chhota sa gap, taake",
+        "    # MediaStore ka record sahi tartib me lage. Marker TermuxMod/.scan_waqfa",
+        "    # me \"off\" (ya \"0\") ho to waqfa band; marker na ho ya kuch aur ho to ON.",
+        "    # Marker ek run me sirf ek dafa parha jata hai.",
+        "    global _WAQFA",
+        "    if _WAQFA is None:",
+        "        _WAQFA = True",
+        "        try:",
+        "            with open(\"/storage/emulated/0/TermuxMod/.scan_waqfa\") as _f:",
+        "                if _f.read().strip().lower() in (\"off\", \"0\"):",
+        "                    _WAQFA = False",
+        "        except Exception:",
+        "            pass",
+        "    return _WAQFA",
+        "",
         "def scan_media(path, timeout_sec=5):",
         "    try:",
         "        subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)",
         "    except subprocess.TimeoutExpired:",
         "        pass",
+        "    if _waqfa_on() and \"/TermuxMod/Project \" in str(path):",
+        "        time.sleep(0.25)",
         "",
         "def safe_scan_dir(path, timeout_sec=20):",
         "    try:",
@@ -296,14 +342,16 @@ public class BulkV145Test {
     );
 
     @Test
-    public void scanMediaVariantFixedAndDirHelperUntouched() {
+    public void scanMediaVariantAlreadyOkAndDirHelperUntouched() {
         BulkProjectFixer.FixResult r = BulkProjectFixer.fixText(SCAN_MEDIA_STYLE, 5);
         assertFalse(r.report.failed);
-        assertEquals(BulkProjectFixer.Status.FIXED, r.report.scanTimeout);
-        // scan_media ka body Popen ho gaya, def ka default bhi 1
-        assertTrue(r.text.contains("def scan_media(path, timeout_sec=1):"));
+        // v149 revision: scan_media canonical form (waiting + waqfa) me hai
+        assertEquals(BulkProjectFixer.Status.ALREADY_OK, r.report.scanTimeout);
+        assertFalse(r.report.changed);
+        assertEquals(SCAN_MEDIA_STYLE, r.text);
+        assertTrue(r.text.contains("def scan_media(path, timeout_sec=5):"));
         assertTrue(r.text.contains(
-            "subprocess.Popen([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)"));
+            "subprocess.run([\"termux-media-scan\", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)"));
         // safe_scan_dir bilkul waisa ka waisa (bulk helper ko hath nahi lagta)
         assertTrue(r.text.contains("def safe_scan_dir(path, timeout_sec=20):"));
         assertTrue(r.text.contains(
@@ -323,8 +371,9 @@ public class BulkV145Test {
         assertTrue(r1.changed);
         String after = new String(Files.readAllBytes(script.toPath()), StandardCharsets.UTF_8);
         assertTrue(after.contains("def gallery_pair_copy"));
-        assertTrue(after.contains("timeout_sec=1"));
-        assertTrue(after.contains("subprocess.Popen([\"termux-media-scan\", path]"));
+        assertTrue(after.contains("timeout_sec=5"));
+        assertTrue(after.contains("subprocess.run([\"termux-media-scan\", path]"));
+        assertFalse(after.contains("subprocess.Popen([\"termux-media-scan\", path]"));
 
         File backup = new File(dir, "w9.py.orig");
         assertTrue("backup .orig banna chahiye", backup.isFile());
@@ -398,12 +447,12 @@ public class BulkV145Test {
     }
 
     @Test
-    public void versionBumpedTo148() throws Exception {
+    public void versionBumpedTo149() throws Exception {
         String dash = findSource("app/src/main/java/com/termux/app/BulkDashboardActivity.java");
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v148"));
+        assertTrue(dash.contains("Termux Mod v149"));
         String gradle = findSource("app/build.gradle");
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 148"));
+        assertTrue(gradle.contains("versionCode 149"));
     }
 }

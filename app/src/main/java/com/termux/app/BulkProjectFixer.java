@@ -24,13 +24,18 @@ import java.util.regex.Pattern;
  *      sleeps (engine poll, retry backoff) ko hath NAHI lagta
  *   4. WAKELOCK — set_wakelock ka os.system wala body (ya inline
  *      os.system calls) → subprocess.Popen fire-and-forget
- *   5. SCAN STALL — safe_scan/scan_media ka body subprocess.run
- *      (wait karne wala) ho to pura body P1 wale proven
- *      subprocess.Popen fire-and-forget form se badal jata hai
- *      (naam + signature waisa ka waisa; def ka default
- *      timeout_sec >1 ho to 1). Body pehle se Popen wala ho to
- *      ALREADY_OK — koi change nahi. safe_scan_dir or bulk/batch
- *      scan helpers ko hath NAHI lagta.
+ *   5. SCAN (ONE-BY-ONE) — v149 se target RESTORED W1 wala
+ *      waiting form hai: safe_scan/scan_media ka body
+ *      subprocess.run (ruk kar, one-by-one) ho, timeout_sec ka
+ *      default 5 (bina timeout param wale par literal timeout=5).
+ *      Body pehle se isi form me ho to ALREADY_OK — koi change
+ *      nahi. Fire-and-forget Popen wala body ab FIX hota hai.
+ *      safe_scan_dir or bulk/batch scan helpers ko hath NAHI lagta.
+ *      v149 revision: canonical form me SCAN WAQFA bhi shamil hai —
+ *      gallery copy (TermuxMod/Project wala path) ke scan ke baad
+ *      time.sleep(0.25), or us ke liye _waqfa_on() helper (marker
+ *      TermuxMod/.scan_waqfa, "off"/"0" = band, warna ON) scan def
+ *      se pehle. Bundled runners isi form me hain — ALREADY_OK.
  *   6. GALLERY SEQUENCE — sirf family pair pattern par: helper
  *      mojood na ho or process_one me safe_scan(mock_path) +
  *      safe_scan(wall_path) ki adjacent jori mile to P1 wala
@@ -122,14 +127,16 @@ public final class BulkProjectFixer {
             for (String l : work.split("\n", -1)) lines.add(l);
 
             boolean[] needSubprocessImport = {false};
+            boolean[] needTimeImport = {false};
 
             fixHistory(lines, report);
             fixBasePath(lines, report);
             fixDelays(lines, report);
             fixWakelock(lines, report, needSubprocessImport);
-            fixScanTimeout(lines, report, needSubprocessImport);
+            fixScanTimeout(lines, report, needSubprocessImport, needTimeImport);
             fixGallery(lines, report, projectNumber);
             if (needSubprocessImport[0]) ensureSubprocessImport(lines);
+            if (needTimeImport[0]) ensureTimeImport(lines);
 
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < lines.size(); i++) {
@@ -334,21 +341,62 @@ public final class BulkProjectFixer {
         }
     }
 
-    // ------------------------------------------------------------ item 5: scan stall
+    // ------------------------------------------------------------ item 5: scan (one-by-one)
 
     /**
-     * Per-file scan function (safe_scan, warna scan_media) ka body
-     * subprocess.run wala ho to pura body P1 ke proven Popen
-     * fire-and-forget form se badal do — naam + signature waisa ka
-     * waisa rehta hai, sirf def ke default timeout_sec >1 ko 1 kar
-     * dete hain taake form P1 se mil jaye. Body pehle se Popen wala
-     * ho to ALREADY_OK or koi change nahi (byte-identical ki
-     * guarantee). safe_scan_dir / bulk helpers is me nahi ate —
-     * un ke naam alag hain or unhe jaan bujh kar nahi cherhte.
+     * Canonical scan form ka waqfa helper — bundled runners ke
+     * bytes se HU-BAHU yahi text hai (is liye woh ALREADY_OK
+     * parte hain). Marker ek run me ek dafa parha jata hai;
+     * "off"/"0" = waqfa band, marker na ho ya kuch aur ho = ON.
      */
-    private static void fixScanTimeout(List<String> lines, Report report, boolean[] needImport) {
+    private static final String[] WAQFA_HELPER = {
+        "_WAQFA = None",
+        "def _waqfa_on():",
+        "    # Scan waqfa (v149): gallery copy ke scan ke baad chhota sa gap, taake",
+        "    # MediaStore ka record sahi tartib me lage. Marker TermuxMod/.scan_waqfa",
+        "    # me \"off\" (ya \"0\") ho to waqfa band; marker na ho ya kuch aur ho to ON.",
+        "    # Marker ek run me sirf ek dafa parha jata hai.",
+        "    global _WAQFA",
+        "    if _WAQFA is None:",
+        "        _WAQFA = True",
+        "        try:",
+        "            with open(\"/storage/emulated/0/TermuxMod/.scan_waqfa\") as _f:",
+        "                if _f.read().strip().lower() in (\"off\", \"0\"):",
+        "                    _WAQFA = False",
+        "        except Exception:",
+        "            pass",
+        "    return _WAQFA",
+    };
+
+    /**
+     * Per-file scan function (safe_scan, warna scan_media) ka target
+     * v149 se RESTORED W1 wala waiting form hai (owner ka hukm
+     * 2026-11-26: gallery ki asal tartib sirf one-by-one ruk kar
+     * scan karne se perfect rehti hai):
+     *   timeout_sec param ho  → def ka default 5, body me
+     *       subprocess.run(..., timeout=timeout_sec)
+     *   timeout param na ho   → body me subprocess.run(...,
+     *       timeout=5)  (P2/P16 wali surat)
+     * Body pehle se bilkul isi form me ho to ALREADY_OK or koi
+     * change nahi (byte-identical ki guarantee). Fire-and-forget
+     * Popen wala body ab FIX hota hai — pura body canonical
+     * waiting form se badal jata hai; def ka default 5 ke ilawa
+     * ho to 5 kar dete hain. safe_scan_dir / bulk helpers is me
+     * nahi ate — un ke naam alag hain or unhe jaan bujh kar nahi
+     * cherhte.
+     *
+     * v149 revision — canonical form me SCAN WAQFA bhi hai: body
+     * ke aakhir me gallery-copy wale path par time.sleep(0.25),
+     * or file me _waqfa_on() helper (na ho to scan def se pehle
+     * inject). Waiting form ho lekin waqfa na ho to waqfa FIX
+     * hota hai; dono hon to ALREADY_OK.
+     */
+    private static void fixScanTimeout(List<String> lines, Report report,
+                                       boolean[] needImport, boolean[] needTimeImport) {
         int[] range = null;
         String param = null;
+        String fnName = null;
+        boolean hasTimeoutParam = false;
         for (String fn : new String[]{"safe_scan", "scan_media"}) {
             int[] r = findFunction(lines, fn);
             if (r == null) continue;
@@ -361,6 +409,10 @@ public final class BulkProjectFixer {
             if (!first.matches("[A-Za-z_][A-Za-z0-9_]*")) continue;
             range = r;
             param = first;
+            fnName = fn;
+            for (String p : ps.split(",")) {
+                if (p.split("=")[0].trim().equals("timeout_sec")) hasTimeoutParam = true;
+            }
             break;
         }
         if (range == null) return; // scan function hi nahi — NOT_APPLIED
@@ -368,37 +420,71 @@ public final class BulkProjectFixer {
         StringBuilder body = new StringBuilder();
         for (int i = range[1]; i < range[2]; i++) body.append(lines.get(i)).append('\n');
         String b = body.toString();
-        if (b.contains("subprocess.Popen") && b.contains("termux-media-scan")) {
-            report.scanTimeout = Status.ALREADY_OK;
-            return;
-        }
-        if (!b.contains("subprocess.run") || !b.contains("termux-media-scan")) {
+        boolean waiting = b.contains("subprocess.run") && b.contains("termux-media-scan");
+        boolean popen = b.contains("subprocess.Popen") && b.contains("termux-media-scan");
+        if (!waiting && !popen) {
             return; // ajeeb body — hath nahi lagana
         }
 
-        // Def ka default timeout_sec >1 → 1 (P1 ki exact form)
-        Matcher m = SCAN_DEF_TIMEOUT.matcher(lines.get(range[0]));
-        if (m.find() && parseIntSafe(m.group(2), -1) > 1) {
-            lines.set(range[0], m.replaceFirst("$1" + "1"));
+        boolean changed = false;
+
+        // Def ka default timeout_sec: 5 ke ilawa ho to 5 (target form)
+        if (hasTimeoutParam) {
+            Matcher m = SCAN_DEF_TIMEOUT.matcher(lines.get(range[0]));
+            if (m.find() && parseIntSafe(m.group(2), -1) != 5) {
+                lines.set(range[0], m.replaceFirst("$1" + "5"));
+                changed = true;
+            }
         }
 
-        // Body ka asal hissa (akhir ki khali lines mehfooz rakho)
-        int bodyEnd = range[2];
-        while (bodyEnd > range[1] && lines.get(bodyEnd - 1).trim().isEmpty()) bodyEnd--;
+        // Body bilkul target form me hai? (waiting + sahi timeout
+        // istemal + waqfa wali do lines)
+        String waqfaIf = "if _waqfa_on() and \"/TermuxMod/Project \" in str(" + param + "):";
+        boolean bodyExact = (hasTimeoutParam
+            ? (waiting && b.contains("timeout=timeout_sec"))
+            : (waiting && b.contains("timeout=5")))
+            && b.contains(waqfaIf) && b.contains("time.sleep(0.25)");
+        if (!bodyExact) {
+            // Body ka asal hissa (akhir ki khali lines mehfooz rakho)
+            int bodyEnd = range[2];
+            while (bodyEnd > range[1] && lines.get(bodyEnd - 1).trim().isEmpty()) bodyEnd--;
 
-        String defIndent = indentStr(lines.get(range[0]));
-        List<String> newBody = new ArrayList<>();
-        newBody.add(defIndent + "    # Fire-and-forget: scan ko kabhi wait nahi karna — app ke andar run ho to");
-        newBody.add(defIndent + "    # termux-media-scan wapas ane me dair karta hai aur har image par time zaya hota hai.");
-        newBody.add(defIndent + "    # Scan pichay chal kar apna kaam khud pura kar leta hai, tartib launch order se rehti hai.");
-        newBody.add(defIndent + "    try:");
-        newBody.add(defIndent + "        subprocess.Popen([\"termux-media-scan\", " + param
-            + "], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)");
-        newBody.add(defIndent + "    except Exception:");
-        newBody.add(defIndent + "        pass");
-        replaceRange(lines, range[1], bodyEnd, newBody);
-        needImport[0] = true;
-        report.scanTimeout = Status.FIXED;
+            String defIndent = indentStr(lines.get(range[0]));
+            String timeoutArg = hasTimeoutParam ? "timeout_sec" : "5";
+            List<String> newBody = new ArrayList<>();
+            newBody.add(defIndent + "    try:");
+            newBody.add(defIndent + "        subprocess.run([\"termux-media-scan\", " + param
+                + "], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=" + timeoutArg + ")");
+            newBody.add(defIndent + "    except subprocess.TimeoutExpired:");
+            newBody.add(defIndent + "        pass");
+            newBody.add(defIndent + "    except Exception:");
+            newBody.add(defIndent + "        pass");
+            newBody.add(defIndent + "    " + waqfaIf);
+            newBody.add(defIndent + "        time.sleep(0.25)");
+            replaceRange(lines, range[1], bodyEnd, newBody);
+            changed = true;
+        }
+
+        // Waqfa helper file me na ho to scan def se pehle inject
+        // (bundled runners ke bytes jesa hi block + ek khali line)
+        if (!join(lines).contains("def _waqfa_on():")) {
+            int[] r2 = findFunction(lines, fnName);
+            if (r2 != null) {
+                List<String> helper = new ArrayList<>();
+                for (String h : WAQFA_HELPER) helper.add(h);
+                helper.add("");
+                lines.addAll(r2[0], helper);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            needImport[0] = true;
+            needTimeImport[0] = true;
+            report.scanTimeout = Status.FIXED;
+        } else {
+            report.scanTimeout = Status.ALREADY_OK;
+        }
     }
 
     // ------------------------------------------------------------ item 6: gallery sequence
@@ -499,7 +585,22 @@ public final class BulkProjectFixer {
         for (String l : lines) {
             if (SUBPROCESS_IMPORT.matcher(l).find()) return;
         }
-        // Upar wale import block ke akhir me jod do
+        addImportLine(lines, "import subprocess");
+    }
+
+    private static final Pattern TIME_IMPORT = Pattern.compile(
+        "^\\s*import\\s+.*\\btime\\b|^\\s*from\\s+time\\s+import\\b");
+
+    /** Waqfa wala canonical body time.sleep istemal karta hai — import na ho to jod do. */
+    private static void ensureTimeImport(List<String> lines) {
+        for (String l : lines) {
+            if (TIME_IMPORT.matcher(l).find()) return;
+        }
+        addImportLine(lines, "import time");
+    }
+
+    /** Upar wale import block ke akhir me ek import line jod do. */
+    private static void addImportLine(List<String> lines, String stmt) {
         int insertAt = 0;
         for (int i = 0; i < Math.min(lines.size(), 80); i++) {
             String t = lines.get(i).trim();
@@ -509,7 +610,7 @@ public final class BulkProjectFixer {
                 break;
             }
         }
-        lines.add(insertAt, "import subprocess");
+        lines.add(insertAt, stmt);
     }
 
     /** def line + body ka range: [defIdx, bodyStart, bodyEndExclusive). Na mile to null. */
