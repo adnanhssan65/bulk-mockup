@@ -50,6 +50,23 @@ def animated_spinner(text, duration=0.8):
         time.sleep(0)
     sys.stdout.write(f"\r {C4}✔{ENDC} {text} Completed!       \n")
 
+_WAQFA = None
+def _waqfa_on():
+    # Scan waqfa (v149): gallery copy ke scan ke baad chhota sa gap, taake
+    # MediaStore ka record sahi tartib me lage. Marker TermuxMod/.scan_waqfa
+    # me "off" (ya "0") ho to waqfa band; marker na ho ya kuch aur ho to ON.
+    # Marker ek run me sirf ek dafa parha jata hai.
+    global _WAQFA
+    if _WAQFA is None:
+        _WAQFA = True
+        try:
+            with open("/storage/emulated/0/TermuxMod/.scan_waqfa") as _f:
+                if _f.read().strip().lower() in ("off", "0"):
+                    _WAQFA = False
+        except Exception:
+            pass
+    return _WAQFA
+
 def safe_scan(path):
     try:
         subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
@@ -57,6 +74,8 @@ def safe_scan(path):
         pass
     except Exception:
         pass
+    if _waqfa_on() and "/TermuxMod/Project " in str(path):
+        time.sleep(0.25)
 
 
 # --- Gallery copies (TermuxMod) — set ki tartib me ---
