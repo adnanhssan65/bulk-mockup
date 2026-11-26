@@ -155,23 +155,56 @@ public final class BulkRunHelper {
         dispatchView(a, p, pipedCommand, onLaunched);
     }
 
+    /** v151: Projects ka Batch button bhi yahin se — Run wala hi fetch + terminal dispatch. */
+    public static void startBatch(final Activity a, final BulkProjects.ProjectInfo p) {
+        if (a == null || p == null) return;
+        final String cmd = BulkProjects.effectiveCommand(p, "batch");
+        if (cmd == null) return;
+        dispatchView(a, p, cmd, null);
+    }
+
     /**
-     * Asal dispatch — Run, Batch (Projects ka Batch button
-     * pehle hi terminal hand-off par tha) aur Delete teeno ka
-     * engine yahin se terminal session banta hai. View ka
-     * faisla More Settings ki Run View switch se: ON =
-     * terminal samne, OFF (default) = peeche naya session +
+     * Asal dispatch — Run, Batch aur Delete teeno ka engine
+     * yahin se terminal session banta hai. View ka faisla
+     * More Settings ki Run View switch se: ON = terminal
+     * samne, OFF (default) = peeche naya session +
      * display-only showpiece panel.
+     *
+     * v151 (owner ki panchvi report — ASAL defect): execution
+     * se PEHLE drop folders ka sync (BulkDropFolders.syncNow,
+     * background thread par — Dashboard ki tarah). Wajah:
+     * app se move/copy ki hui images pehle TermuxMod/Project
+     * N (shared drop folder) me parti hain, jabke har run ka
+     * input SIRF engine folder ($HOME/mockup_project_N/
+     * N_wallpapers) hai — dono ke darmiyan ka pul yehi sync
+     * hai, or ye sirf app ki screens khulne par chalta tha.
+     * Popup run ko is liye images mil jati theen (owner Run
+     * se pehle Dashboard/Projects dekh chuka hota tha);
+     * terminal par hath se chalaye run ko sync kabhi nahi
+     * milta tha — input khaali, "image hai hi nahi". Ab har
+     * terminal dispatch pehle wahi sync karta hai, phir
+     * command chalti hai — command waisa ka waisa hai
+     * (fullCommand: cd engine folder + MOCKUP_BASE, yani
+     * bilkul wahi input jo staging/fetch bharta hai).
      */
     private static void dispatchView(final Activity a, final BulkProjects.ProjectInfo p,
                                      final String pipedCommand, final Runnable onLaunched) {
-        if (BulkRunSettings.isTerminalView(a)) {
-            launchInTerminal(a, pipedCommand, onLaunched);
-        } else if (executeInTerminalSession(a, pipedCommand)) {
-            showRunViewPanel(a, p, onLaunched);
-        } else if (onLaunched != null) {
-            onLaunched.run();
-        }
+        new Thread(() -> {
+            try { BulkDropFolders.syncNow(a); } catch (Exception ignored) {}
+            a.runOnUiThread(() -> {
+                if (a.isFinishing()) {
+                    if (onLaunched != null) onLaunched.run();
+                    return;
+                }
+                if (BulkRunSettings.isTerminalView(a)) {
+                    launchInTerminal(a, pipedCommand, onLaunched);
+                } else if (executeInTerminalSession(a, pipedCommand)) {
+                    showRunViewPanel(a, p, onLaunched);
+                } else if (onLaunched != null) {
+                    onLaunched.run();
+                }
+            });
+        }).start();
     }
 
     /**

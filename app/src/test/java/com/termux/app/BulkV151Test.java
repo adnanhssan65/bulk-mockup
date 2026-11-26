@@ -118,14 +118,73 @@ public class BulkV151Test {
         String run = window(src, "private static void dispatchRun", 500);
         assertTrue(run.contains("dispatchView(a, p, pipedCommand, onLaunched)"));
         assertFalse(run.contains("runLiveInPopup"));
-        // asal dispatch: view ka faisla, engine hamesha terminal
-        String dispatch = window(src, "private static void dispatchView", 900);
+        // asal dispatch: pehle drop sync, phir view ka faisla —
+        // engine hamesha terminal
+        String dispatch = window(src, "private static void dispatchView", 2600);
+        assertTrue(dispatch.contains("BulkDropFolders.syncNow(a)"));
         assertTrue(dispatch.contains("BulkRunSettings.isTerminalView(a)"));
         assertTrue(dispatch.contains("launchInTerminal(a, pipedCommand, onLaunched)"));
         assertTrue(dispatch.contains("executeInTerminalSession(a, pipedCommand)"));
         assertTrue(dispatch.contains("showRunViewPanel(a, p, onLaunched)"));
+        // sync execution se PEHLE hai (warna terminal run ko
+        // staged images phir nahi milengi — asal defect)
+        int syncIdx = dispatch.indexOf("BulkDropFolders.syncNow");
+        assertTrue(syncIdx >= 0);
+        assertTrue(syncIdx < dispatch.indexOf("launchInTerminal"));
+        assertTrue(syncIdx < dispatch.indexOf("executeInTerminalSession"));
         // dispatch popup engine ko NAHI bulata
         assertFalse(dispatch.contains("runLiveInPopup"));
+    }
+
+    // ------------------------------------------------------------ staged inputs (5th report)
+
+    @Test
+    public void terminalCommandReferencesStagedInputs() {
+        // command ka engine folder = staging/fetch ka input folder
+        String dir = BulkProjects.projectDir(7).getAbsolutePath();
+        assertEquals(dir + "/7_wallpapers",
+            BulkProjects.wallpapersDir(7).getAbsolutePath());
+        String cmd = BulkProjects.fullCommand(7, "w7.py", "process");
+        assertEquals("cd " + dir + " && MOCKUP_BASE=" + dir
+            + " python w7.py process 7", cmd);
+        // terminal alias (w7) bhi bilkul yahi command hai —
+        // app command or hath se type ki hui command ek hi
+        // input folder par kaam karti hain
+        assertEquals("alias w7='" + cmd + "'",
+            BulkProjects.aliasLine("w7", 7, "w7.py", "process"));
+        // batch bhi wahi engine folder
+        assertEquals("cd " + dir + " && MOCKUP_BASE=" + dir
+            + " python w7.py batch 7",
+            BulkProjects.fullCommand(7, "w7.py", "batch"));
+    }
+
+    @Test
+    public void stagingCommitLandsInRunnerInput() throws Exception {
+        // Stage screen ka commit seedha engine input me copy
+        // karta hai — wahi folder jo command istemal karta hai
+        String stage = findSource(
+            "app/src/main/java/com/termux/app/BulkStageActivity.java");
+        assertNotNull(stage);
+        assertTrue(stage.contains(
+            "final File destDir = BulkProjects.wallpapersDir(sel.number);"));
+        // or drop folder se fetch bhi isi input me lata hai
+        String drop = findSource(
+            "app/src/main/java/com/termux/app/BulkDropFolders.java");
+        assertNotNull(drop);
+        assertTrue(drop.contains("File destDir = BulkProjects.wallpapersDir(n);"));
+    }
+
+    @Test
+    public void batchRoutesThroughRunHelper() throws Exception {
+        String projects = findSource(
+            "app/src/main/java/com/termux/app/BulkProjectsActivity.java");
+        assertNotNull(projects);
+        assertTrue(projects.contains("BulkRunHelper.startBatch(this, p)"));
+        String src = findSource(HELPER);
+        assertNotNull(src);
+        String batch = window(src, "public static void startBatch", 500);
+        assertTrue(batch.contains("BulkProjects.effectiveCommand(p, \"batch\")"));
+        assertTrue(batch.contains("dispatchView(a, p, cmd, null);"));
     }
 
     @Test

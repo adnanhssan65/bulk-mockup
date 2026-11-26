@@ -396,10 +396,10 @@ public class BulkProjectsActivity extends Activity {
             }
 
             // v138: Batch bhi snapshot alias par nahi — asal command
-            // (terminal interactive hai, lekin poori command wahan bhi
-            // purani .bashrc aliases se mehfooz hai)
+            // v151: Batch bhi BulkRunHelper se — pehle drop sync,
+            // phir terminal session (Run wala hi rasta/view)
             TextView batch = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.BATCH),
-                v -> runInTerminal(BulkProjects.effectiveCommand(p, "batch")));
+                v -> BulkRunHelper.startBatch(this, p));
             batch.setTextSize(12);
             setEnabledStyle(batch, BulkProjects.effectiveCommand(p, "batch") != null);
             actions.addView(batch, actionLp(first ? 0 : BulkTheme.dp(this, 8)));
