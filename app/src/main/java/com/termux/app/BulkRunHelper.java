@@ -53,10 +53,15 @@ import java.util.Set;
  *    kaam peeche naye terminal session me); More Settings ki
  *    "Run View" switch ON ho to us ki jagah terminal samne
  *    ata hai. Terminal sirf Run tap se — ZIP add par kabhi
- *    nahi. Order Fix ka fresh default bhi OFF. (Popup engine
- *    runLiveInPopup ab sirf Projects ke Delete console —
- *    runCommandInPopup — me baqi hai; startRun se us tak
- *    koi rasta nahi.)
+ *    nahi. Order Fix ka fresh default bhi OFF. Owner ki
+ *    chauthi hidayat par Batch aur Delete bhi terminal
+ *    request par hain (Batch button + Delete ka warehouse
+ *    option pehle hi hand-off par thay; Delete ka piped
+ *    option runCommandInPopup se ata tha — wo bhi ab
+ *    dispatchView se guzarta hai). Popup engine
+ *    (runLiveInPopup / ProcessBuilder) ab KISI user action
+ *    se nahi bulta — code dead ke tor par baqi hai, koi
+ *    caller nahi.
  *
  * Jawab BulkRunSettings.answersFor se bante hain aur
  * BulkRunSettings.buildPipedCommand se command me pipe hote hain,
@@ -108,15 +113,19 @@ public final class BulkRunHelper {
     }
 
     /**
-     * v133: pehle se bani hui piped command console popup me chalao
+     * v133: pehle se bani hui piped command chalane ka rasta
      * (Projects screen ka Delete popup isay istemal karta hai —
-     * printf se digit pipe hota hai, output wahi console me dikhta
-     * hai jahan Run dikhta hai).
+     * printf se digit pipe hota hai).
+     * v151 (owner ki chauthi hidayat): Delete bhi ab asal
+     * terminal request se chalta hai — ye entry bhi dispatchView
+     * se guzarti hai (engine hamesha terminal session; view
+     * wahi jo Run ka hai). Naam purana hai, kaam naya hai:
+     * popup engine isay bhi nahi bulta.
      */
     public static void runCommandInPopup(final Activity a, final BulkProjects.ProjectInfo p,
                                          final String pipedCommand) {
         if (a == null || p == null || pipedCommand == null) return;
-        runLiveInPopup(a, p, pipedCommand, null);
+        dispatchView(a, p, pipedCommand, null);
     }
 
     // ------------------------------------------------------------ v151: run ka rasta
@@ -133,8 +142,9 @@ public final class BulkRunHelper {
      *    NAYE terminal session me chalti hai (activity samne
      *    nahi ati) aur maujooda console popup sirf SHOWPIECE
      *    ban kar dikhta hai (display-only).
-     * Ye dispatch sirf startRun (aur us ke Manual jawab popup)
-     * se bulta hai — koi add/import flow isay NAHI bulata.
+     * Ye dispatch Run (startRun + Manual jawab popup) aur
+     * Delete (runCommandInPopup) se bulta hai — koi add/import
+     * flow isay NAHI bulata.
      * Na sRunActive guard hai, na post-run mirror thread —
      * mirror + registration Dashboard/Add/Projects ke sync
      * wale hook se waise hi hoti rehti hai.
@@ -142,6 +152,19 @@ public final class BulkRunHelper {
     private static void dispatchRun(final Activity a, final BulkProjects.ProjectInfo p,
                                     final String pipedCommand, final Runnable onLaunched) {
         BulkLog.add(BulkStrings.format(a, BulkStrings.LOG_RUN_START, p.name));
+        dispatchView(a, p, pipedCommand, onLaunched);
+    }
+
+    /**
+     * Asal dispatch — Run, Batch (Projects ka Batch button
+     * pehle hi terminal hand-off par tha) aur Delete teeno ka
+     * engine yahin se terminal session banta hai. View ka
+     * faisla More Settings ki Run View switch se: ON =
+     * terminal samne, OFF (default) = peeche naya session +
+     * display-only showpiece panel.
+     */
+    private static void dispatchView(final Activity a, final BulkProjects.ProjectInfo p,
+                                     final String pipedCommand, final Runnable onLaunched) {
         if (BulkRunSettings.isTerminalView(a)) {
             launchInTerminal(a, pipedCommand, onLaunched);
         } else if (executeInTerminalSession(a, pipedCommand)) {

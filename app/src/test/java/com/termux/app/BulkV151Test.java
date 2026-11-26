@@ -26,8 +26,11 @@ import java.nio.file.Files;
  *    Finished/counter).
  *  - Terminal raste sirf BulkRunHelper me hain — koi
  *    add/import flow unhe nahi bulata.
- *  - runCommandInPopup (Projects Delete console) na-badla
- *    hua — wo Run ka rasta hai hi nahi.
+ *  - Batch aur Delete bhi terminal request par hain
+ *    (owner ki chauthi hidayat): Delete ka piped option
+ *    runCommandInPopup se ata hai — wo bhi dispatchView se
+ *    guzarta hai. Popup engine (runLiveInPopup) ab kisi
+ *    user action se nahi bulta — koi caller baqi nahi.
  *  - Order Fix fresh-install default OFF (v151); saved
  *    value ki izzat waisi hi.
  *  - versionCode 151 + footer v151.
@@ -111,7 +114,12 @@ public class BulkV151Test {
     public void dispatchAlwaysExecutesInTerminal() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String dispatch = window(src, "private static void dispatchRun", 900);
+        // dispatchRun sirf log + dispatchView hai
+        String run = window(src, "private static void dispatchRun", 500);
+        assertTrue(run.contains("dispatchView(a, p, pipedCommand, onLaunched)"));
+        assertFalse(run.contains("runLiveInPopup"));
+        // asal dispatch: view ka faisla, engine hamesha terminal
+        String dispatch = window(src, "private static void dispatchView", 900);
         assertTrue(dispatch.contains("BulkRunSettings.isTerminalView(a)"));
         assertTrue(dispatch.contains("launchInTerminal(a, pipedCommand, onLaunched)"));
         assertTrue(dispatch.contains("executeInTerminalSession(a, pipedCommand)"));
@@ -208,12 +216,15 @@ public class BulkV151Test {
     }
 
     @Test
-    public void deleteConsoleUntouched() throws Exception {
-        // runCommandInPopup (Projects Delete) waisa ka waisa —
-        // wo Run ka rasta hai hi nahi
+    public void deleteRoutesViaTerminalToo() throws Exception {
+        // Delete (runCommandInPopup) bhi dispatchView se —
+        // popup engine ka ab KOI caller nahi (dead code)
         String src = findSource(HELPER);
         assertNotNull(src);
-        assertTrue(src.contains("runLiveInPopup(a, p, pipedCommand, null);"));
+        String del = window(src, "public static void runCommandInPopup", 1200);
+        assertTrue(del.contains("dispatchView(a, p, pipedCommand, null);"));
+        assertFalse(del.contains("runLiveInPopup"));
+        assertFalse(src.contains("runLiveInPopup(a, p"));
     }
 
     // ------------------------------------------------------------ option: More Settings only
