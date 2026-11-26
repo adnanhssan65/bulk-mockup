@@ -80,8 +80,11 @@ public class BulkV151Test {
 
     @Test
     public void terminalViewDefaultIsPopup() {
-        // fresh install (stored null) → popup view; saved true → terminal view
-        assertFalse(BulkRunSettings.resolveTerminalView(null));
+        // v152 (owner ka aakhri faisla 2026-11-26 23:27):
+        // fresh install (stored null) → TERMINAL view (default
+        // ulta gaya); owner ki saved value ki izzat — saved
+        // false → popup view, saved true → terminal view.
+        assertTrue(BulkRunSettings.resolveTerminalView(null));
         assertTrue(BulkRunSettings.resolveTerminalView(Boolean.TRUE));
         assertFalse(BulkRunSettings.resolveTerminalView(Boolean.FALSE));
     }
@@ -191,11 +194,18 @@ public class BulkV151Test {
     public void terminalViewLaunchUsesHandoffAndStaysLean() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String launch = window(src, "private static void launchInTerminal", 900);
-        // pre-v137 wala hand-off: TermuxActivity + EXTRA_RUN_COMMAND
-        assertTrue(launch.contains("new Intent(a, TermuxActivity.class)"));
-        assertTrue(launch.contains("BulkDashboardActivity.EXTRA_RUN_COMMAND"));
-        assertTrue(launch.contains("Intent.FLAG_ACTIVITY_NEW_TASK"));
+        String launch = window(src, "private static void launchInTerminal", 2400);
+        // v152: terminal view ab nishan-zada asal session +
+        // OPEN_ACTIVITY hai (auto-return isi nishan se hota
+        // hai) — typed EXTRA_RUN_COMMAND hand-off is raste se
+        // gaya (wo ab sirf drawer ke hath-wale commands ka hai)
+        assertTrue(launch.contains("ACTION_SERVICE_EXECUTE"));
+        assertTrue(launch.contains("EXTRA_SHELL_NAME"));
+        assertTrue(launch.contains("runSessionName(System.currentTimeMillis())"));
+        assertTrue(launch.contains(
+            "VALUE_EXTRA_SESSION_ACTION_SWITCH_TO_NEW_SESSION_AND_OPEN_ACTIVITY"));
+        assertTrue(launch.contains("a.startService(exec)"));
+        assertFalse(launch.contains("EXTRA_RUN_COMMAND"));
         // terminal raste me: na mirror thread, na guard, na process spawn
         assertFalse(launch.contains("syncMirrorForProject"));
         assertFalse(launch.contains("sRunActive"));
@@ -220,7 +230,7 @@ public class BulkV151Test {
     public void showpiecePanelIsDisplayOnly() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String panel = window(src, "private static void showRunViewPanel", 3600);
+        String panel = window(src, "private static void showRunViewPanel", 5600);
         // maujooda console panel hi reuse hota hai
         assertTrue(panel.contains("buildConsolePanel(a, p.name, dialog"));
         assertTrue(panel.contains("BulkStrings.RUNNING_IN_TERMINAL"));

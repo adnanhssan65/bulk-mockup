@@ -196,6 +196,15 @@ public final class BulkStrings {
     public static final String RUN_VIEW = "run_view";
     public static final String RUN_VIEW_SUB = "run_view_sub";
     public static final String RUNNING_IN_TERMINAL = "running_in_terminal";
+    public static final String SHOWPIECE_EDIT = "showpiece_edit";
+    public static final String SHOWPIECE_EDIT_SUB = "showpiece_edit_sub";
+    public static final String SHOWPIECE_NAME_LABEL = "showpiece_name_label";
+    public static final String SHOWPIECE_LOADING_LABEL = "showpiece_loading_label";
+    public static final String SHOWPIECE_DONE_LABEL = "showpiece_done_label";
+    public static final String SEQ_FIX = "seq_fix";
+    public static final String SEQ_FIX_SUB = "seq_fix_sub";
+    public static final String ALAG_SECOND = "alag_second";
+    public static final String ALAG_SECOND_SUB = "alag_second_sub";
     public static final String ANSWER_MODE = "answer_mode";
     public static final String AUTO_OPTION = "auto_option";
     public static final String MANUAL_OPTION = "manual_option";
@@ -632,6 +641,18 @@ public final class BulkStrings {
         put(RUN_VIEW_SUB, "When on, the terminal opens — when off, the popup shows; the terminal does the work either way",
             "On ho to terminal khulta hai — off ho to popup dikhta hai; kaam dono haal me terminal hi karta hai");
         put(RUNNING_IN_TERMINAL, "Running in the terminal", "Run terminal me ho raha hai");
+        put(SHOWPIECE_EDIT, "Showpiece Edit", "Showpiece Edit");
+        put(SHOWPIECE_EDIT_SUB, "Change the name and lines shown on the popup showpiece",
+            "Popup showpiece par dikhne wala naam or lines badlo");
+        put(SHOWPIECE_NAME_LABEL, "Name on the showpiece", "Showpiece par naam");
+        put(SHOWPIECE_LOADING_LABEL, "Loading line", "Loading wali line");
+        put(SHOWPIECE_DONE_LABEL, "Done line", "Done wali line");
+        put(SEQ_FIX, "Sequence Fix", "Sequence Fix");
+        put(SEQ_FIX_SUB, "Write all three dates in production order and self-check — fixes Gallery/TikTok order without deleting any row",
+            "Teeno dates production tartib me likho or khud check karo — koi row delete kiye baghair Gallery/TikTok tartib durust");
+        put(ALAG_SECOND, "Har File Alag Second", "Har File Alag Second");
+        put(ALAG_SECOND_SUB, "Space registrations 1 second apart so no two files share a second — order can never tie",
+            "Har registration 1 second ke waqfe se — do files ek second me kabhi nahi, tartib kabhi tie nahi hoti");
         put(ANSWER_MODE, "Answer Mode", "Jawab Ka Tareeqa");
         put(AUTO_OPTION, "Auto — Saved Answers", "Auto — Save Shuda Jawab");
         put(MANUAL_OPTION, "Manual — Ask Every Time", "Manual — Har Bar Poochho");

@@ -212,20 +212,60 @@ public final class BulkRunHelper {
     }
 
     /**
-     * Terminal view: pre-v137 wala launch rasta — wahi
-     * mechanism jo aaj bhi Batch/Delete (BulkProjectsActivity
-     * .runInTerminal) istemal karta hai: TermuxActivity ko
-     * EXTRA_RUN_COMMAND ke sath kholo; wo command ko session
-     * me type kar deti hai (ProjectsLauncher.runCommand).
+     * v152: app-launched run sessions ka naam — isi nishan se
+     * TermuxTerminalSessionActivityClient pehchanta hai ke ye
+     * session app ke Run/Batch/Delete se aya hai (auto-return
+     * sirf inhi par lagu hai; hath se khole gaye sessions ka
+     * naam hamesha mukhtalif hota hai, unhe kabhi hath nahi
+     * lagta).
+     */
+    public static final String RUN_SESSION_NAME_PREFIX = "BulkRun-";
+
+    /** Is run ke liye khaas session naam (pure). */
+    public static String runSessionName(long nowMs) {
+        return RUN_SESSION_NAME_PREFIX + nowMs;
+    }
+
+    /** Ye session app-launched run ka hai? (pure) */
+    public static boolean isRunSessionName(String name) {
+        return name != null && name.startsWith(RUN_SESSION_NAME_PREFIX);
+    }
+
+    /**
+     * Terminal view (v152 — owner ka aakhri faisla: sab kaam
+     * terminal par hi): command ek NAYE, nishan-zada asal
+     * terminal session me chalti hai or TermuxActivity KHUD
+     * samne ati hai (session action SWITCH_TO_NEW_SESSION_AND
+     * _OPEN_ACTIVITY — service activity kholti hai, NEW_TASK
+     * flag ke sath; Bulk wali screen apni task me neeche
+     * mehfooz rehti hai). Session ka process bash -c khud hai
+     * — koi type karna, koi Enter nahi; view attach hote hi
+     * (or TermuxService ke v152 initialize par) process chalta
+     * hai, bilkul hath se chalaye terminal run ki speed par.
+     * Run khatam (exit 0) hone par activity client wahi
+     * session pehchan kar activity band kar deta hai —
+     * owner khud-ba-khud usi Bulk screen par wapas.
+     * (pre-v137 wala typed EXTRA_RUN_COMMAND rasta ab sirf
+     * drawer/BulkProjectsActivity ke hath-wale commands ke
+     * liye rehta hai — wahan koi auto-return nahi.)
      */
     private static void launchInTerminal(final Activity a, final String command,
                                          final Runnable onLaunched) {
         if (command == null) return;
         try {
-            Intent intent = new Intent(a, TermuxActivity.class);
-            intent.putExtra(BulkDashboardActivity.EXTRA_RUN_COMMAND, command);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            a.startActivity(intent);
+            Intent exec = new Intent(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.ACTION_SERVICE_EXECUTE,
+                Uri.fromFile(new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin/bash")));
+            exec.setClass(a, TermuxService.class);
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_ARGUMENTS,
+                new String[]{"-c", command});
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_WORKDIR,
+                TermuxConstants.TERMUX_HOME_DIR_PATH);
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_SHELL_NAME,
+                runSessionName(System.currentTimeMillis()));
+            exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_SESSION_ACTION,
+                String.valueOf(TermuxConstants.TERMUX_APP.TERMUX_SERVICE
+                    .VALUE_EXTRA_SESSION_ACTION_SWITCH_TO_NEW_SESSION_AND_OPEN_ACTIVITY));
+            a.startService(exec);
             if (onLaunched != null) onLaunched.run();
         } catch (Exception e) {
             BulkTheme.showToast(a, "Terminal nahi khul saka.");
@@ -313,7 +353,23 @@ public final class BulkRunHelper {
         final Dialog dialog = new Dialog(a);
         final ConsoleViews cv = buildConsolePanel(a, p.name, dialog,
             () -> dialog.dismiss(), () -> {});
-        cv.status.setText(BulkStrings.t(a, BulkStrings.RUNNING_IN_TERMINAL));
+        // v152 showpiece (owner: "Back showpiece ho — loading
+        // design, mera name, wo sb kuch"): design wali brand
+        // line chrome ke neeche — naam More Settings ke
+        // Showpiece Edit se badal sakta hai (default design
+        // wali line hi hai). Loading/Done lines bhi wahi se.
+        TextView brand = new TextView(a);
+        brand.setText(BulkRunSettings.showpieceName(a));
+        brand.setTextSize(11.5f);
+        brand.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        brand.setTextColor(BulkTheme.textMuted(a));
+        LinearLayout.LayoutParams brandLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        brandLp.bottomMargin = BulkTheme.dp(a, 8);
+        brand.setLayoutParams(brandLp);
+        cv.panel.addView(brand, 2);
+        cv.status.setText(BulkRunSettings.showpieceLoading(a,
+            BulkStrings.t(a, BulkStrings.RUNNING_IN_TERMINAL)));
         // Background/Cancel wali row is panel se POORI hata do —
         // display-only panel ke pas koi process handle hai hi
         // nahi, Cancel yahan jhoot hota. Text area (scroll) v152
@@ -365,7 +421,8 @@ public final class BulkRunHelper {
             if (!watchDone[0] && panelWatchTick(watchSnapshot,
                     watchCandidate, watchSeenRunning, pipedCommand)) {
                 watchDone[0] = true;
-                cv.status.setText(BulkStrings.t(a, BulkStrings.RUN_DONE));
+                cv.status.setText(BulkRunSettings.showpieceDone(a,
+                    BulkStrings.t(a, BulkStrings.RUN_DONE)));
             }
             // v152 snapshot: candidate milte hi har tick
             // session ki ASAL screen ka taaza tail text area

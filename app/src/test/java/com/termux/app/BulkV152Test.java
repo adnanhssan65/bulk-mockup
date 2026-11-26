@@ -10,6 +10,7 @@ import org.junit.Test;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
 
 /**
  * Termux Mod v152 test (owner-approved 2026-11-26 — SIRF ek
@@ -60,6 +61,12 @@ public class BulkV152Test {
 
     private static final String SERVICE =
         "app/src/main/java/com/termux/app/TermuxService.java";
+    private static final String CLIENT =
+        "app/src/main/java/com/termux/app/terminal/TermuxTerminalSessionActivityClient.java";
+    private static final String REGISTER =
+        "app/src/main/java/com/termux/app/BulkMediaRegister.java";
+    private static final String MORE_SETTINGS =
+        "app/src/main/java/com/termux/app/BulkMoreSettingsActivity.java";
     private static final String HELPER =
         "app/src/main/java/com/termux/app/BulkRunHelper.java";
     private static final String LAUNCHER =
@@ -189,7 +196,7 @@ public class BulkV152Test {
         assertTrue(src.contains("sm.mTermuxSessions"));
         assertTrue(src.contains("panelWatchTick(watchSnapshot,"));
         // Done par status RUN_DONE hota hai or poster rukta hai
-        String panel = window(src, "private static void showRunViewPanel", 4200);
+        String panel = window(src, "private static void showRunViewPanel", 5400);
         assertTrue(panel.contains("BulkStrings.RUN_DONE"));
         assertTrue(panel.contains("watchSnapshot"));
         // panel ab bhi display-only hai: koi process nahi
@@ -247,13 +254,170 @@ public class BulkV152Test {
         assertTrue(src.contains("cv.out.setText(snap)"));
         // text area panel me REHTA hai (snapshot ke liye) —
         // scroll ab remove NAHI hota
-        String panel = window(src, "private static void showRunViewPanel", 4600);
+        String panel = window(src, "private static void showRunViewPanel", 5800);
         assertFalse(panel.contains("removeView(cv.scroll)"));
         // Cancel/Background wali row ab bhi hati hui hai
         assertTrue(panel.contains("removeView(cv.runActions)"));
     }
 
     // ------------------------------------------------------------ version
+
+    // ------------------------------------------------------------ auto-return
+
+    @Test
+    public void runSessionNames() {
+        assertEquals("BulkRun-123", BulkRunHelper.runSessionName(123L));
+        assertTrue(BulkRunHelper.isRunSessionName("BulkRun-123"));
+        assertFalse(BulkRunHelper.isRunSessionName("bash"));
+        assertFalse(BulkRunHelper.isRunSessionName(null));
+        assertFalse(BulkRunHelper.isRunSessionName("BulkRun"));
+    }
+
+    @Test
+    public void autoReturnWiring() throws Exception {
+        String src = findSource(CLIENT);
+        assertNotNull(src);
+        String finish = window(src, "public void onSessionFinished", 4200);
+        // auto-return: sirf nishan-zada app-run session, exit 0,
+        // activity samne or wahi session screen par — phir
+        // session hata kar activity band (owner wapas Bulk par)
+        assertTrue(finish.contains("BulkRunHelper.isRunSessionName(finishedSession.mSessionName)"));
+        assertTrue(finish.contains("finishedSession.getExitStatus() == 0"));
+        assertTrue(finish.contains("mActivity.isVisible()"));
+        assertTrue(finish.contains("finishedSession == mActivity.getCurrentSession()"));
+        assertTrue(finish.contains("removeFinishedSession(finishedSession)"));
+        assertTrue(finish.contains("mActivity.finishActivityIfNotFinishing()"));
+    }
+
+    // ------------------------------------------------------------ sequence fix
+
+    @Test
+    public void sequenceTogglesDefaultOff() {
+        assertFalse(BulkMediaRegister.resolveSequenceFix(null));
+        assertTrue(BulkMediaRegister.resolveSequenceFix(Boolean.TRUE));
+        assertFalse(BulkMediaRegister.resolveSequenceFix(Boolean.FALSE));
+        assertFalse(BulkMediaRegister.resolveAlagSecond(null));
+        assertTrue(BulkMediaRegister.resolveAlagSecond(Boolean.TRUE));
+        assertFalse(BulkMediaRegister.resolveAlagSecond(Boolean.FALSE));
+        assertFalse(BulkMediaRegister.anyPassEnabled(false, false, false));
+        assertTrue(BulkMediaRegister.anyPassEnabled(true, false, false));
+        assertTrue(BulkMediaRegister.anyPassEnabled(false, true, false));
+        assertTrue(BulkMediaRegister.anyPassEnabled(false, false, true));
+    }
+
+    @Test
+    public void sequenceLadderIsStrictInAllThreeFields() {
+        long[][] ladder = BulkMediaRegister.sequenceLadder(4, 10_000L);
+        assertEquals(4, ladder.length);
+        // aakhri file = nowSec; har field sakht barhta hua
+        assertEquals(10_000L, ladder[3][0]);
+        for (int i = 1; i < ladder.length; i++) {
+            assertTrue(ladder[i][0] > ladder[i - 1][0]);
+            assertTrue(ladder[i][1] > ladder[i - 1][1]);
+            assertTrue(ladder[i][2] > ladder[i - 1][2]);
+        }
+        // DATE_ADDED/DATE_MODIFIED seconds me, DATE_TAKEN ms me
+        assertEquals(ladder[2][0], ladder[2][1]);
+        assertEquals(ladder[2][0] * 1000L, ladder[2][2]);
+        assertEquals(0, BulkMediaRegister.sequenceLadder(0, 5L).length);
+    }
+
+    @Test
+    public void sequenceMismatchesPure() {
+        java.util.List<String> order = Arrays.asList("/a/1.jpg", "/a/2.jpg");
+        long[][] ladder = BulkMediaRegister.sequenceLadder(2, 5000L);
+        java.util.Map<String, long[]> assigned = new java.util.HashMap<>();
+        assigned.put("/a/1.jpg", ladder[0]);
+        assigned.put("/a/2.jpg", ladder[1]);
+        java.util.Map<String, BulkMediaRegister.RowFull> rows =
+            new java.util.HashMap<>();
+        rows.put("/a/1.jpg", new BulkMediaRegister.RowFull(
+            "/a/1.jpg", 11L, ladder[0][0], ladder[0][1], ladder[0][2]));
+        rows.put("/a/2.jpg", new BulkMediaRegister.RowFull(
+            "/a/2.jpg", 12L, ladder[1][0], ladder[1][1], ladder[1][2]));
+        // sab durust → koi mismatch nahi
+        assertTrue(BulkMediaRegister.sequenceMismatches(
+            order, rows, assigned, true).isEmpty());
+        // DATE_TAKEN ghalat → sirf checkTaken par pakra jaye
+        rows.put("/a/2.jpg", new BulkMediaRegister.RowFull(
+            "/a/2.jpg", 12L, ladder[1][0], ladder[1][1], 999L));
+        assertEquals(Arrays.asList("/a/2.jpg"), BulkMediaRegister
+            .sequenceMismatches(order, rows, assigned, true));
+        assertTrue(BulkMediaRegister.sequenceMismatches(
+            order, rows, assigned, false).isEmpty());
+        // row gayab → mismatch
+        rows.remove("/a/1.jpg");
+        assertEquals(Arrays.asList("/a/1.jpg"), BulkMediaRegister
+            .sequenceMismatches(order, rows, assigned, false));
+        // MIME pehchan
+        assertEquals("image/png", BulkMediaRegister.mimeTypeFor("/a/2.PNG"));
+        assertEquals("video/mp4", BulkMediaRegister.mimeTypeFor("/a/3.mp4"));
+        assertEquals("image/jpeg", BulkMediaRegister.mimeTypeFor("/a/4.jpg"));
+    }
+
+    @Test
+    public void sequencePassWiringIsDeleteFree() throws Exception {
+        String src = findSource(REGISTER);
+        assertNotNull(src);
+        // gate: teeno switches
+        assertTrue(src.contains(
+            "if (!isOrderFixEnabled(ctx) && !isSequenceFixEnabled(ctx)"));
+        // Alag Second legacy raste me ladder band karta hai
+        assertTrue(src.contains("if (isAlagSecondEnabled(ctx)) fastPath = false;"));
+        // Sequence pass ka apna hissa: insert + update +
+        // applyBatch hai, DELETE bilkul nahi
+        int from = src.indexOf("private static int sequenceFixPass");
+        int to = src.indexOf("private static boolean deleteRows");
+        assertTrue(from >= 0 && to > from);
+        String seq = src.substring(from, to);
+        assertTrue(seq.contains("applyBatch"));
+        assertTrue(seq.contains("newInsert"));
+        assertTrue(seq.contains("newUpdate"));
+        assertFalse(seq.contains(".delete("));
+        assertTrue(seq.contains("sequenceMismatches"));
+    }
+
+    // ------------------------------------------------------------ showpiece
+
+    @Test
+    public void showpieceSettingsPure() {
+        assertEquals("Developer: Mehar Adnan", BulkRunSettings.SHOWPIECE_NAME_DEFAULT);
+        assertEquals("X", BulkRunSettings.resolveShowpieceText("X", "D"));
+        assertEquals("D", BulkRunSettings.resolveShowpieceText(null, "D"));
+        assertEquals("D", BulkRunSettings.resolveShowpieceText("   ", "D"));
+        assertEquals("seq_fix", BulkStrings.SEQ_FIX);
+        assertEquals("alag_second", BulkStrings.ALAG_SECOND);
+        assertEquals("showpiece_edit", BulkStrings.SHOWPIECE_EDIT);
+    }
+
+    @Test
+    public void moreSettingsFamilyComplete() throws Exception {
+        String src = findSource(MORE_SETTINGS);
+        assertNotNull(src);
+        // chaar nayi/family rows body me lagti hain
+        assertTrue(src.contains("body.addView(runViewRow());"));
+        assertTrue(src.contains("body.addView(showpieceEditRow());"));
+        assertTrue(src.contains("body.addView(sequenceFixRow());"));
+        assertTrue(src.contains("body.addView(alagSecondRow());"));
+        // editor teen fields save karta hai
+        assertTrue(src.contains("BulkRunSettings.setShowpieceName"));
+        assertTrue(src.contains("BulkRunSettings.setShowpieceLoading"));
+        assertTrue(src.contains("BulkRunSettings.setShowpieceDone"));
+        // switches apni apni settings par
+        assertTrue(src.contains("BulkMediaRegister.setSequenceFixEnabled"));
+        assertTrue(src.contains("BulkMediaRegister.setAlagSecondEnabled"));
+    }
+
+    @Test
+    public void panelShowpieceWiring() throws Exception {
+        String src = findSource(HELPER);
+        assertNotNull(src);
+        String panel = window(src, "private static void showRunViewPanel", 5600);
+        // brand line (naam) + editable loading/done lines
+        assertTrue(panel.contains("BulkRunSettings.showpieceName(a)"));
+        assertTrue(panel.contains("BulkRunSettings.showpieceLoading(a,"));
+        assertTrue(panel.contains("BulkRunSettings.showpieceDone(a,"));
+    }
 
     @Test
     public void versionIs152() throws Exception {

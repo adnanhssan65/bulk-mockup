@@ -20,6 +20,7 @@ import com.termux.R;
 import com.termux.shared.interact.ShareUtils;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
+import com.termux.app.BulkRunHelper;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.termux.shared.termux.TermuxConstants;
@@ -156,6 +157,32 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             isPluginExecutionCommandWithPendingResult = termuxSession.getExecutionCommand().isPluginExecutionCommandWithPendingResult();
             if (isPluginExecutionCommandWithPendingResult)
                 Logger.logVerbose(LOG_TAG, "The \"" + finishedSession.mSessionName + "\" session will be force finished automatically since result in pending.");
+        }
+
+        // v152 AUTO-RETURN (Bulk Mod — owner 2026-11-26 23:27:
+        // "kam khatam hoty he khud he us page pr back ah jaw"):
+        // sirf APP-LAUNCHED run sessions (BulkRunHelper ke
+        // nishan-zada naam wale) ke liye — hath se khola gaya
+        // terminal kabhi auto-band nahi hota. Shartein sakht
+        // hain, sab sachche signals par: session asal me
+        // khatam ho chuka hai (ye callback hi us ka saboot
+        // hai), exit safai se 0 hai (ghalti wali run par
+        // terminal khula rehta hai taake owner parh sake),
+        // activity abhi samne hai or wahi session screen par
+        // hai (owner darmiyan me kahin or chala gaya ho to
+        // kuch nahi karte). Session pehle hi mar chuka hai —
+        // activity band karne se koi chalti cheez nahi marti;
+        // baqi sessions service ke pas mehfooz rehte hain.
+        // Band hote hi owner apni usi Bulk screen par wapas
+        // (wo apni task me neeche mehfooz thi).
+        if (!isPluginExecutionCommandWithPendingResult
+            && BulkRunHelper.isRunSessionName(finishedSession.mSessionName)
+            && finishedSession.getExitStatus() == 0
+            && mActivity.isVisible()
+            && finishedSession == mActivity.getCurrentSession()) {
+            removeFinishedSession(finishedSession);
+            mActivity.finishActivityIfNotFinishing();
+            return;
         }
 
         if (mActivity.isVisible() && finishedSession != mActivity.getCurrentSession()) {

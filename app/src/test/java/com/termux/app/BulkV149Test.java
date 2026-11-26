@@ -325,7 +325,10 @@ public class BulkV149Test {
         assertNotNull(src);
         assertTrue(src.contains("order fix ho gaya"));
         assertTrue(src.contains("seeded149_"));
-        assertTrue(src.contains("if (!isOrderFixEnabled(ctx)) return 0;"));
+        // v152: gate ab teeno switches (Order Fix / Sequence
+        // Fix / Har File Alag Second) ka hai — koi ek ON ho
+        // tab hi pass chalta hai
+        assertTrue(src.contains("if (!isOrderFixEnabled(ctx) && !isSequenceFixEnabled(ctx)"));
         assertTrue(src.contains("MediaStore.Files.getContentUri"));
         assertTrue(src.contains("ContentResolver"));
         assertTrue(src.contains("KEY_ENABLED = \"order_fix_enabled\""));

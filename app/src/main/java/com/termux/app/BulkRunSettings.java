@@ -230,17 +230,23 @@ public final class BulkRunSettings {
      * v151 (owner 2026-11-26): Run ka kaam HAR haal me asal
      * terminal session karta hai — ye setting sirf VIEW chunti
      * hai: Run dabane par kya dikhe. ON = terminal samne aye;
-     * OFF (default) = maujooda console popup sirf showpiece ke
-     * tor par dikhe (display-only — kaam peeche terminal
-     * session hi karta hai). Faisla pure hai: stored value na
-     * ho (fresh install) to POPUP view; stored true ho tab hi
-     * terminal view.
+     * OFF = console popup showpiece ke tor par dikhe
+     * (display-only — kaam peeche terminal session hi karta
+     * hai).
+     *
+     * v152 (owner ka aakhri faisla 2026-11-26 23:27 — "wesy he
+     * hum terminal pr he sb kr lety hy, jhanhat khatam kro"):
+     * DEFAULT AB TERMINAL HAI. Faisla pure hai: stored value
+     * na ho (fresh install) to TERMINAL view; owner ne khud
+     * Popup chuna ho (stored false) to usi ki izzat — popup
+     * view bhi v152 me mukammal durust hai (khud chalta run,
+     * asal screen snapshot, sachcha Done).
      */
     public static boolean resolveTerminalView(Boolean stored) {
-        return stored != null && stored;
+        return stored == null || stored;
     }
 
-    /** Run par terminal samne aye? Default NAHI — popup view (v151). */
+    /** Run par terminal samne aye? Default HAAN — terminal view (v152). */
     public static boolean isTerminalView(Context c) {
         SharedPreferences p = prefs(c);
         Boolean stored = p.contains(KEY_RUN_VIEW_TERMINAL)
@@ -251,4 +257,74 @@ public final class BulkRunSettings {
     public static void setTerminalView(Context c, boolean terminal) {
         prefs(c).edit().putBoolean(KEY_RUN_VIEW_TERMINAL, terminal).apply();
     }
+
+    // ------------------------------------------------------------ v152: showpiece edit
+
+    private static final String KEY_SHOWPIECE_NAME = "showpiece_name";
+    private static final String KEY_SHOWPIECE_LOADING = "showpiece_loading";
+    private static final String KEY_SHOWPIECE_DONE = "showpiece_done";
+
+    /** Showpiece par design se chhapa naam — app ki apni branding line. */
+    public static final String SHOWPIECE_NAME_DEFAULT = "Developer: Mehar Adnan";
+
+    /**
+     * Showpiece ke editable text ka faisla (pure): owner ki
+     * saved value (khali/whitespace na ho) hi chalegi, warna
+     * design wali default. Editor me field khaali karke save
+     * karna = default wapas.
+     */
+    public static String resolveShowpieceText(String stored, String fallback) {
+        if (stored != null && !stored.trim().isEmpty()) return stored;
+        return fallback;
+    }
+
+    public static String showpieceName(Context c) {
+        return resolveShowpieceText(
+            prefs(c).getString(KEY_SHOWPIECE_NAME, null), SHOWPIECE_NAME_DEFAULT);
+    }
+
+    /** Loading (Running) wali line — fallback caller BulkStrings se deta hai. */
+    public static String showpieceLoading(Context c, String fallback) {
+        return resolveShowpieceText(
+            prefs(c).getString(KEY_SHOWPIECE_LOADING, null), fallback);
+    }
+
+    /** Done wali line — fallback caller BulkStrings se deta hai. */
+    public static String showpieceDone(Context c, String fallback) {
+        return resolveShowpieceText(
+            prefs(c).getString(KEY_SHOWPIECE_DONE, null), fallback);
+    }
+
+    /** Editor ki raw saved value (na ho to khaali string) — field bharne ke liye. */
+    public static String showpieceStored(Context c, String which) {
+        String key = KEY_SHOWPIECE_NAME.equals(which) ? KEY_SHOWPIECE_NAME
+            : KEY_SHOWPIECE_LOADING.equals(which) ? KEY_SHOWPIECE_LOADING
+            : KEY_SHOWPIECE_DONE;
+        String v = prefs(c).getString(key, null);
+        return v != null ? v : "";
+    }
+
+    public static void setShowpieceName(Context c, String v) {
+        setShowpiece(c, KEY_SHOWPIECE_NAME, v);
+    }
+
+    public static void setShowpieceLoading(Context c, String v) {
+        setShowpiece(c, KEY_SHOWPIECE_LOADING, v);
+    }
+
+    public static void setShowpieceDone(Context c, String v) {
+        setShowpiece(c, KEY_SHOWPIECE_DONE, v);
+    }
+
+    private static void setShowpiece(Context c, String key, String v) {
+        SharedPreferences.Editor e = prefs(c).edit();
+        if (v == null || v.trim().isEmpty()) e.remove(key);
+        else e.putString(key, v.trim());
+        e.apply();
+    }
+
+    /** Editor ke liye keys (More Settings isi se fields bharta hai). */
+    public static final String SHOWPIECE_KEY_NAME = KEY_SHOWPIECE_NAME;
+    public static final String SHOWPIECE_KEY_LOADING = KEY_SHOWPIECE_LOADING;
+    public static final String SHOWPIECE_KEY_DONE = KEY_SHOWPIECE_DONE;
 }
