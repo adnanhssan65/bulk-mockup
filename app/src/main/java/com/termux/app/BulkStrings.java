@@ -516,9 +516,13 @@ public final class BulkStrings {
         put(ALLOW_ALL, "✔  ALLOW ALL", "✔  SAB EK SATH ALLOW KARO");
         put(ALLOW, "Allow", "Allow Karo");
         put(OPEN, "Open", "Kholo");
-        put(PERM_API, "Termux:API App", "Termux:API App");
-        put(PERM_API_INSTALL, "Install the Termux:API App — without it, scans do not work",
-            "Termux:API App install karo — baghair is ke scan nahi hota");
+        // v150: scan built-in hai (BulkApiServer + wrapper files) —
+        // Termux:API app ki zaroorat nahi; purana install wala
+        // dawa ghalat tha. PERM_API_INSTALL ab sirf repair ki
+        // hidayat hai (kharab files app khud theek karti hai).
+        put(PERM_API, "Media Scan (Built-in)", "Media Scan (App ke andar)");
+        put(PERM_API_INSTALL, "Built into the app — reopen Termux Mod and the scan files repair themselves",
+            "Ye app ke andar hi hai — Termux Mod dobara kholo, scan files khud theek ho jayengi");
         put(PERM_API_DONE, "Done", "Done");
         put(PERM_STORAGE_HINT, "To read and save your wallpapers.",
             "Wallpapers parhne/likhne ke liye.");

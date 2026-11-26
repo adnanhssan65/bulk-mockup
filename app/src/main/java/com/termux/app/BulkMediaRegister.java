@@ -1,9 +1,13 @@
 package com.termux.app;
 
+import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
+import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.provider.MediaStore;
@@ -11,6 +15,7 @@ import android.provider.MediaStore;
 import com.termux.shared.logger.Logger;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,6 +26,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -63,6 +69,30 @@ import java.util.concurrent.atomic.AtomicReference;
  * chained scanFile se record numeric tartib me dobara lagta
  * hai; peeche wali sahi files ko hath nahi lagta.
  *
+ * v150 — teen mazid durustgiyan (owner-approved 2026-11-26):
+ *  1. CHUNKING: DATA IN (...) wali query/delete ab 300 paths
+ *     ke tukron me hoti hai (purani SQLite 999-bind had —
+ *     dost ke 500 images = 1000 files par purana pass chup
+ *     chap abort ho jata tha). Chunk natije Java me
+ *     (DATE_ADDED, _ID) tartib se merge hote hain.
+ *  2. TIE = BREAK: tartib check me do SATH-WALI files ka
+ *     DATE_ADDED second barabar ho to wo bhi break hai —
+ *     sirf second-resolution wale pickers (TikTok) unhi ko
+ *     ghumate hain, jabke _ID tiebreak par hamara check
+ *     unhe "sahi" keh deta tha.
+ *  3. DATE_ADDED LADDER: ek dafa ki capability probe
+ *     (scan → update → read-back → delete-test, natija
+ *     cache) pass ho to re-register shuda files ki
+ *     DATE_ADDED ContentResolver se 1-second-step ladder
+ *     (aakhri file = abhi ka second) se set ho jati hai —
+ *     koi intezar nahi. Probe fail ho to purana chained
+ *     scanFile, lekin har registration agle second me
+ *     girne ki spacing ke sath. Sab kuch usi Order Fix
+ *     switch ke neeche hai.
+ *  Pass shuru honay se pehle BulkApiServer ki scan queue
+ *  ka drain (zyada se zyada 20s) bhi isi liye hai ke query
+ *  aadhi-lagi tartib na parhe.
+ *
  * Scope SIRF TermuxMod/Project N ke "Mockups" aur
  * "Ready Wallpapers" subfolders hain — Batches kabhi nahi,
  * $HOME ke engine folders kabhi nahi. Tamam kaam caller ke
@@ -90,6 +120,17 @@ public final class BulkMediaRegister {
      *  mari hui lagti hai; entries save nahi hongi, agli pass me
      *  dobara koshish hogi. */
     static final int MAX_CONSECUTIVE_TIMEOUTS = 3;
+
+    /** v150: DATA IN (...) ki har chunk me zyada se zyada paths
+     *  (purani SQLite ki 999-bind had se mehfooz faasla). */
+    static final int DATA_IN_CHUNK = 300;
+    /** v150: DATE_ADDED probe ka cached natija (SharedPreferences). */
+    private static final String KEY_PROBE = "dateadded_probe150";
+    static final int PROBE_UNKNOWN = 0;
+    static final int PROBE_OK = 1;
+    static final int PROBE_FAIL = 2;
+    /** v150: pass se pehle server scan queue ke drain ki had. */
+    static final long SERVER_DRAIN_MS = 20_000L;
 
     private BulkMediaRegister() {}
 
@@ -325,6 +366,137 @@ public final class BulkMediaRegister {
         return out;
     }
 
+    // ------------------------------------------------------------ v150 pure helpers
+
+    /** MediaStore ki ek row ki pehchan (pure): path + DATE_ADDED (seconds) + _ID. */
+    public static final class RowInfo {
+        public final String path;
+        public final long dateAdded;
+        public final long id;
+
+        public RowInfo(String path, long dateAdded, long id) {
+            this.path = path;
+            this.dateAdded = dateAdded;
+            this.id = id;
+        }
+    }
+
+    /**
+     * Paths ko barabar tukron me banto (pure) — har tukra zyada
+     * se zyada chunkSize ka. DATA IN (...) wali query/delete
+     * isi se chalti hain taake 999-bind wali had kabhi na aye.
+     * Input mutate nahi hota; tartib mehfooz rehti hai.
+     */
+    public static List<List<String>> chunkPaths(List<String> paths, int chunkSize) {
+        List<List<String>> out = new ArrayList<>();
+        if (paths == null || paths.isEmpty()) return out;
+        int size = chunkSize > 0 ? chunkSize : DATA_IN_CHUNK;
+        for (int i = 0; i < paths.size(); i += size) {
+            out.add(new ArrayList<>(
+                paths.subList(i, Math.min(paths.size(), i + size))));
+        }
+        return out;
+    }
+
+    /**
+     * Rows ki kul tartib (pure): DATE_ADDED barhti hui, barabar
+     * second par _ID. Chunk queries ke natije isi se merge
+     * hote hain (har chunk apne andar sorted hota hai, lekin
+     * chunks ke darmiyan tartib sirf yahan se pakki hoti hai).
+     * Input mutate nahi hota.
+     */
+    public static List<RowInfo> sortRows(List<RowInfo> rows) {
+        List<RowInfo> out = new ArrayList<>();
+        if (rows != null) out.addAll(rows);
+        out.sort((a, b) -> {
+            if (a.dateAdded != b.dateAdded) {
+                return Long.compare(a.dateAdded, b.dateAdded);
+            }
+            return Long.compare(a.id, b.id);
+        });
+        return out;
+    }
+
+    /**
+     * SMART pass ka faisla — TIE wali sakhti ke sath (pure).
+     * smartFixSuffix wale usool (row gayab = break, peeche
+     * reh jana/crossing = break) ke ilawa: do SATH-WALI
+     * (expected tartib me lagatar) files ka DATE_ADDED second
+     * BARABAR ho to baad wali file se break — kyunke sirf
+     * second tak parhne wale pickers (TikTok) ke paas un ki
+     * tartib ka koi saboot nahi hota, wo unhe ghuma dete
+     * hain; _ID tiebreak par wo "sahi" nazar ati theen.
+     */
+    public static List<String> smartFixSuffixWithTies(List<String> numericOrder,
+                                                      List<RowInfo> rows) {
+        List<String> out = new ArrayList<>();
+        if (numericOrder == null || numericOrder.isEmpty()) return out;
+        Map<String, RowInfo> byPath = new HashMap<>();
+        Map<String, Integer> pos = new HashMap<>();
+        if (rows != null) {
+            for (int i = 0; i < rows.size(); i++) {
+                RowInfo r = rows.get(i);
+                if (r == null || r.path == null) continue;
+                if (!byPath.containsKey(r.path)) {
+                    byPath.put(r.path, r);
+                    pos.put(r.path, i);
+                }
+            }
+        }
+        int lastPos = -1;
+        RowInfo prev = null;
+        int breakAt = -1;
+        for (int i = 0; i < numericOrder.size(); i++) {
+            String p = numericOrder.get(i);
+            RowInfo r = byPath.get(p);
+            if (r == null) {
+                breakAt = i;
+                break;
+            }
+            int position = pos.get(p);
+            if (position < lastPos) {
+                breakAt = i;
+                break;
+            }
+            if (prev != null && r.dateAdded == prev.dateAdded) {
+                breakAt = i;
+                break;
+            }
+            lastPos = position;
+            prev = r;
+        }
+        if (breakAt < 0) return out;
+        out.addAll(numericOrder.subList(breakAt, numericOrder.size()));
+        return out;
+    }
+
+    /**
+     * DATE_ADDED ladder (pure): count files ke liye 1-second
+     * step — aakhri file = nowSec, har pichli file us se 1
+     * second peeche. Tartib registration wali hi hai (index 0
+     * = pehle register hui file).
+     */
+    public static long[] dateAddedLadder(int count, long nowSec) {
+        if (count <= 0) return new long[0];
+        long[] out = new long[count];
+        for (int i = 0; i < count; i++) {
+            out[i] = nowSec - (count - 1 - i);
+        }
+        return out;
+    }
+
+    /**
+     * Spacing ka hisaab (pure): pichli registration ka callback
+     * prevCallbackMs par aya tha — agli registration is waqt
+     * se pehle NAHI girni chahiye: agle second ki boundary
+     * + 50ms. Abhi ka waqt nowMs ho to kitni dair rukna hai
+     * (kabhi manfi nahi).
+     */
+    public static long spacingDelayMs(long prevCallbackMs, long nowMs) {
+        long target = (prevCallbackMs / 1000L + 1L) * 1000L + 50L;
+        return Math.max(0L, target - nowMs);
+    }
+
     // ------------------------------------------------------------ Android glue
 
     /** Item F: Order Fix switch abhi ON hai? (default ON) */
@@ -361,8 +533,10 @@ public final class BulkMediaRegister {
      *     files "settled" seed ho jati hain — purani files ka
      *     order fix NAHI hota (owner ka faisla). Sirf is ke baad
      *     anay wali files "nayi" hain.
-     *   - Nayi/badli files ke liye SMART pass: pehle EK query
-     *     se un ki asal MediaStore tartib parho. Tartib sahi ho
+     *   - Nayi/badli files ke liye SMART pass: pehle chunked
+     *     queries se un ki asal MediaStore tartib parho (v150:
+     *     pehle server queue drain; same-second tie bhi break
+     *     hai). Tartib sahi ho
      *     to sab settle (koi delete/scan nahi). Tartib jahan
      *     tootti hai, sirf wahan se aage ki files: har media
      *     qisam ki EK batched delete, phir har file ka scanFile
@@ -408,18 +582,27 @@ public final class BulkMediaRegister {
                 return 0;
             }
 
-            // Step 1: EK query — nayi files ki ASAL tartib
+            // v150: runner ke apne scans BulkApiServer ki FIFO
+            // line se lagte hain — query se pehle wo line drain
+            // ho jaye (zyada se zyada 20s), warna query aadhi
+            // lagi hui tartib parh kar ghalat faisla kare gi.
+            try { BulkApiServer.awaitIdle(SERVER_DRAIN_MS); } catch (Exception ignored) {}
+
+            // Step 1: chunked queries — nayi files ki ASAL tartib
             // (DATE_ADDED, phir _ID) parho; fail ho to pass abort
-            List<String> actualOrder = queryRowOrder(ctx, plan.toRegister);
-            if (actualOrder == null) {
+            List<RowInfo> rows = queryRows(ctx, plan.toRegister);
+            if (rows == null) {
                 // Query hi fail — is pass me kuch settle nahi hoga
                 return 0;
             }
+            List<String> actualOrder = new ArrayList<>();
+            for (RowInfo r : rows) actualOrder.add(r.path);
             Set<String> rowsPresent = new HashSet<>(actualOrder);
 
-            // Step 2: SMART faisla — tartib pehle se sahi ho to
-            // sab settle, na delete na scan (ye aam halat hai)
-            List<String> suffix = smartFixSuffix(plan.toRegister, actualOrder);
+            // Step 2: SMART faisla (v150: same-second TIE bhi
+            // break hai) — tartib pehle se sahi ho to sab
+            // settle, na delete na scan (ye aam halat hai)
+            List<String> suffix = smartFixSuffixWithTies(plan.toRegister, rows);
             Set<String> finalKeys = new HashSet<>(plan.stillRegistered);
             if (suffix.isEmpty()) {
                 for (String p : plan.toRegister) {
@@ -452,15 +635,54 @@ public final class BulkMediaRegister {
             List<String> proceed = proceedAfterDelete(
                 suffix, rowsPresent, deleteFailedKinds);
 
-            // Step 4: chained scanFile — ek ek karke, numeric tartib
+            // Step 4: chained scanFile — ek ek karke, numeric tartib.
+            // v150: pehle ek-dafa ki DATE_ADDED probe (cached) —
+            // pass ho to FAST PATH (registration ke baad ladder
+            // se seconds set, koi intezar nahi); fail ho to
+            // FALLBACK spacing (har registration agle second me).
+            boolean fastPath = false;
+            if (!proceed.isEmpty()) {
+                int probe = probeState(ctx);
+                if (probe == PROBE_UNKNOWN) {
+                    probe = runProbe(ctx) ? PROBE_OK : PROBE_FAIL;
+                    saveProbeState(ctx, probe);
+                }
+                fastPath = probe == PROBE_OK;
+            }
             int done = 0;
             int consecutiveTimeouts = 0;
+            long prevCallbackMs = -1L;
+            List<String> succeeded = new ArrayList<>();
             for (String path : proceed) {
-                int outcome = scanOne(ctx, path);
+                if (!fastPath && prevCallbackMs > 0) {
+                    long delay = spacingDelayMs(
+                        prevCallbackMs, System.currentTimeMillis());
+                    if (delay > 0) {
+                        try {
+                            Thread.sleep(delay);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                }
+                AtomicLong callbackMs = new AtomicLong(-1L);
+                int outcome = scanOne(ctx, path, callbackMs);
+                if (callbackMs.get() > 0) {
+                    prevCallbackMs = callbackMs.get();
+                } else if (outcome != SCAN_FAILED) {
+                    // Callback ka waqt na mila (timeout) — return
+                    // ka waqt hi hifazati reference hai.
+                    prevCallbackMs = System.currentTimeMillis();
+                }
                 if (outcome == SCAN_OK) {
                     finalKeys.add(entryKey(path, sigs.get(path)));
+                    succeeded.add(path);
                     done++;
                     consecutiveTimeouts = 0;
+                    if (!fastPath && done % 25 == 0 && done < proceed.size()) {
+                        BulkLog.add("Order fix " + done + "/" + proceed.size());
+                    }
                 } else if (outcome == SCAN_TIMEOUT) {
                     consecutiveTimeouts++;
                     if (consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
@@ -470,6 +692,9 @@ public final class BulkMediaRegister {
                     }
                 }
                 // SCAN_FAILED: entry save nahi hoti — agli pass me retry
+            }
+            if (fastPath && !succeeded.isEmpty()) {
+                applyDateAddedLadder(ctx, succeeded);
             }
             if (!finalKeys.equals(registered)) {
                 saveRegistered(ctx, n, finalKeys);
@@ -485,64 +710,246 @@ public final class BulkMediaRegister {
     }
 
     /**
-     * EK MediaStore query: diye gaye paths ki rows ASAL tartib
-     * me — DATE_ADDED barhti hui, barabar second par _ID (row
-     * lagne ki asal tartib hamesha yahi hoti hai). Jo file list
-     * me nahi ati, us ki row abhi lagi hi nahi. Query fail ho
-     * to null (pass abort — kuch settle nahi hota).
+     * MediaStore queries (v150: 300-path chunks): diye gaye
+     * paths ki rows ASAL tartib me — DATE_ADDED barhti hui,
+     * barabar second par _ID (row lagne ki asal tartib hamesha
+     * yahi hoti hai). Har chunk apne andar sorted ata hai;
+     * chunk natije sortRows se merge hote hain. Jo file list
+     * me nahi ati, us ki row abhi lagi hi nahi. Koi bhi chunk
+     * fail ho to null (pass abort — kuch settle nahi hota).
      */
-    private static List<String> queryRowOrder(Context ctx, List<String> paths) {
-        List<String> out = new ArrayList<>();
-        if (paths == null || paths.isEmpty()) return out;
-        Cursor cursor = null;
+    private static List<RowInfo> queryRows(Context ctx, List<String> paths) {
+        List<RowInfo> all = new ArrayList<>();
+        if (paths == null || paths.isEmpty()) return all;
         try {
-            StringBuilder sel = new StringBuilder(MediaStore.MediaColumns.DATA)
-                .append(" IN (");
-            String[] args = new String[paths.size()];
-            for (int i = 0; i < paths.size(); i++) {
-                if (i > 0) sel.append(',');
-                sel.append('?');
-                args[i] = paths.get(i);
-            }
-            sel.append(')');
             ContentResolver cr = ctx.getContentResolver();
-            cursor = cr.query(MediaStore.Files.getContentUri("external"),
-                new String[]{MediaStore.MediaColumns.DATA},
-                sel.toString(), args,
-                MediaStore.MediaColumns.DATE_ADDED + " ASC, "
-                    + MediaStore.MediaColumns._ID + " ASC");
-            if (cursor == null) return null;
-            int idx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA);
-            if (idx < 0) return null;
-            while (cursor.moveToNext()) {
-                String p = cursor.getString(idx);
-                if (p != null) out.add(p);
+            String[] projection = {
+                MediaStore.MediaColumns.DATA,
+                MediaStore.MediaColumns.DATE_ADDED,
+                MediaStore.MediaColumns._ID
+            };
+            String sort = MediaStore.MediaColumns.DATE_ADDED + " ASC, "
+                + MediaStore.MediaColumns._ID + " ASC";
+            for (List<String> chunk : chunkPaths(paths, DATA_IN_CHUNK)) {
+                StringBuilder sel = new StringBuilder(MediaStore.MediaColumns.DATA)
+                    .append(" IN (");
+                String[] args = new String[chunk.size()];
+                for (int i = 0; i < chunk.size(); i++) {
+                    if (i > 0) sel.append(',');
+                    sel.append('?');
+                    args[i] = chunk.get(i);
+                }
+                sel.append(')');
+                Cursor cursor = null;
+                try {
+                    cursor = cr.query(MediaStore.Files.getContentUri("external"),
+                        projection, sel.toString(), args, sort);
+                    if (cursor == null) return null;
+                    int dIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA);
+                    int aIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED);
+                    int iIdx = cursor.getColumnIndex(MediaStore.MediaColumns._ID);
+                    if (dIdx < 0) return null;
+                    while (cursor.moveToNext()) {
+                        String p = cursor.getString(dIdx);
+                        if (p == null) continue;
+                        long added = aIdx >= 0 ? cursor.getLong(aIdx) : 0L;
+                        long id = iIdx >= 0 ? cursor.getLong(iIdx) : 0L;
+                        all.add(new RowInfo(p, added, id));
+                    }
+                } finally {
+                    try { if (cursor != null) cursor.close(); } catch (Exception ignored) {}
+                }
             }
-            return out;
         } catch (Exception e) {
             return null;
+        }
+        return sortRows(all);
+    }
+
+    /** Ek hi path ki pehli row (probe ke liye); na mile to null. */
+    private static RowInfo querySingleRow(Context ctx, String path) {
+        List<RowInfo> rows = queryRows(ctx, java.util.Collections.singletonList(path));
+        if (rows == null || rows.isEmpty()) return null;
+        return rows.get(0);
+    }
+
+    /** Ek path ki kul rows ki tadaad (probe ke liye); fail par -1. */
+    private static int countRows(Context ctx, String path) {
+        Cursor cursor = null;
+        try {
+            cursor = ctx.getContentResolver().query(
+                MediaStore.Files.getContentUri("external"),
+                new String[]{MediaStore.MediaColumns._ID},
+                MediaStore.MediaColumns.DATA + " = ?",
+                new String[]{path}, null);
+            if (cursor == null) return -1;
+            return cursor.getCount();
+        } catch (Exception e) {
+            return -1;
         } finally {
             try { if (cursor != null) cursor.close(); } catch (Exception ignored) {}
         }
     }
 
-    /** Ek media qisam ki tamam rows EK delete call me. File ko hath nahi lagta — sirf record. */
+    // ------------------------------------------------------------ v150 probe + ladder
+
+    private static int probeState(Context ctx) {
+        try {
+            return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_PROBE, PROBE_UNKNOWN);
+        } catch (Exception e) {
+            return PROBE_UNKNOWN;
+        }
+    }
+
+    private static void saveProbeState(Context ctx, int state) {
+        try {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt(KEY_PROBE, state).apply();
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * Ek-dafa ki capability probe: is device/provider par
+     * ContentResolver.update se DATE_ADDED asal me badalta
+     * hai ya nahi? Chhoti temp image (TermuxMod root me)
+     * scan karke row banao, phir:
+     *   (a) DATE_ADDED = abhi-10000s update karke read-back
+     *       — value hu-ba-hu mili?
+     *   (b) us path ki rows bilkul 1 hon or koi "(1)" wali
+     *       sibling file na bani ho;
+     *   (c) row delete karne ke baad temp FILE disk par
+     *       zinda ho (Android 10+ par row delete se asal
+     *       file bhi ud sakti hai — yehi sab se khatarnak
+     *       imkaan hai, is liye ye test lazmi hai).
+     * Temp file har surat me saaf hoti hai. Koi bhi qadam
+     * fail → probe FAIL (fallback spacing hamesha mehfooz
+     * hai).
+     */
+    private static boolean runProbe(Context ctx) {
+        File tmp = null;
+        Uri rowUri = null;
+        try {
+            File root = BulkDropFolders.rootDir();
+            if (!root.isDirectory() && !root.mkdirs()) return false;
+            tmp = new File(root, "bulk_probe150.jpg");
+            Bitmap bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            FileOutputStream fos = new FileOutputStream(tmp);
+            try {
+                bmp.compress(Bitmap.CompressFormat.JPEG, 90, fos);
+            } finally {
+                fos.close();
+                bmp.recycle();
+            }
+            if (!tmp.isFile() || tmp.length() == 0) return false;
+            String path = tmp.getAbsolutePath();
+            if (scanOne(ctx, path) != SCAN_OK) return false;
+            RowInfo row = querySingleRow(ctx, path);
+            if (row == null) return false;
+            rowUri = ContentUris.withAppendedId(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, row.id);
+            long targetSec = System.currentTimeMillis() / 1000L - 10_000L;
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DATE_ADDED, targetSec);
+            if (ctx.getContentResolver().update(rowUri, values, null, null) <= 0) {
+                return false;
+            }
+            RowInfo after = querySingleRow(ctx, path);
+            if (after == null || after.dateAdded != targetSec) return false;
+            if (countRows(ctx, path) != 1) return false;
+            if (new File(root, "bulk_probe150 (1).jpg").exists()) return false;
+            if (ctx.getContentResolver().delete(rowUri, null, null) <= 0) {
+                return false;
+            }
+            rowUri = null; // row ja chuki — finally dobara na mare
+            return tmp.isFile();
+        } catch (Exception e) {
+            return false;
+        } finally {
+            // Jo row reh gayi ho use best-effort saaf karo,
+            // phir temp file har surat me delete.
+            if (rowUri != null) {
+                try { ctx.getContentResolver().delete(rowUri, null, null); }
+                catch (Exception ignored) {}
+            }
+            try { if (tmp != null && tmp.isFile()) tmp.delete(); }
+            catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * FAST PATH: register ho chuki files ki DATE_ADDED ek
+     * 1-second-step ladder se set karo (aakhri file = abhi
+     * ka second). applyBatch chunk-wise; batch fail ho to
+     * per-file update ki koshish. Ye best-effort hai — fail
+     * ho jaye to files apni asal (scan wali) DATE_ADDED par
+     * rehti hain, pass phir bhi kamyab hai.
+     */
+    private static void applyDateAddedLadder(Context ctx, List<String> orderedPaths) {
+        if (orderedPaths == null || orderedPaths.isEmpty()) return;
+        long[] ladder = dateAddedLadder(
+            orderedPaths.size(), System.currentTimeMillis() / 1000L);
+        try {
+            String authority =
+                MediaStore.Files.getContentUri("external").getAuthority();
+            for (List<String> chunk : chunkPaths(orderedPaths, DATA_IN_CHUNK)) {
+                int base = orderedPaths.indexOf(chunk.get(0));
+                ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+                for (int i = 0; i < chunk.size(); i++) {
+                    String path = chunk.get(i);
+                    Uri uri = "video".equals(mediaKind(path))
+                        ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                    ops.add(ContentProviderOperation.newUpdate(uri)
+                        .withSelection(MediaStore.MediaColumns.DATA + " = ?",
+                            new String[]{path})
+                        .withValue(MediaStore.MediaColumns.DATE_ADDED,
+                            ladder[base + i])
+                        .build());
+                }
+                ctx.getContentResolver().applyBatch(authority, ops);
+            }
+        } catch (Exception e) {
+            try {
+                for (int i = 0; i < orderedPaths.size(); i++) {
+                    String path = orderedPaths.get(i);
+                    Uri uri = "video".equals(mediaKind(path))
+                        ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                    ContentValues v = new ContentValues();
+                    v.put(MediaStore.MediaColumns.DATE_ADDED, ladder[i]);
+                    ctx.getContentResolver().update(uri, v,
+                        MediaStore.MediaColumns.DATA + " = ?",
+                        new String[]{path});
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * Ek media qisam ki tamam rows delete — v150: 300-path
+     * chunks me (999-bind had se bachne ke liye), har chunk
+     * apni delete call. File ko hath nahi lagta — sirf record.
+     * Koi chunk fail ho to poora delete fail mana jata hai.
+     */
     private static boolean deleteRows(Context ctx, String kind, List<String> paths) {
         if (paths == null || paths.isEmpty()) return true;
         try {
             Uri uri = "video".equals(kind)
                 ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                 : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-            StringBuilder sel = new StringBuilder(MediaStore.MediaColumns.DATA)
-                .append(" IN (");
-            String[] args = new String[paths.size()];
-            for (int i = 0; i < paths.size(); i++) {
-                if (i > 0) sel.append(',');
-                sel.append('?');
-                args[i] = paths.get(i);
+            for (List<String> chunk : chunkPaths(paths, DATA_IN_CHUNK)) {
+                StringBuilder sel = new StringBuilder(MediaStore.MediaColumns.DATA)
+                    .append(" IN (");
+                String[] args = new String[chunk.size()];
+                for (int i = 0; i < chunk.size(); i++) {
+                    if (i > 0) sel.append(',');
+                    sel.append('?');
+                    args[i] = chunk.get(i);
+                }
+                sel.append(')');
+                ctx.getContentResolver().delete(uri, sel.toString(), args);
             }
-            sel.append(')');
-            ctx.getContentResolver().delete(uri, sel.toString(), args);
             return true;
         } catch (Exception e) {
             return false;
@@ -591,12 +998,24 @@ public final class BulkMediaRegister {
      * Callback jis thread par bhi aye, latch use jaga deta hai.
      */
     private static int scanOne(Context ctx, String path) {
+        return scanOne(ctx, path, null);
+    }
+
+    /**
+     * scanOne — callback ka waqt (ms) callbackMsOut me bhi
+     * deta hai (v150 ki spacing isi par chalti hai); callback
+     * na aye to callbackMsOut -1 hi rehta hai.
+     */
+    private static int scanOne(Context ctx, String path, AtomicLong callbackMsOut) {
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicBoolean fired = new AtomicBoolean(false);
         final AtomicReference<Uri> result = new AtomicReference<>();
         try {
             MediaScannerConnection.scanFile(ctx, new String[]{path}, null,
                 (scannedPath, uri) -> {
+                    if (callbackMsOut != null) {
+                        callbackMsOut.set(System.currentTimeMillis());
+                    }
                     result.set(uri);
                     fired.set(true);
                     latch.countDown();

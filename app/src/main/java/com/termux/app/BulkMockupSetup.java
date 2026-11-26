@@ -21,7 +21,9 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FilterInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -482,12 +484,61 @@ public final class BulkMockupSetup {
         Logger.logInfo(LOG_TAG, "Bin wrappers installed (termux-media-scan / wake-lock / wake-unlock)");
     }
 
-    private static void ensureBinWrappers(Context context) {
+    /**
+     * Wrapper content ka muqabla (pure): maujooda file ka text
+     * generated script se HU-BA-HU milna chahiye — sirf file ka
+     * mojood hona kaafi nahi.
+     */
+    public static boolean wrapperContentMatches(String existing, String expected) {
+        return existing != null && expected != null && existing.equals(expected);
+    }
+
+    /** Ek wrapper file durust hai? (glue): file ho + content match. */
+    private static boolean wrapperFileOk(File bin, String name, String expected) {
+        try {
+            File f = new File(bin, name);
+            if (!f.isFile()) return false;
+            return wrapperContentMatches(readFileText(f), expected);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String readFileText(File f) throws Exception {
+        try (InputStream in = new FileInputStream(f)) {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int r;
+            while ((r = in.read(buf)) != -1) bos.write(buf, 0, r);
+            return bos.toString("UTF-8");
+        }
+    }
+
+    /**
+     * Teeno wrappers ki asal halat (Permissions row bhi yahi
+     * check karti hai): har file mojood ho or us ka content
+     * generated script se milta ho. pkg install/upgrade kabhi
+     * in files ko official Termux:API walon se badal de to ye
+     * check foran pakar leta hai.
+     */
+    public static boolean wrappersOk(Context context) {
+        if (context == null) return false;
         try {
             File bin = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "bin");
-            if (!new File(bin, "termux-media-scan").exists()
-                || !new File(bin, "termux-wake-lock").exists()
-                || !new File(bin, "termux-wake-unlock").exists()) {
+            return wrapperFileOk(bin, "termux-media-scan", wrapperScript(context, "scan"))
+                && wrapperFileOk(bin, "termux-wake-lock", wrapperScript(context, "wakelock"))
+                && wrapperFileOk(bin, "termux-wake-unlock", wrapperScript(context, "wakeunlock"));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static void ensureBinWrappers(Context context) {
+        try {
+            // v150: sirf mojoodgi nahi — CONTENT check. File badli
+            // hui mile (masalan pkg ne official wrapper likh diya
+            // ho) to apni wali dobara likh do.
+            if (!wrappersOk(context)) {
                 installBinWrappers(context);
             }
         } catch (Exception e) {

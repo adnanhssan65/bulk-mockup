@@ -373,9 +373,10 @@ public class BulkPermissionsActivity extends Activity {
                 isInstallOk(), BulkStrings.t(this, BulkStrings.ALLOW), this::fixInstall);
         }
 
-        // v149 Item H: Termux:API app ki ASAL mojoodgi — scan isi
-        // app se hota hai. Check har rebuild (har page open) par
-        // fresh PackageManager lookup hai (BulkApiCheck).
+        // v150: scan app ke built-in server + wrapper files se
+        // hota hai (Termux:API app ki zaroorat nahi). Check har
+        // rebuild (har page open) par wrapper files ki asal
+        // halat fresh parhta hai (BulkApiCheck).
         addApiRow();
 
         // v129: Auto-start par ✔/✖ wala jhoota status nahi — ye sirf
@@ -602,16 +603,18 @@ public class BulkPermissionsActivity extends Activity {
     }
 
     /**
-     * v149 Item H — Termux:API wali row (baqi rows ki hi shakal):
-     *   Laga hua ho → ✔ + sirf "Done"; na link, na fazool text.
-     *   Na laga ho  → ✖ + install karne ki hidayat, or row ke
-     *                 neeche download link WAZEH dikhta hai
-     *                 (tap par F-Droid wala page khulta hai);
-     *                 poori row bhi tappable hai.
+     * v150 — scan wali row (baqi rows ki hi shakal, wahi jagah):
+     * scan app ke built-in server + apni wrapper files se
+     * hota hai — Termux:API app ki zaroorat nahi.
+     *   Wrapper files durust hon → ✔ + sirf "Done".
+     *   Durust na hon → ✖ + sirf itni hidayat ke app dobara
+     *                 kholne par files khud theek ho jati
+     *                 hain. Koi install ki hidayat NAHI,
+     *                 koi download link NAHI.
      * Halat har rebuild par BulkApiCheck se fresh parhi jati hai.
      */
     private void addApiRow() {
-        boolean ok = BulkApiCheck.isApiInstalled(this);
+        boolean ok = BulkApiCheck.isScanReady(this);
         LinearLayout row = permCard();
 
         LinearLayout top = new LinearLayout(this);
@@ -647,32 +650,9 @@ public class BulkPermissionsActivity extends Activity {
             hintView.setTextSize(12);
             hintView.setPadding(dp(26), dp(2), 0, 0);
             row.addView(hintView);
-
-            // Download link — row ke neeche wazeh, tap par F-Droid page
-            TextView link = new TextView(this);
-            link.setText(BulkApiCheck.API_STORE_URL);
-            link.setTextColor(BulkTheme.accent(this));
-            link.setTextSize(12.5f);
-            link.setPaintFlags(link.getPaintFlags()
-                | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
-            link.setPadding(dp(26), dp(4), 0, 0);
-            link.setClickable(true);
-            link.setOnClickListener(v -> openApiStorePage());
-            row.addView(link);
-
-            row.setClickable(true);
-            row.setOnClickListener(v -> openApiStorePage());
         }
 
         mRoot.addView(row);
-    }
-
-    /** Termux:API ka F-Droid page kholo — best effort, fail par khamoshi. */
-    private void openApiStorePage() {
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW,
-                Uri.parse(BulkApiCheck.API_STORE_URL)));
-        } catch (Exception ignored) {}
     }
 
     private void addRow(String name, String hint, boolean ok, String buttonText, Runnable fix) {

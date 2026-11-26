@@ -33,6 +33,8 @@ import java.util.zip.ZipFile;
  *  - Item H: Permissions screen par Termux:API ki ASAL
  *    mojoodgi (BulkApiCheck) — missing → install ki hidayat +
  *    neeche download link; installed → sirf "Done".
+ *    [v150 me superseded: scan built-in hai — yehi Item H
+ *    tests ab wrapper-content check parhte hain.]
  */
 public class BulkV149RevTest {
 
@@ -272,8 +274,11 @@ public class BulkV149RevTest {
     public void smartPassWiring() throws Exception {
         String src = findSource(REGISTER);
         assertNotNull(src);
-        assertTrue(src.contains("smartFixSuffix(plan.toRegister, actualOrder)"));
-        assertTrue(src.contains("queryRowOrder"));
+        // v150: wiring ab tie-aware suffix + chunked queryRows
+        // par hai (purani smartFixSuffix/queryRowOrder wiring
+        // superseded — pure smartFixSuffix tests oper wese hi).
+        assertTrue(src.contains("smartFixSuffixWithTies(plan.toRegister, rows)"));
+        assertTrue(src.contains("queryRows"));
         assertTrue(src.contains("DATE_ADDED"));
         assertTrue(src.contains("order pehle se sahi hai"));
     }
@@ -316,27 +321,26 @@ public class BulkV149RevTest {
 
     // ------------------------------------------------------------ Item H
 
+    // v150: Item H ka purana Termux:API-presence wala matlab
+    // khatam — scan built-in hai. Ab ye tests wrapper-content
+    // check (BulkApiCheck.resolveOk / isScanReady) parhte hain.
+
     @Test
     public void apiPresenceDecisionIsPure() {
-        assertTrue(BulkApiCheck.resolveInstalled(Boolean.TRUE));
-        assertFalse(BulkApiCheck.resolveInstalled(Boolean.FALSE));
-        assertFalse(BulkApiCheck.resolveInstalled(null));
-        assertEquals("com.termux.api", BulkApiCheck.API_PACKAGE);
-        assertEquals("https://f-droid.org/packages/com.termux.api/",
-            BulkApiCheck.API_STORE_URL);
+        assertTrue(BulkApiCheck.resolveOk(Boolean.TRUE));
+        assertFalse(BulkApiCheck.resolveOk(Boolean.FALSE));
+        assertFalse(BulkApiCheck.resolveOk(null));
     }
 
     @Test
-    public void apiCheckIsRealPackageManagerLookup() throws Exception {
+    public void apiCheckIsWrapperContentLookup() throws Exception {
         String src = findSource(API_CHECK);
         assertNotNull(src);
-        assertTrue(src.contains("getPackageManager().getPackageInfo(API_PACKAGE, 0)"));
-        assertTrue(src.contains("resolveInstalled"));
-        // manifest me package visibility query lazmi hai (Android 11+)
-        String manifest = findSource(MANIFEST);
-        assertNotNull(manifest);
-        assertTrue(manifest.contains("<queries>"));
-        assertTrue(manifest.contains("android:name=\"com.termux.api\""));
+        assertTrue(src.contains("BulkMockupSetup.wrappersOk"));
+        assertTrue(src.contains("resolveOk"));
+        // purana ghalat dawa kahin nahi hona chahiye
+        assertFalse(src.contains("getPackageInfo"));
+        assertFalse(src.contains("f-droid.org"));
     }
 
     @Test
@@ -344,19 +348,18 @@ public class BulkV149RevTest {
         String src = findSource(PERMISSIONS);
         assertNotNull(src);
         assertTrue(src.contains("addApiRow()"));
-        assertTrue(src.contains("BulkApiCheck.isApiInstalled(this)"));
-        // missing: hidayat + neeche wazeh link
+        assertTrue(src.contains("BulkApiCheck.isScanReady(this)"));
+        // kharab halat: sirf repair ki hidayat — install/link NAHI
         assertTrue(src.contains("BulkStrings.PERM_API_INSTALL"));
-        assertTrue(src.contains("BulkApiCheck.API_STORE_URL"));
-        assertTrue(src.contains("UNDERLINE_TEXT_FLAG"));
-        assertTrue(src.contains("openApiStorePage"));
-        assertTrue(src.contains("Intent.ACTION_VIEW"));
-        // installed: sirf Done
+        assertFalse(src.contains("API_STORE_URL"));
+        assertFalse(src.contains("openApiStorePage"));
+        assertFalse(src.contains("f-droid.org"));
+        // durust halat: sirf Done
         assertTrue(src.contains("BulkStrings.PERM_API_DONE"));
         assertTrue(BulkStrings.hasBothLanguages(BulkStrings.PERM_API));
         assertTrue(BulkStrings.hasBothLanguages(BulkStrings.PERM_API_INSTALL));
         assertTrue(BulkStrings.hasBothLanguages(BulkStrings.PERM_API_DONE));
-        assertEquals("Termux:API App install karo — baghair is ke scan nahi hota",
+        assertEquals("Ye app ke andar hi hai — Termux Mod dobara kholo, scan files khud theek ho jayengi",
             BulkStrings.get(BulkStrings.PERM_API_INSTALL, true));
         assertEquals("Done", BulkStrings.get(BulkStrings.PERM_API_DONE, false));
         assertEquals("Done", BulkStrings.get(BulkStrings.PERM_API_DONE, true));
