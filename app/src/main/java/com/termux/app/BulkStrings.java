@@ -45,6 +45,7 @@ public final class BulkStrings {
     public static final String ABOUT_BODY = "about_body";
     public static final String CLOSE = "close";
     public static final String CANCEL = "cancel";
+    public static final String BACKGROUND = "background";
     public static final String BACK = "back";
     public static final String SWITCH_THEME = "switch_theme";
 
@@ -199,6 +200,7 @@ public final class BulkStrings {
     public static final String SHOWPIECE_EDIT = "showpiece_edit";
     public static final String SHOWPIECE_EDIT_SUB = "showpiece_edit_sub";
     public static final String SHOWPIECE_NAME_LABEL = "showpiece_name_label";
+    public static final String SHOWPIECE_NUMBER_LABEL = "showpiece_number_label";
     public static final String SHOWPIECE_LOADING_LABEL = "showpiece_loading_label";
     public static final String SHOWPIECE_DONE_LABEL = "showpiece_done_label";
     public static final String SEQ_FIX = "seq_fix";
@@ -432,6 +434,7 @@ public final class BulkStrings {
             "Ek asaan Termux terminal aur automatic phone mockup generator — one-tap workflows ke liye banaya gaya.");
         put(CLOSE, "Close", "Band Karo");
         put(CANCEL, "Cancel", "Cancel Karo");
+        put(BACKGROUND, "Background", "Background");
         put(BACK, "Back", "Wapas");
         put(SWITCH_THEME, "Switch Theme", "Theme Badlo");
 
@@ -645,6 +648,7 @@ public final class BulkStrings {
         put(SHOWPIECE_EDIT_SUB, "Change the name and lines shown on the popup showpiece",
             "Popup showpiece par dikhne wala naam or lines badlo");
         put(SHOWPIECE_NAME_LABEL, "Name on the showpiece", "Showpiece par naam");
+        put(SHOWPIECE_NUMBER_LABEL, "Number on the showpiece", "Showpiece par number");
         put(SHOWPIECE_LOADING_LABEL, "Loading line", "Loading wali line");
         put(SHOWPIECE_DONE_LABEL, "Done line", "Done wali line");
         put(SEQ_FIX, "Sequence Fix", "Sequence Fix");

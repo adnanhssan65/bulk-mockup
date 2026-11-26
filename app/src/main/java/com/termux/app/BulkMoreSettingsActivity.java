@@ -125,7 +125,7 @@ public class BulkMoreSettingsActivity extends Activity {
         return row;
     }
 
-    /** Showpiece editor — teen fields: naam, loading line, done line. */
+    /** Showpiece editor — chaar fields: naam, number (v153), loading line, done line. */
     private void showShowpieceEditor() {
         final android.app.Dialog dialog = new android.app.Dialog(this);
         LinearLayout panel = new LinearLayout(this);
@@ -144,6 +144,9 @@ public class BulkMoreSettingsActivity extends Activity {
         final android.widget.EditText nameField = showpieceField(panel,
             BulkStrings.t(this, BulkStrings.SHOWPIECE_NAME_LABEL),
             BulkRunSettings.showpieceName(this));
+        final android.widget.EditText numberField = showpieceField(panel,
+            BulkStrings.t(this, BulkStrings.SHOWPIECE_NUMBER_LABEL),
+            BulkRunSettings.showpieceNumber(this));
         final android.widget.EditText loadingField = showpieceField(panel,
             BulkStrings.t(this, BulkStrings.SHOWPIECE_LOADING_LABEL),
             BulkRunSettings.showpieceLoading(this,
@@ -169,6 +172,7 @@ public class BulkMoreSettingsActivity extends Activity {
         TextView save = BulkTheme.primaryButton(this,
             BulkStrings.t(this, BulkStrings.SAVE), v -> {
                 BulkRunSettings.setShowpieceName(this, nameField.getText().toString());
+                BulkRunSettings.setShowpieceNumber(this, numberField.getText().toString());
                 BulkRunSettings.setShowpieceLoading(this, loadingField.getText().toString());
                 BulkRunSettings.setShowpieceDone(this, doneField.getText().toString());
                 dialog.dismiss();

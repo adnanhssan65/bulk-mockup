@@ -241,12 +241,19 @@ public final class BulkRunSettings {
      * Popup chuna ho (stored false) to usi ki izzat — popup
      * view bhi v152 me mukammal durust hai (khud chalta run,
      * asal screen snapshot, sachcha Done).
+     *
+     * v153 (owner ka naya hukm 2026-11-27 — naya panel approve
+     * hone ke baad): FRESH-INSTALL DEFAULT WAPAS POPUP hai
+     * (naya design wala panel). Stored value ki izzat bilkul
+     * waisi hi hai — owner ne kabhi Terminal chuna ho (stored
+     * true) to wahi chalega; sirf pehli-dafa (koi stored
+     * value nahi) ka faisla badla hai.
      */
     public static boolean resolveTerminalView(Boolean stored) {
-        return stored == null || stored;
+        return stored != null && stored;
     }
 
-    /** Run par terminal samne aye? Default HAAN — terminal view (v152). */
+    /** Run par terminal samne aye? Default NAHI — popup view (v153). */
     public static boolean isTerminalView(Context c) {
         SharedPreferences p = prefs(c);
         Boolean stored = p.contains(KEY_RUN_VIEW_TERMINAL)
@@ -263,9 +270,18 @@ public final class BulkRunSettings {
     private static final String KEY_SHOWPIECE_NAME = "showpiece_name";
     private static final String KEY_SHOWPIECE_LOADING = "showpiece_loading";
     private static final String KEY_SHOWPIECE_DONE = "showpiece_done";
+    private static final String KEY_SHOWPIECE_NUMBER = "showpiece_number";
 
-    /** Showpiece par design se chhapa naam — app ki apni branding line. */
-    public static final String SHOWPIECE_NAME_DEFAULT = "Developer: Mehar Adnan";
+    /**
+     * Showpiece footer ka naam — v153: owner ke hukm par sirf
+     * "Adnan" (purani "Developer: Mehar Adnan" wali line panel
+     * ke header se khatam; naam ab footer ki chhoti brand line
+     * me number ke sath ata hai).
+     */
+    public static final String SHOWPIECE_NAME_DEFAULT = "Adnan";
+
+    /** Showpiece footer ka number — owner ka apna contact number (us ke hukm par). */
+    public static final String SHOWPIECE_NUMBER_DEFAULT = "+44 7404 032136";
 
     /**
      * Showpiece ke editable text ka faisla (pure): owner ki
@@ -283,6 +299,27 @@ public final class BulkRunSettings {
             prefs(c).getString(KEY_SHOWPIECE_NAME, null), SHOWPIECE_NAME_DEFAULT);
     }
 
+    /** Footer ka number — khaali saved ho to default number wapas. */
+    public static String showpieceNumber(Context c) {
+        return resolveShowpieceText(
+            prefs(c).getString(KEY_SHOWPIECE_NUMBER, null), SHOWPIECE_NUMBER_DEFAULT);
+    }
+
+    /**
+     * v153: panel ke footer ki brand line banao (pure):
+     * "✿ <name> · <number> ✿". Jo hissa khaali ho wo saaf
+     * tor par reh jata hai; dono khaali hon to poori line
+     * khaali (panel footer chhupa deta hai).
+     */
+    public static String showpieceFooterText(String name, String number) {
+        String n = name == null ? "" : name.trim();
+        String num = number == null ? "" : number.trim();
+        if (n.isEmpty() && num.isEmpty()) return "";
+        if (num.isEmpty()) return "✿ " + n + " ✿";
+        if (n.isEmpty()) return "✿ " + num + " ✿";
+        return "✿ " + n + " · " + num + " ✿";
+    }
+
     /** Loading (Running) wali line — fallback caller BulkStrings se deta hai. */
     public static String showpieceLoading(Context c, String fallback) {
         return resolveShowpieceText(
@@ -298,6 +335,7 @@ public final class BulkRunSettings {
     /** Editor ki raw saved value (na ho to khaali string) — field bharne ke liye. */
     public static String showpieceStored(Context c, String which) {
         String key = KEY_SHOWPIECE_NAME.equals(which) ? KEY_SHOWPIECE_NAME
+            : KEY_SHOWPIECE_NUMBER.equals(which) ? KEY_SHOWPIECE_NUMBER
             : KEY_SHOWPIECE_LOADING.equals(which) ? KEY_SHOWPIECE_LOADING
             : KEY_SHOWPIECE_DONE;
         String v = prefs(c).getString(key, null);
@@ -306,6 +344,10 @@ public final class BulkRunSettings {
 
     public static void setShowpieceName(Context c, String v) {
         setShowpiece(c, KEY_SHOWPIECE_NAME, v);
+    }
+
+    public static void setShowpieceNumber(Context c, String v) {
+        setShowpiece(c, KEY_SHOWPIECE_NUMBER, v);
     }
 
     public static void setShowpieceLoading(Context c, String v) {
@@ -325,6 +367,7 @@ public final class BulkRunSettings {
 
     /** Editor ke liye keys (More Settings isi se fields bharta hai). */
     public static final String SHOWPIECE_KEY_NAME = KEY_SHOWPIECE_NAME;
+    public static final String SHOWPIECE_KEY_NUMBER = KEY_SHOWPIECE_NUMBER;
     public static final String SHOWPIECE_KEY_LOADING = KEY_SHOWPIECE_LOADING;
     public static final String SHOWPIECE_KEY_DONE = KEY_SHOWPIECE_DONE;
 }

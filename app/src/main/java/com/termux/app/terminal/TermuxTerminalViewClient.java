@@ -18,6 +18,7 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import com.termux.R;
+import com.termux.app.BulkRunHelper;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.interact.MessageDialogUtils;
@@ -565,6 +566,21 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
         }
     }
 
+    /**
+     * Termux Mod v153: screen par maujooda session app-launched
+     * run (BulkRunHelper ke BulkRun- nishan wala) hai? Keyboard
+     * ki khud-khulne wali harkat sirf inhi par roki jati hai.
+     */
+    private boolean isCurrentSessionBulkRun() {
+        try {
+            TerminalSession session = mActivity.getCurrentSession();
+            return session != null
+                && BulkRunHelper.isRunSessionName(session.mSessionName);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void setSoftKeyboardState(boolean isStartup, boolean isReloadTermuxProperties) {
         boolean noShowKeyboard = false;
 
@@ -596,7 +612,15 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             KeyboardUtils.clearDisableSoftKeyboardFlags(mActivity);
 
             // If soft keyboard is to be hidden on startup
-            if (isStartup && mActivity.getProperties().shouldSoftKeyboardBeHiddenOnStartup()) {
+            // Termux Mod v153 (owner ka hukm): app-launched run
+            // (BulkRun- nishan wala session) ke liye khule
+            // TermuxActivity me keyboard KHUD-BA-KHUD na khule —
+            // wahi hidden-on-startup wala rasta. Scope sirf
+            // maujooda session ke nishan par hai: hath ke
+            // sessions or global setting bilkul waisi hi rehti
+            // hai; owner tap karke keyboard la sakta hai.
+            if (isStartup && (mActivity.getProperties().shouldSoftKeyboardBeHiddenOnStartup()
+                || isCurrentSessionBulkRun())) {
                 Logger.logVerbose(LOG_TAG, "Hiding soft keyboard on startup");
                 // Required to keep keyboard hidden when Termux app is switched back from another app
                 KeyboardUtils.setSoftKeyboardAlwaysHiddenFlags(mActivity);

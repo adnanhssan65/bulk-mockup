@@ -83,6 +83,27 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
      */
     private TermuxTerminalSessionActivityClient mTermuxTerminalSessionActivityClient;
 
+    /**
+     * Termux Mod v153: wo BulkRun- session jo TermuxActivity ke
+     * bind hone se pehle hi safai se (exit 0) khatam ho gaya —
+     * us ka record (TermuxTerminalSessionServiceClient bharta
+     * hai). Bind hote hi record activity client ko de diya
+     * jata hai taake auto-return wahan bhi ho jahan run
+     * activity khulne se tez khatam ho gaya tha. Record sirf
+     * taaza (15s ke andar) ho to istemal hota hai or ek dafa
+     * me saaf ho jata hai — der baad hath se khola gaya
+     * terminal is se kabhi band nahi hota.
+     */
+    private TerminalSession mBulkRunFinishedSession;
+    private long mBulkRunFinishedSessionMs;
+    private static final long BULK_RUN_FINISHED_BIND_WINDOW_MS = 15000;
+
+    /** v153: bind se pehle safai se khatam hue BulkRun session ka record rakho. */
+    public synchronized void noteBulkRunSessionFinishedBeforeBind(TerminalSession finishedSession) {
+        mBulkRunFinishedSession = finishedSession;
+        mBulkRunFinishedSessionMs = System.currentTimeMillis();
+    }
+
     /** The basic implementation of the {@link TerminalSessionClient} interface to be used by {@link TerminalSession}
      * that does not hold activity references and only a service reference.
      */
@@ -790,6 +811,22 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         for (int i = 0; i < mShellManager.mTermuxSessions.size(); i++)
             mShellManager.mTermuxSessions.get(i).getTerminalSession().updateTerminalSessionClient(mTermuxTerminalSessionActivityClient);
+
+        // Termux Mod v153: bind se pehle khatam hue BulkRun
+        // session ka record activity client ko de do — wahi
+        // v152 wala auto-return ab is raste par bhi hoga
+        // (record taaza ho tabhi; har haal me saaf ho jata hai)
+        if (termuxTerminalSessionActivityClient != null
+            && mBulkRunFinishedSession != null) {
+            TerminalSession finished = mBulkRunFinishedSession;
+            long finishedAtMs = mBulkRunFinishedSessionMs;
+            mBulkRunFinishedSession = null;
+            if (System.currentTimeMillis() - finishedAtMs
+                <= BULK_RUN_FINISHED_BIND_WINDOW_MS) {
+                termuxTerminalSessionActivityClient
+                    .onBulkRunSessionFinishedBeforeBind(finished);
+            }
+        }
     }
 
     /** This should be called when {@link TermuxActivity} has been destroyed and in {@link #onUnbind(Intent)}

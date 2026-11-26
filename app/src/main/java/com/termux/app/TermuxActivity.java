@@ -220,6 +220,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         super.onCreate(savedInstanceState);
 
+        // Termux Mod v153 (owner ka hukm): app-launched run ke
+        // liye khulne par halki si fade-in animation — SIRF
+        // cosmetic hai; session or command apne raste par
+        // pehle se hain, is se koi dair ya koi farq nahi
+        // parta. Nishan BulkRunHelper ke terminal-launch wale
+        // raste se bharta hai or ek dafa istemal hokar saaf ho
+        // jata hai — hath se khola gaya terminal bilkul waisa
+        // hi khulta hai jaisa pehle khulta tha.
+        if (BulkRunHelper.consumeTerminalLaunch(System.currentTimeMillis(), 10000)) {
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        }
+
         setContentView(R.layout.activity_termux);
 
         // Load termux shared preferences

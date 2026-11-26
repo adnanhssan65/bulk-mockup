@@ -80,11 +80,13 @@ public class BulkV151Test {
 
     @Test
     public void terminalViewDefaultIsPopup() {
-        // v152 (owner ka aakhri faisla 2026-11-26 23:27):
-        // fresh install (stored null) → TERMINAL view (default
-        // ulta gaya); owner ki saved value ki izzat — saved
-        // false → popup view, saved true → terminal view.
-        assertTrue(BulkRunSettings.resolveTerminalView(null));
+        // v152 (owner ka faisla 2026-11-26 23:27): fresh
+        // install → TERMINAL view (default ulta gaya tha).
+        // v153 (owner ka naya hukm 2026-11-27): fresh-install
+        // default WAPAS POPUP hai (naya panel) — is liye null
+        // ab false hai. Saved value ki izzat dono daur me
+        // waisi hi: saved false → popup, saved true → terminal.
+        assertFalse(BulkRunSettings.resolveTerminalView(null));
         assertTrue(BulkRunSettings.resolveTerminalView(Boolean.TRUE));
         assertFalse(BulkRunSettings.resolveTerminalView(Boolean.FALSE));
     }
@@ -230,15 +232,19 @@ public class BulkV151Test {
     public void showpiecePanelIsDisplayOnly() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String panel = window(src, "private static void showRunViewPanel", 5600);
+        String panel = window(src, "private static void showRunViewPanel", 12000);
         // maujooda console panel hi reuse hota hai
         assertTrue(panel.contains("buildConsolePanel(a, p.name, dialog"));
         assertTrue(panel.contains("BulkStrings.RUNNING_IN_TERMINAL"));
         assertTrue(panel.contains("BulkRunProgress.formatElapsed"));
         // Cancel/Background wali row panel se hatayi jati hai
         assertTrue(panel.contains("removeView(cv.runActions)"));
-        // Terminal button wahi session kholta hai
-        assertTrue(panel.contains("openTerminalView(a)"));
+        // v152: Terminal button wahi session kholta tha —
+        // v153 me owner ke hukm par wo button KHATAM hai; us
+        // ki jagah Cancel/Background/Close ki row hai (asal
+        // Cancel killSessionTree se judti hai)
+        assertTrue(panel.contains("BulkStrings.BACKGROUND"));
+        assertTrue(panel.contains("killSessionTree"));
         // display-only: na process, na popup engine
         assertFalse(panel.contains("ProcessBuilder"));
         assertFalse(panel.contains("runLiveInPopup"));
@@ -349,10 +355,10 @@ public class BulkV151Test {
     public void versionIs151() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 152"));
+        assertTrue(gradle.contains("versionCode 153"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v152"));
+        assertTrue(dash.contains("Termux Mod v153"));
         assertFalse(dash.contains("Termux Mod v150"));
     }
 }

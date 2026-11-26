@@ -207,6 +207,31 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         }
     }
 
+    /**
+     * Termux Mod v153: BulkRun session is activity ke bind
+     * hone se PEHLE hi safai se (exit 0) khatam ho gaya tha —
+     * us waqt session ka client service wala tha, is liye
+     * v152 wala auto-return yahan kabhi nahi pohanchta.
+     * Service bind par record yahan deta hai
+     * (noteBulkRunSessionFinishedBeforeBind); ab wahi kaam
+     * karo jo onSessionFinished karta: khatam shuda session
+     * hatao or activity band karke owner ko us ki Bulk
+     * screen par wapas bhejo. Shart wohi sakht hai: screen
+     * par maujooda session BILKUL wahi khatam shuda session
+     * ho (owner darmiyan me kahin or gaya ho to kuch nahi
+     * karte). Chhoti si dair is liye ke activity poori tarah
+     * samne aa jaye — session pehle hi mar chuka hai, is
+     * dair se run par koi asar nahi.
+     */
+    public void onBulkRunSessionFinishedBeforeBind(@NonNull TerminalSession finishedSession) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (mActivity.isFinishing()) return;
+            if (finishedSession != mActivity.getCurrentSession()) return;
+            removeFinishedSession(finishedSession);
+            mActivity.finishActivityIfNotFinishing();
+        }, 300);
+    }
+
     @Override
     public void onCopyTextToClipboard(@NonNull TerminalSession session, String text) {
         if (!mActivity.isVisible()) return;

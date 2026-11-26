@@ -265,6 +265,9 @@ public final class BulkRunHelper {
             exec.putExtra(TermuxConstants.TERMUX_APP.TERMUX_SERVICE.EXTRA_SESSION_ACTION,
                 String.valueOf(TermuxConstants.TERMUX_APP.TERMUX_SERVICE
                     .VALUE_EXTRA_SESSION_ACTION_SWITCH_TO_NEW_SESSION_AND_OPEN_ACTIVITY));
+            // v153: is khulne ka nishan — TermuxActivity ka
+            // cosmetic fade-in sirf isi launch par lage ga
+            noteTerminalLaunch(System.currentTimeMillis());
             a.startService(exec);
             if (onLaunched != null) onLaunched.run();
         } catch (Exception e) {
@@ -329,10 +332,22 @@ public final class BulkRunHelper {
      *    TerminalSessionClient slot se milta hai jo service/
      *    activity ke pas hai; dialog view use cheen kar
      *    full-terminal hand-off khatre me dalta.
-     *  - Background/Cancel wali row panel se POORI hata di —
-     *    is panel ke pas koi process handle nahi, Cancel
-     *    jhoot hota; Close ki jagah Terminal button hai —
-     *    wahi chalti hui session khulta hai
+     *  - v153 (owner-approved naya design): header saaf —
+     *    dots + "Project N" + LIVE badge + timer pill + X;
+     *    header ke neeche brand line NAHI (naam ab footer ki
+     *    chhoti line "✿ <name> · <number> ✿" me hai);
+     *    status row me spinner + chhoti loading line + dayein
+     *    taraf transcript ki AAKHRI asal ginti se bari
+     *    numbers ("5 / 8") or us ke neeche patli bar — ginti
+     *    na mile to dono ghayab (nakli number kabhi nahi);
+     *    chhoti screen me sirf aakhri ~4 asal lines or
+     *    "[Process completed - press Enter]" wali line panel
+     *    me KABHI nahi (sirf display filter); refresh ~200ms.
+     *  - v153 buttons: Terminal button KHATAM — neeche
+     *    Cancel (ASAL: session ka poora process tree group
+     *    SIGKILL se marta hai — killSessionTree), Background
+     *    or Close (dono sirf panel band karte hain; run
+     *    service ke session me chalta rehta hai).
      *  - "Finished" (RUN_DONE) SIRF sachche signal par
      *    dikhta hai (v152, owner ki hidayat): panel har tick
      *    TermuxService ki session list (TermuxShellManager)
@@ -344,8 +359,13 @@ public final class BulkRunHelper {
      *    Running par rehta hai — jhoota Done kabhi nahi.
      *    (Double-run guard phir bhi nahi lagaya gaya —
      *    ghalat guard na-hone se bura hai.)
-     *  - X / dismiss se run par ZERO asar (run service ke
-     *    session me hai, is dialog se us ka koi lena dena nahi)
+     *  - v153 AUTO-OFF: exit status asal me 0 ho to Finished
+     *    ~1.2s dikh kar panel KHUD band ho jata hai; ghalti
+     *    (exit != 0 ya status na mile) par panel KHULA rehta
+     *    hai — koi auto-off nahi, lines parhi ja sakti hain.
+     *  - X / Background / Close se run par ZERO asar (run
+     *    service ke session me hai, is dialog se us ka koi
+     *    lena dena nahi) — sirf Cancel use rokta hai.
      */
     private static void showRunViewPanel(final Activity a, final BulkProjects.ProjectInfo p,
                                          final String pipedCommand,
@@ -353,38 +373,86 @@ public final class BulkRunHelper {
         final Dialog dialog = new Dialog(a);
         final ConsoleViews cv = buildConsolePanel(a, p.name, dialog,
             () -> dialog.dismiss(), () -> {});
-        // v152 showpiece (owner: "Back showpiece ho — loading
-        // design, mera name, wo sb kuch"): design wali brand
-        // line chrome ke neeche — naam More Settings ke
-        // Showpiece Edit se badal sakta hai (default design
-        // wali line hi hai). Loading/Done lines bhi wahi se.
-        TextView brand = new TextView(a);
-        brand.setText(BulkRunSettings.showpieceName(a));
-        brand.setTextSize(11.5f);
-        brand.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        brand.setTextColor(BulkTheme.textMuted(a));
-        LinearLayout.LayoutParams brandLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        brandLp.bottomMargin = BulkTheme.dp(a, 8);
-        brand.setLayoutParams(brandLp);
-        cv.panel.addView(brand, 2);
+        // v153 (owner-approved naya design): header ke neeche
+        // wali brand line KHATAM — naam ab footer ki chhoti
+        // brand line me number ke sath ata hai (neeche dekho).
+        // Status line wohi chhoti editable loading line hai;
+        // LIVE badge run ke zinda rehne tak dikhta hai.
         cv.status.setText(BulkRunSettings.showpieceLoading(a,
             BulkStrings.t(a, BulkStrings.RUNNING_IN_TERMINAL)));
-        // Background/Cancel wali row is panel se POORI hata do —
-        // display-only panel ke pas koi process handle hai hi
-        // nahi, Cancel yahan jhoot hota. Text area (scroll) v152
-        // me REHTA hai — us me session ki asal screen ka
-        // snapshot dikhta hai. Sirf X (dismiss) or neeche
-        // Terminal button rehta hai.
+        cv.liveBadge.setVisibility(View.VISIBLE);
+        // Chhoti screen: ~4 lines ki unchai (poora 230dp wala
+        // dabba ab nahi — sirf aakhri asal lines)
+        LinearLayout.LayoutParams scp =
+            (LinearLayout.LayoutParams) cv.scroll.getLayoutParams();
+        scp.height = BulkTheme.dp(a, 88);
+        cv.scroll.setLayoutParams(scp);
+        // Build-in Background/Cancel row or akela Close button
+        // — dono hata kar nayi teen-button wali row (Cancel ka
+        // handler watch state ke sath neeche judta hai)
         if (cv.runActions.getParent() instanceof ViewGroup) {
             ((ViewGroup) cv.runActions.getParent()).removeView(cv.runActions);
         }
-        cv.closeBtn.setVisibility(View.VISIBLE);
-        cv.closeBtn.setText(BulkStrings.t(a, BulkStrings.TERMINAL));
-        cv.closeBtn.setOnClickListener(v -> {
-            dialog.dismiss();
-            openTerminalView(a);
-        });
+        if (cv.closeBtn.getParent() instanceof ViewGroup) {
+            ((ViewGroup) cv.closeBtn.getParent()).removeView(cv.closeBtn);
+        }
+        final boolean[] userGone = {false};
+        final boolean[] cancelPressed = {false};
+        final Runnable[] cancelAction = {null};
+        LinearLayout actions = new LinearLayout(a);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        alp.topMargin = BulkTheme.dp(a, 14);
+        actions.setLayoutParams(alp);
+        TextView cancelBtn = BulkTheme.secondaryButton(a,
+            BulkStrings.t(a, BulkStrings.CANCEL), v -> {
+                if (cancelAction[0] != null) cancelAction[0].run();
+            });
+        cancelBtn.setTextColor(BulkTheme.danger(a));
+        cancelBtn.setBackground(BulkTheme.dangerBg(a));
+        LinearLayout.LayoutParams cnp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cnp.rightMargin = BulkTheme.dp(a, 5);
+        cancelBtn.setLayoutParams(cnp);
+        actions.addView(cancelBtn);
+        TextView bgBtn = BulkTheme.secondaryButton(a,
+            BulkStrings.t(a, BulkStrings.BACKGROUND), v -> {
+                userGone[0] = true;
+                dialog.dismiss();
+            });
+        LinearLayout.LayoutParams bgp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        bgp.rightMargin = BulkTheme.dp(a, 5);
+        bgBtn.setLayoutParams(bgp);
+        actions.addView(bgBtn);
+        TextView closeBtn = BulkTheme.primaryButton(a,
+            BulkStrings.t(a, BulkStrings.CLOSE), v -> {
+                userGone[0] = true;
+                dialog.dismiss();
+            });
+        closeBtn.setLayoutParams(new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        actions.addView(closeBtn);
+        cv.panel.addView(actions);
+        // Footer brand line: "✿ <name> · <number> ✿" — chhoti
+        // si, darmiyan me. Naam/number Showpiece Edit se badal
+        // sakte hain; dono khaali hon to line hi nahi banti.
+        String footerText = BulkRunSettings.showpieceFooterText(
+            BulkRunSettings.showpieceName(a), BulkRunSettings.showpieceNumber(a));
+        if (!footerText.isEmpty()) {
+            TextView footer = new TextView(a);
+            footer.setText(footerText);
+            footer.setTextSize(11.5f);
+            footer.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            footer.setTextColor(BulkTheme.textMuted(a));
+            footer.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            flp.topMargin = BulkTheme.dp(a, 10);
+            footer.setLayoutParams(flp);
+            cv.panel.addView(footer);
+        }
         final Dialog shown = BulkTheme.showPanelDialog(a, cv.panel);
         final boolean[] launchedOnce = {false};
         shown.setOnDismissListener(d -> {
@@ -410,36 +478,125 @@ public final class BulkRunHelper {
         final long startMs = android.os.SystemClock.elapsedRealtime();
         final android.os.Handler uiHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
+        // v153: ASAL Cancel — session ka poora process tree
+        // (killSessionTree: group SIGKILL + finishIfRunning
+        // backstop). Candidate abhi na mila ho to session list
+        // me command se dhoondo; phir bhi na mile to poster har
+        // tick par cancelPressed dekh kar milte hi band kar
+        // dega (session bante hi). Status sachcha "Cancelled"
+        // ho jata hai or panel ek lamhe baad band — run ka
+        // session service me hota hai, panel band hone se
+        // pehle hi tree mar chuka hota hai.
+        cancelAction[0] = () -> {
+            if (cancelPressed[0] || watchDone[0]) return;
+            cancelPressed[0] = true;
+            TermuxSession target = watchCandidate[0];
+            if (target == null) {
+                try {
+                    TermuxShellManager sm = TermuxShellManager.getShellManager();
+                    if (sm != null) {
+                        for (TermuxSession s : new ArrayList<>(sm.mTermuxSessions)) {
+                            if (watchSnapshot.contains(s)) continue;
+                            ExecutionCommand ec = s.getExecutionCommand();
+                            if (ec != null && argumentsContainCommand(
+                                    ec.arguments, pipedCommand)) {
+                                target = s;
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            if (target != null) killSessionTree(target);
+            cv.liveBadge.setVisibility(View.GONE);
+            cv.spinner.setVisibility(View.GONE);
+            cv.status.setText(BulkStrings.t(a, BulkStrings.RUN_CANCELLED));
+            uiHandler.postDelayed(() -> {
+                if (shown.isShowing()) shown.dismiss();
+            }, 800);
+        };
         final Runnable[] poster = new Runnable[1];
         poster[0] = () -> {
             if (!shown.isShowing()) return;
             cv.timer.setText(BulkRunProgress.formatElapsed(
                 android.os.SystemClock.elapsedRealtime() - startMs));
-            // v152: har tick par sachcha Done signal dekho —
-            // mil jaye to status "Finished" ho jata hai or
-            // timer wahi ruk jata hai (poster chain khatam).
+            // v152/v153: har tick par sachcha Done signal dekho
+            // — mil jaye to exit status parha jata hai: sirf 0
+            // par "Finished" + AUTO-OFF; ghalti (ya status na
+            // mil sake) par panel KHULA rehta hai taake owner
+            // lines parh sake. Timer wahi ruk jata hai (poster
+            // chain khatam).
             if (!watchDone[0] && panelWatchTick(watchSnapshot,
                     watchCandidate, watchSeenRunning, pipedCommand)) {
                 watchDone[0] = true;
-                cv.status.setText(BulkRunSettings.showpieceDone(a,
-                    BulkStrings.t(a, BulkStrings.RUN_DONE)));
+                int exit = Integer.MIN_VALUE;
+                try {
+                    if (watchCandidate[0] != null
+                        && watchCandidate[0].getTerminalSession() != null
+                        && !watchCandidate[0].getTerminalSession().isRunning()) {
+                        exit = watchCandidate[0].getTerminalSession().getExitStatus();
+                    }
+                } catch (Exception ignored) {}
+                cv.liveBadge.setVisibility(View.GONE);
+                cv.spinner.setVisibility(View.GONE);
+                if (!cancelPressed[0]) {
+                    cv.status.setText(exit == 0
+                        ? BulkRunSettings.showpieceDone(a,
+                            BulkStrings.t(a, BulkStrings.RUN_DONE))
+                        : BulkStrings.t(a, BulkStrings.RUN_FAILED));
+                }
+                if (exit == 0 && !cancelPressed[0]) {
+                    // AUTO-OFF (owner ka hukm): Finished ek
+                    // lamha (~1.2s) dikhe, phir panel KHUD band.
+                    // Owner beech me Background/Close/X se gaya
+                    // ho to ye kuch nahi karta (panel pehle hi
+                    // band; userGone bhi nishan hai).
+                    uiHandler.postDelayed(() -> {
+                        if (shown.isShowing() && !userGone[0]) shown.dismiss();
+                    }, 1200);
+                }
             }
-            // v152 snapshot: candidate milte hi har tick
-            // session ki ASAL screen ka taaza tail text area
-            // me — Done wale tick par aakhri dafa bhi render
-            // hota hai, phir chain ruk jati hai. Text badla
-            // na ho to view ko nahi chhute (flicker nahi).
+            // Cancel dabane ke baad candidate der se mile to
+            // use bhi foran band karo (warna run peeche shuru
+            // ho kar chalta rehta)
+            if (cancelPressed[0] && !watchDone[0] && watchCandidate[0] != null) {
+                killSessionTree(watchCandidate[0]);
+            }
+            // Snapshot: candidate milte hi har tick session ki
+            // ASAL screen — panel me sirf aakhri ~4 lines or
+            // "[Process completed - press Enter]" wali line
+            // kabhi nahi (panelDisplayText ka filter). Done
+            // wale tick par aakhri dafa bhi render hota hai,
+            // phir chain ruk jati hai. Text badla na ho to
+            // view ko nahi chhute (flicker nahi).
             if (watchCandidate[0] != null) {
-                String snap = transcriptTail(
-                    sessionTranscriptText(watchCandidate[0]), 40);
+                String raw = sessionTranscriptText(watchCandidate[0]);
+                String snap = panelDisplayText(raw, 4);
                 if (!snap.equals(lastSnapshot[0])) {
                     lastSnapshot[0] = snap;
                     cv.out.setText(snap);
                     cv.scroll.post(() ->
                         cv.scroll.fullScroll(View.FOCUS_DOWN));
                 }
+                // LIVE numbers: transcript ki AAKHRI asal ginti
+                // hi bari ginti + patli bar banti hai — ginti na
+                // mile to dono ghayab rehte hain (nakli number
+                // kabhi nahi)
+                int[] count = parseTranscriptCount(raw);
+                if (count != null) {
+                    String c = count[0] + " / " + count[1];
+                    if (!c.equals(cv.countText.getText().toString())) {
+                        cv.countText.setText(c);
+                    }
+                    if (cv.slimBar.getVisibility() != View.VISIBLE) {
+                        cv.slimBar.setVisibility(View.VISIBLE);
+                    }
+                    BulkTheme.setProgress(cv.slimBar,
+                        countPercent(count[0], count[1]));
+                }
             }
-            if (!watchDone[0]) uiHandler.postDelayed(poster[0], 500);
+            // v153: refresh 500ms -> ~200ms (panel live lage)
+            if (!watchDone[0]) uiHandler.postDelayed(poster[0], 200);
         };
         uiHandler.post(poster[0]);
     }
@@ -561,6 +718,144 @@ public final class BulkRunHelper {
             if (command.equals(arg)) return true;
         }
         return false;
+    }
+
+    // ------------------------------------------------------------ v153: panel sachchai
+
+    /**
+     * TerminalSession process khatam hone par screen par ye
+     * line khud likhta hai ("\r\n[Process completed" +
+     * " - press Enter]"). Panel me ye line KABHI nahi dikhti
+     * (owner ka hukm) — sirf panel ke display se filter hoti
+     * hai; TerminalSession ki asal tehreer ko hath nahi lagta.
+     */
+    static final String PROCESS_COMPLETED_LINE = "[Process completed - press Enter]";
+
+    /** Ye line wahi dabane-wali line hai? (pure) */
+    static boolean isProcessCompletedLine(String line) {
+        return line != null && PROCESS_COMPLETED_LINE.equals(line.trim());
+    }
+
+    /**
+     * v153: panel ki chhoti screen ka sachcha text (pure) —
+     * transcript se "[Process completed - press Enter]" wali
+     * lines hata kar aakhri maxLines lines. Trailing khaali
+     * lines bhi hat jati hain. Ye sirf DISPLAY ka filter hai;
+     * session ki asal screen aisi ki aisi rehti hai.
+     */
+    static String panelDisplayText(String transcript, int maxLines) {
+        if (transcript == null || maxLines <= 0) return "";
+        String t = transcript.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = t.split("\n", -1);
+        List<String> kept = new ArrayList<>();
+        for (String line : lines) {
+            if (!isProcessCompletedLine(line)) kept.add(line);
+        }
+        while (!kept.isEmpty() && kept.get(kept.size() - 1).isEmpty()) {
+            kept.remove(kept.size() - 1);
+        }
+        int from = Math.max(0, kept.size() - maxLines);
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < kept.size(); i++) {
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(kept.get(i));
+        }
+        return sb.toString();
+    }
+
+    private static final java.util.regex.Pattern COUNT_PATTERN =
+        java.util.regex.Pattern.compile("(\\d+)\\s*/\\s*(\\d+)");
+
+    /**
+     * v153: transcript se AAKHRI "N/M" ginti (pure) — runner
+     * apni asal screen par jo progress chhapta hai (tqdm
+     * "HD Mode |█████░░| 5/8", delete "Mockups: 100% 15/15"),
+     * wahi panel ke numbers bante hain. Koi match na mile ya
+     * total 0 ho to null — panel number NAHI banata (nakli
+     * ginti kabhi nahi).
+     *
+     * @return {done, total} ya null
+     */
+    static int[] parseTranscriptCount(String transcript) {
+        if (transcript == null) return null;
+        java.util.regex.Matcher m = COUNT_PATTERN.matcher(transcript);
+        int[] last = null;
+        while (m.find()) {
+            try {
+                int done = Integer.parseInt(m.group(1));
+                int total = Integer.parseInt(m.group(2));
+                if (total > 0) last = new int[]{done, total};
+            } catch (NumberFormatException ignored) {}
+        }
+        return last;
+    }
+
+    /** Ginti se percent (pure): total <= 0 par 0; hamesha 0..100 ke andar. */
+    static int countPercent(int done, int total) {
+        if (total <= 0) return 0;
+        int pct = (int) Math.round(done * 100.0 / total);
+        if (pct < 0) return 0;
+        if (pct > 100) return 100;
+        return pct;
+    }
+
+    /**
+     * v153: ASAL Cancel — run ke session ka POORA process
+     * tree maro. Code se sabit tartib: JNI createSubprocess
+     * child par setsid() bulata hai (terminal-emulator ka
+     * termux.c) — shell apne process GROUP ka leader banta
+     * hai (pgid == pid) or ghair-interactive bash ke bachay
+     * (pipeline ka subshell, python) usi group me rehte
+     * hain. Is liye group par SIGKILL (-pid) poora tree
+     * khatam karta hai; sirf leader ko marna (finishIfRunning
+     * akela) python ko yateem chor deta — wo backstop ke tor
+     * par aakhir me bulta hai. Session list se hatana service
+     * ka apna rasta karta hai (exit ke baad onTermuxSession
+     * Exited); panel ka watch bhi !isRunning dekh kar Done
+     * pehchan leta hai.
+     */
+    static void killSessionTree(TermuxSession session) {
+        if (session == null || session.getTerminalSession() == null) return;
+        com.termux.terminal.TerminalSession ts = session.getTerminalSession();
+        try {
+            int pid = ts.getPid();
+            if (pid > 0) {
+                try {
+                    android.system.Os.kill(-pid, android.system.OsConstants.SIGKILL);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        try { ts.finishIfRunning(); } catch (Exception ignored) {}
+    }
+
+    // ------------------------------------------------------------ v153: terminal launch nishan
+
+    /**
+     * v153: launchInTerminal ne aakhri dafa TermuxActivity ko
+     * app-run ke liye khola — isi nishan se TermuxActivity ka
+     * cosmetic fade-in (sirf app-launched khulne par) or koi
+     * aur launch-scoped rawaiya pehchana jata hai. Hath se
+     * khola gaya terminal is nishan ko kabhi nahi bharta.
+     */
+    private static volatile long sTerminalLaunchMs = 0;
+
+    static void noteTerminalLaunch(long nowMs) {
+        sTerminalLaunchMs = nowMs;
+    }
+
+    /** Nishan abhi taaza hai? (pure) */
+    static boolean terminalLaunchFresh(long launchedMs, long nowMs, long windowMs) {
+        return launchedMs > 0 && nowMs >= launchedMs && nowMs - launchedMs <= windowMs;
+    }
+
+    /**
+     * Taaza nishan ek dafa istemal karke saaf kar do — baad
+     * wale hath ke khulne par asar nahi parta.
+     */
+    static synchronized boolean consumeTerminalLaunch(long nowMs, long windowMs) {
+        long launched = sTerminalLaunchMs;
+        sTerminalLaunchMs = 0;
+        return terminalLaunchFresh(launched, nowMs, windowMs);
     }
 
     // ------------------------------------------------------------ MANUAL popup
@@ -1096,6 +1391,11 @@ public final class BulkRunHelper {
         TextView timer;
         TextView status;
         ProgressBar spinner;
+        // v153: naya panel design — LIVE badge (chrome me), status
+        // row ke dayein taraf bari ginti, us ke neeche patli bar
+        TextView liveBadge;
+        TextView countText;
+        LinearLayout slimBar;
         LinearLayout counterBlock;
         TextView counter;
         TextView percent;
@@ -1158,6 +1458,19 @@ public final class BulkRunHelper {
         tp.leftMargin = BulkTheme.dp(a, 10);
         t.setLayoutParams(tp);
         chrome.addView(t);
+        // v153: LIVE badge — sirf jab run asal me zinda ho
+        // (showpiece panel ise chalata hai; default GONE)
+        cv.liveBadge = new TextView(a);
+        cv.liveBadge.setText("● LIVE");
+        cv.liveBadge.setTextSize(10.5f);
+        cv.liveBadge.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        cv.liveBadge.setTextColor(BulkTheme.danger(a));
+        LinearLayout.LayoutParams lbp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lbp.leftMargin = BulkTheme.dp(a, 8);
+        cv.liveBadge.setLayoutParams(lbp);
+        cv.liveBadge.setVisibility(View.GONE);
+        chrome.addView(cv.liveBadge);
         cv.timer = new TextView(a);
         cv.timer.setText("00:00");
         cv.timer.setTextSize(13);
@@ -1200,7 +1513,31 @@ public final class BulkRunHelper {
         slp.leftMargin = BulkTheme.dp(a, 9);
         cv.status.setLayoutParams(slp);
         statusRow.addView(cv.status);
+        // v153: status row ke dayein taraf bari ginti ("5 / 8") —
+        // sirf jab transcript se asal ginti mile (showpiece panel
+        // bharta hai; na mile to khaali rehti hai)
+        cv.countText = new TextView(a);
+        cv.countText.setTextSize(17);
+        cv.countText.setTypeface(android.graphics.Typeface.MONOSPACE,
+            android.graphics.Typeface.BOLD);
+        cv.countText.setTextColor(BulkTheme.textMain(a));
+        cv.countText.setGravity(Gravity.RIGHT);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        nlp.leftMargin = BulkTheme.dp(a, 9);
+        cv.countText.setLayoutParams(nlp);
+        statusRow.addView(cv.countText);
         panel.addView(statusRow);
+
+        // v153: status row ke neeche patli progress bar — ginti
+        // mile to hi dikhti hai (showpiece panel chalata hai)
+        cv.slimBar = BulkTheme.progressTrack(a);
+        LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, BulkTheme.dp(a, 5));
+        sbp.topMargin = BulkTheme.dp(a, 8);
+        cv.slimBar.setLayoutParams(sbp);
+        cv.slimBar.setVisibility(View.GONE);
+        panel.addView(cv.slimBar);
 
         // Bara counter block — SIRF jab asal progress parse ho
         cv.counterBlock = new LinearLayout(a);

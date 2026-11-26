@@ -196,7 +196,8 @@ public class BulkV152Test {
         assertTrue(src.contains("sm.mTermuxSessions"));
         assertTrue(src.contains("panelWatchTick(watchSnapshot,"));
         // Done par status RUN_DONE hota hai or poster rukta hai
-        String panel = window(src, "private static void showRunViewPanel", 5400);
+        // (v153: method lamba ho gaya hai — window bara rakha)
+        String panel = window(src, "private static void showRunViewPanel", 12000);
         assertTrue(panel.contains("BulkStrings.RUN_DONE"));
         assertTrue(panel.contains("watchSnapshot"));
         // panel ab bhi display-only hai: koi process nahi
@@ -381,7 +382,8 @@ public class BulkV152Test {
 
     @Test
     public void showpieceSettingsPure() {
-        assertEquals("Developer: Mehar Adnan", BulkRunSettings.SHOWPIECE_NAME_DEFAULT);
+        // v153: naam ki default owner ke hukm par sirf "Adnan"
+        assertEquals("Adnan", BulkRunSettings.SHOWPIECE_NAME_DEFAULT);
         assertEquals("X", BulkRunSettings.resolveShowpieceText("X", "D"));
         assertEquals("D", BulkRunSettings.resolveShowpieceText(null, "D"));
         assertEquals("D", BulkRunSettings.resolveShowpieceText("   ", "D"));
@@ -412,8 +414,9 @@ public class BulkV152Test {
     public void panelShowpieceWiring() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String panel = window(src, "private static void showRunViewPanel", 5600);
-        // brand line (naam) + editable loading/done lines
+        String panel = window(src, "private static void showRunViewPanel", 12000);
+        // v153: naam ab footer ki brand line me (showpieceName
+        // footer composer ko jata hai) + editable loading/done
         assertTrue(panel.contains("BulkRunSettings.showpieceName(a)"));
         assertTrue(panel.contains("BulkRunSettings.showpieceLoading(a,"));
         assertTrue(panel.contains("BulkRunSettings.showpieceDone(a,"));
@@ -423,10 +426,10 @@ public class BulkV152Test {
     public void versionIs152() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 152"));
+        assertTrue(gradle.contains("versionCode 153"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v152"));
+        assertTrue(dash.contains("Termux Mod v153"));
         assertFalse(dash.contains("Termux Mod v151"));
     }
 }
