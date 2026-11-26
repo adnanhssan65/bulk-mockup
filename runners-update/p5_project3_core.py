@@ -46,12 +46,11 @@ def set_wakelock(enable=True):
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: pass
 
-def scan_media(path, timeout_sec=1):
-    # Fire-and-forget: scan ko kabhi wait nahi karna — app ke andar run ho to
-    # termux-media-scan wapas ane me dair karta hai aur har image par time zaya hota hai.
-    # Scan pichay chal kar apna kaam khud pura kar leta hai, tartib launch order se rehti hai.
+def scan_media(path, timeout_sec=5):
     try:
-        subprocess.Popen(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["termux-media-scan", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        pass
     except Exception:
         pass
 
