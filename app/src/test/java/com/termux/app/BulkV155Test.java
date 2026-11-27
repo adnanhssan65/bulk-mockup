@@ -104,7 +104,10 @@ public class BulkV155Test {
         assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode(""));
         assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode("garbage"));
         assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode("past"));
-        assertEquals(BulkTimeMode.MODE_CURRENT, BulkTimeMode.resolveMode("current"));
+        // "current" mode khatam (owner ka faisla) — ye value
+        // ab ghalat value ki tarah PAST hi banti hai, taake
+        // marker me kabhi current ja hi na sake
+        assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode("current"));
         assertEquals(BulkTimeMode.MODE_FUTURE, BulkTimeMode.resolveMode("future"));
     }
 
@@ -112,7 +115,7 @@ public class BulkV155Test {
     public void timeModeMarkerContentIsResolvedMode() {
         assertEquals("past", BulkTimeMode.markerContent(null));
         assertEquals("past", BulkTimeMode.markerContent("xyz"));
-        assertEquals("current", BulkTimeMode.markerContent("current"));
+        assertEquals("past", BulkTimeMode.markerContent("current"));
         assertEquals("future", BulkTimeMode.markerContent("future"));
         assertEquals(".time_mode", BulkTimeMode.markerFile().getName());
         assertEquals("TermuxMod", BulkTimeMode.markerFile().getParentFile().getName());

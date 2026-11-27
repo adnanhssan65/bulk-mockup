@@ -11,14 +11,14 @@ import java.nio.charset.StandardCharsets;
  * Termux Mod v155 — Time Mode setting (More Settings).
  *
  * Mockup files ki mtime ladder kis zamane me lage, is ka
- * faisla: PAST (v154 wala proven default — ladder abhi se
- * peeche, tracker ke baad), CURRENT (tracker baghair, files
- * abhi tak barhti hui 1s step par) ya FUTURE (purana pre-v154
- * tareeqa — max(abhi, tracker) se +60s/file aage).
+ * faisla — sirf DO choices (owner ka faisla): PAST (v154
+ * wala proven default — ladder abhi se peeche, tracker ke
+ * baad) ya FUTURE (purana pre-v154 tareeqa — max(abhi,
+ * tracker) se +60s/file aage).
  *
  * Runners alag process me chalte hain, is liye halat MARKER
- * file se jati hai: TermuxMod/.time_mode, content "past" /
- * "current" / "future". Har runner run ke shuru me marker
+ * file se jati hai: TermuxMod/.time_mode, content sirf
+ * "past" / "future". Har runner run ke shuru me marker
  * ek dafa parhta hai; marker na ho ya content kuch aur ho
  * to PAST (default). Setting badalte hi marker taaza hota
  * hai or app start par bhi (syncMarker — Dashboard), taake
@@ -38,7 +38,6 @@ public final class BulkTimeMode {
     private static final String KEY_MODE = "time_mode";
 
     public static final String MODE_PAST = "past";
-    public static final String MODE_CURRENT = "current";
     public static final String MODE_FUTURE = "future";
 
     /** Marker file ka naam (TermuxMod root me). */
@@ -52,12 +51,14 @@ public final class BulkTimeMode {
     // ------------------------------------------------------------ pure
 
     /**
-     * Mode ka faisla (pure): sirf teen asal values qabool
-     * hain — baqi har cheez (null, khaali, ghalat) PAST hai,
-     * jo is version ka default hai.
+     * Mode ka faisla (pure): sirf "future" asal dusri value
+     * hai — baqi har cheez (null, khaali, ghalat, ya koi
+     * purani "current" value) PAST hai, jo is version ka
+     * default hai. Is liye marker me kabhi past/future ke
+     * siwa kuch ja hi nahi sakta.
      */
     public static String resolveMode(String stored) {
-        if (MODE_CURRENT.equals(stored) || MODE_FUTURE.equals(stored)) {
+        if (MODE_FUTURE.equals(stored)) {
             return stored;
         }
         return MODE_PAST;

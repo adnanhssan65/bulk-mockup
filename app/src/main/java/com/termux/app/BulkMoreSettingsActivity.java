@@ -513,9 +513,9 @@ public class BulkMoreSettingsActivity extends Activity {
 
     /**
      * v155 — Time Mode ki chhoti row: mojooda mode sub me
-     * dikhta hai; click par popup — teen choices (Past
-     * default / Current / Future) or USI popup ke andar
-     * Time Reset. Halat BulkTimeMode me save hoti hai or
+     * dikhta hai; click par popup — do choices (Past
+     * default / Future) or USI popup ke andar Time Reset.
+     * Halat BulkTimeMode me save hoti hai or
      * TermuxMod/.time_mode marker se runners tak jati hai.
      */
     private LinearLayout timeModeRow() {
@@ -562,9 +562,6 @@ public class BulkMoreSettingsActivity extends Activity {
 
     /** Mode ki label (dono zubano me mode ka naam waisa hi rehta hai). */
     private String timeModeLabel(String mode) {
-        if (BulkTimeMode.MODE_CURRENT.equals(mode)) {
-            return BulkStrings.t(this, BulkStrings.TIME_MODE_CURRENT);
-        }
         if (BulkTimeMode.MODE_FUTURE.equals(mode)) {
             return BulkStrings.t(this, BulkStrings.TIME_MODE_FUTURE);
         }
@@ -572,17 +569,17 @@ public class BulkMoreSettingsActivity extends Activity {
     }
 
     /**
-     * Time Mode popup: teen radio choices + neeche Time Reset
-     * ki chhoti row (shared tracker delete + toast). Band
-     * sirf button se (showPanelDialog ka lock).
+     * Time Mode popup: do radio choices (Past / Future —
+     * owner ka faisla, Current mode khatam) + neeche Time
+     * Reset ki chhoti row (shared tracker delete + toast).
+     * Band sirf button se (showPanelDialog ka lock).
      */
     private void showTimeModePopup(final TextView subView) {
         final android.app.Dialog dialog = new android.app.Dialog(this);
         LinearLayout panel = BulkTheme.modalPanel(this,
             BulkStrings.t(this, BulkStrings.TIME_MODE), dialog);
         final String current = BulkTimeMode.currentMode(this);
-        String[] modes = {BulkTimeMode.MODE_PAST, BulkTimeMode.MODE_CURRENT,
-            BulkTimeMode.MODE_FUTURE};
+        String[] modes = {BulkTimeMode.MODE_PAST, BulkTimeMode.MODE_FUTURE};
         for (final String mode : modes) {
             TextView opt = new TextView(this);
             opt.setText((mode.equals(current) ? "●  " : "○  ") + timeModeLabel(mode));

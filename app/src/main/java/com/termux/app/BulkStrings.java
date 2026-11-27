@@ -89,7 +89,6 @@ public final class BulkStrings {
     public static final String TIME_MODE = "time_mode";
     public static final String TIME_MODE_SUB_FMT = "time_mode_sub_fmt";
     public static final String TIME_MODE_PAST = "time_mode_past";
-    public static final String TIME_MODE_CURRENT = "time_mode_current";
     public static final String TIME_MODE_FUTURE = "time_mode_future";
     public static final String TIME_RESET = "time_reset";
     public static final String TIME_RESET_SUB = "time_reset_sub";
@@ -513,7 +512,6 @@ public final class BulkStrings {
         put(TIME_MODE, "Time Mode", "Time Mode");
         put(TIME_MODE_SUB_FMT, "File times: %s", "Files ki time: %s");
         put(TIME_MODE_PAST, "Past", "Past");
-        put(TIME_MODE_CURRENT, "Current", "Current");
         put(TIME_MODE_FUTURE, "Future", "Future");
         put(TIME_RESET, "Time Reset", "Time Reset");
         put(TIME_RESET_SUB, "Shared time tracker saaf — agli ladder fresh shuru hogi",
