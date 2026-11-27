@@ -277,6 +277,21 @@ O = os.path.join(B, f"{P_NUM}_Mockups")
 R = os.path.join(B, f"{P_NUM}_Ready_Wallpapers")
 W_H = os.path.join(B, "Ready_Upload_Batches")
 T_F = "/storage/emulated/0/.mockup_time_tracker.txt"
+
+
+def _time_mode():
+    # v155: Time Mode marker (app ki More Settings se likha jata
+    # hai): /storage/emulated/0/TermuxMod/.time_mode ka content
+    # past / current / future. File na ho ya value ghalat ho to
+    # PAST — v154 wala default.
+    try:
+        with open("/storage/emulated/0/TermuxMod/.time_mode", "r") as _mf:
+            _mv = _mf.read().strip().lower()
+        if _mv in ("past", "current", "future"):
+            return _mv
+    except Exception:
+        pass
+    return "past"
 M_P, S_P = os.path.join(B, "mockup.png"), os.path.join(B, "shape.png")
 
 # --- GALLERY REPAIR / BACKUP LOCATION ---
@@ -520,25 +535,49 @@ if action == 'process':
     #     floor = ek din pehle. Purani future files nayi files se "nayi"
     #     rahengi jab tak delete na hon — ye qabool shuda hai.
     _now0 = time.time()
-    _end_soft = _now0 - 60
-    _floor = None
-    if os.path.exists(T_F):
-        try:
-            with open(T_F,"r") as f:
-                _lt = float(f.read().strip())
-                if _lt < _now0: _floor = _lt
-        except: pass
-    if _floor is None:
-        _floor = _end_soft - 86400
     _slots = max(1, 2 * len(imgs))
-    _raw_step = (_end_soft - _floor) / _slots
-    if _raw_step >= 2:
-        t_step = min(_raw_step, 60.0)
-        cur_t = _end_soft - t_step * _slots
+    _tmode = _time_mode()
+    if _tmode == "future":
+        # v155 Time Mode FUTURE — purana (pre-v154) tareeqa:
+        # base = max(abhi, tracker), har file +60s; tracker me
+        # aakhri waqt neeche wapas likha jata hai.
+        _base = _now0
+        if os.path.exists(T_F):
+            try:
+                with open(T_F,"r") as f:
+                    _lt = float(f.read().strip())
+                    if _lt > _base: _base = _lt
+            except: pass
+        t_step = 60.0
+        cur_t = _base
+    elif _tmode == "current":
+        # v155 Time Mode CURRENT — tracker na parho na likho:
+        # files abhi tak barhti hui, 1s step, aakhri file <= abhi.
+        t_step = 1.0
+        cur_t = _now0 - t_step * _slots
     else:
-        # Branch B: window tang hai — tracker ke baad min step se chalo
-        t_step = 2.0
-        cur_t = _floor
+        # PAST (default) — v154 wala proven tareeqa, bilkul waisa:
+        # ladder hamesha past me rehti hai; nayi mtime ka
+        # nishana abhi se ~60s pehle; tracker me PAST value ho
+        # to nayi ladder us ke baad shuru hoti hai.
+        _end_soft = _now0 - 60
+        _floor = None
+        if os.path.exists(T_F):
+            try:
+                with open(T_F,"r") as f:
+                    _lt = float(f.read().strip())
+                    if _lt < _now0: _floor = _lt
+            except: pass
+        if _floor is None:
+            _floor = _end_soft - 86400
+        _raw_step = (_end_soft - _floor) / _slots
+        if _raw_step >= 2:
+            t_step = min(_raw_step, 60.0)
+            cur_t = _end_soft - t_step * _slots
+        else:
+            # Branch B: window tang hai — tracker ke baad min step se chalo
+            t_step = 2.0
+            cur_t = _floor
 
     print("")
 
@@ -631,7 +670,8 @@ if action == 'process':
 
     if processed_count > 0:
         try:
-            with open(T_F,"w") as f: f.write(str(cur_t))
+            if _tmode != "current":
+                with open(T_F, "w") as f: f.write(str(cur_t))
         except: pass
         print(f"\n {C4}✔ {processed_count} Joray aesthetic style mein ready!{ENDC}")
     else:
