@@ -133,28 +133,50 @@ def safe_scan(path, timeout_sec=5):
 
 
 # --- Gallery copies (TermuxMod) — set ki tartib me ---
-# Run ke sath hi har set ki files TermuxMod/Project N folder me bhi laga do,
-# bilkul usi order me jis order me save hui theen: pehli file Mockups me,
-# baqi Ready Wallpapers me; har copy par usi file ka tracker time aur copy
-# ke foran baad scan. Is se gallery me images set ki tartib me ati hain
-# (block me nahi). Folder mojood na ho to khamoshi se skip —
-# folder banana app ka kaam hai.
+# Run ke sath hi har set ki files TermuxMod/Project N ke EK hi "Pairs"
+# folder me laga do, bilkul usi production order me jis order me save hui
+# theen (mockup pehle, phir usi ka wallpaper); har copy par usi file ka
+# tracker time aur copy ke foran baad scan. Is se gallery me images set ki
+# tartib me ati hain (block me nahi). Project folder mojood na ho to
+# khamoshi se skip — folder banana app ka kaam hai.
 TM_ROOT = "/storage/emulated/0/TermuxMod"
 def gallery_copy_outputs(items):
     try:
         proj = os.path.join(TM_ROOT, f"Project {P_NUM}")
-        dm = os.path.join(proj, "Mockups")
-        dr = os.path.join(proj, "Ready Wallpapers")
-        if not (os.path.isdir(dm) and os.path.isdir(dr)):
+        if not os.path.isdir(proj):
             return
+        dp = os.path.join(proj, "Pairs")
+        if not os.path.isdir(dp):
+            os.makedirs(dp, exist_ok=True)
         import shutil
-        for i, (src, t) in enumerate(items):
-            d = os.path.join(dm if i == 0 else dr, os.path.basename(src))
+        for src, t in items:
+            d = os.path.join(dp, os.path.basename(src))
             shutil.copyfile(src, d)
             os.utime(d, (t, t))
             safe_scan(d)
     except Exception:
         pass
+
+
+# --- Batch ka naam (app popup se) ---
+# App Batch dabane par popup me naam poochta hai aur wo naam engine
+# folder ki ".batch_name" file me likh kar bhejta hai; file ho to batch
+# folder usi naam se banta hai, warna purana auto naam. Batch ka flow
+# bilkul purana hi hai - sirf folder ka naam badalta hai.
+def _batch_pick_name(auto_name):
+    try:
+        nf = os.path.join(B, ".batch_name")
+        if os.path.isfile(nf):
+            with open(nf) as fh:
+                nm = fh.read().strip()
+            try: os.remove(nf)
+            except Exception: pass
+            nm = nm.replace("/", "_").replace("\\", "_").strip().strip(".")
+            if nm:
+                return nm[:60]
+    except Exception:
+        pass
+    return auto_name
 
 def safe_scan_dir(path, timeout_sec=20):
     try:
@@ -663,7 +685,7 @@ def process_one(f, idx, t_now, is_hd, level, crop_916=False):
     fin = render_mockup(w_ready, datetime.now(), level)
     mock_path = os.path.join(O, f"{idx}.jpg")
     wall_path = os.path.join(R, f"{idx + 1}.jpg")
-    mt, wt = t_now + 60, t_now + 120
+    mt, wt = t_now + t_step, t_now + 2*t_step
     save_optimized(fin, mock_path); os.utime(mock_path, (mt, mt))
     save_optimized(w_ready, wall_path); os.utime(wall_path, (wt, wt))
     def ok(path):
@@ -705,13 +727,43 @@ if action == 'process':
     print(f" {C4}✔ Arabic time mockup engine ready!{ENDC}")
 
     s_idx = get_max_seq([O, R, W_H]) + 1
-    cur_t = time.time()
+    # --- Time ladder PAST me anchored (2026-11-27, phone test ke baad) ---
+    # Purana tareeqa cur_t ko abhi/future se shuru karke har file par +60s
+    # barhata tha — mtimes ghanton future me chale jate thay. Phone par
+    # saabit hua: Gallery/TikTok future dates bhi theek parhte hain, lekin
+    # Threads future-dated files ki tartib bigaar deta hai (system future
+    # dates ko clamp/tie kar deta hai); past-dated files har jagah perfect
+    # order me aati hain. Is liye ladder ab hamesha PAST me rehti hai:
+    #   * Run ki sab se nayi mtime ka nishana = abhi se ~60s pehle.
+    #   * Tracker me PAST value ho to nayi ladder us ke BAAD shuru hoti
+    #     hai (runs ki aapas ki tartib bani rehti hai) — step window ke
+    #     hisaab se shrink ho jata hai, min 2s/file.
+    #   * Branch B (window min step par bhi tang ho): ladder tracker ke
+    #     foran baad se min step (2s) par chalti hai — end abhi ke aas
+    #     paas rehta hai, future me nahi jata.
+    #   * Tracker me FUTURE (purani) value ho to use nazar-andaz kar do —
+    #     floor = ek din pehle. Purani future files nayi files se "nayi"
+    #     rahengi jab tak delete na hon — ye qabool shuda hai.
+    _now0 = time.time()
+    _end_soft = _now0 - 60
+    _floor = None
     if os.path.exists(T_F):
         try:
-            with open(T_F, "r") as fh:
-                lt = float(fh.read().strip())
-                if lt > cur_t: cur_t = lt
+            with open(T_F,"r") as f:
+                _lt = float(f.read().strip())
+                if _lt < _now0: _floor = _lt
         except: pass
+    if _floor is None:
+        _floor = _end_soft - 86400
+    _slots = max(1, 2 * len(imgs))
+    _raw_step = (_end_soft - _floor) / _slots
+    if _raw_step >= 2:
+        t_step = min(_raw_step, 60.0)
+        cur_t = _end_soft - t_step * _slots
+    else:
+        # Branch B: window tang hai — tracker ke baad min step se chalo
+        t_step = 2.0
+        cur_t = _floor
     print("")
     desc_text = "✨ HD Mode " if is_hd else "⚙️ Normal "
     desc_text += "| Crop 9:16 " if crop_916 else "| Original "
@@ -769,6 +821,28 @@ if action == 'del':
             except Exception: pass
         print(f" {C4}✔ {tag}: {n} files delete (backup ban gaya).{ENDC}")
         return n
+    def tm_pairs_cleanup(parity):
+        # TermuxMod "Pairs" copies ki safai — $HOME delete ke sath wahan ki
+        # copies bhi jayen: 'odd' = sirf mockups, 'even' = sirf wallpapers,
+        # 'all' = dono. _backup_and_clear sirf poora folder leta hai, single
+        # files nahi — is liye Pairs files seedha remove + folder scan.
+        # Project/Pairs folder na ho to khamoshi se skip.
+        try:
+            dp = os.path.join(TM_ROOT, f"Project {P_NUM}", "Pairs")
+            if not os.path.isdir(dp): return
+            _exts = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.avif')
+            for f in os.listdir(dp):
+                if f.startswith('.') or not f.lower().endswith(_exts): continue
+                stem = os.path.splitext(f)[0]
+                if not stem.isdigit(): continue
+                n = int(stem)
+                if parity == 'odd' and n % 2 == 0: continue
+                if parity == 'even' and n % 2 == 1: continue
+                try: os.remove(os.path.join(dp, f))
+                except Exception: pass
+            safe_scan_dir(dp)
+        except Exception:
+            pass
     display_header()
     print(f" {C5}✿ {BOLD}D e l e t e  M e n u{ENDC}")
     print(f" {C1}[1]{ENDC} Tayaar Maal (Mockups + Ready Wallpapers)")
@@ -780,8 +854,10 @@ if action == 'del':
     ch = input(f"\n {C4}➜ {ENDC}").strip()
     if ch == '1':
         _backup_and_clear(O, "Mockups"); _backup_and_clear(R, "Ready")
+        tm_pairs_cleanup('all')
     elif ch == '2':
         _backup_and_clear(O, "Mockups")
+        tm_pairs_cleanup('odd')
     elif ch == '3':
         _backup_and_clear(I, "Input")
     elif ch == '4':
@@ -840,7 +916,7 @@ if action == 'batch':
         print(f" {C2}✖ Batch ke liye Mockups/Ready me kuch nahi hai.{ENDC}")
     else:
         os.makedirs(W_H, exist_ok=True)
-        bname = "Batch_" + datetime.now().strftime("%d-%b_%I-%M%p")
+        bname = _batch_pick_name("Batch_" + datetime.now().strftime("%d-%b_%I-%M%p"))
         bd = os.path.join(W_H, bname)
         os.makedirs(bd, exist_ok=True)
         n = 0
