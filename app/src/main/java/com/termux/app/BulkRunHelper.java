@@ -232,6 +232,12 @@ public final class BulkRunHelper {
                                      final String pipedCommand, final Runnable onLaunched) {
         new Thread(() -> {
             try { BulkDropFolders.syncNow(a); } catch (Exception ignored) {}
+            // v155 Auto Recreate: is project ka drop set bhi
+            // pakka karo (syncNow tamam known ka karti hai —
+            // ye usi project par doosri, seedhi pakar hai)
+            try {
+                if (p.number > 0) BulkDropFolders.ensureProjectFolders(p.number);
+            } catch (Exception ignored) {}
             a.runOnUiThread(() -> {
                 if (a.isFinishing()) {
                     if (onLaunched != null) onLaunched.run();
@@ -473,6 +479,12 @@ public final class BulkRunHelper {
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         actions.addView(closeBtn);
         cv.panel.addView(actions);
+        // v155 (owner ka hukm): run CHAL raha ho to Close
+        // bilkul nahi — na neeche wala button, na header ka X.
+        // Dono run khatam hone par (watchDone wale block me)
+        // wapas ate hain. Cancel / Background wese ke wese.
+        closeBtn.setVisibility(View.GONE);
+        if (cv.headerX != null) cv.headerX.setVisibility(View.GONE);
         // Footer brand line: "✿ <name> · <number> ✿" — chhoti
         // si, darmiyan me. Naam/number Showpiece Edit se badal
         // sakte hain; dono khaali hon to line hi nahi banti.
@@ -577,6 +589,9 @@ public final class BulkRunHelper {
                 } catch (Exception ignored) {}
                 cv.liveBadge.setVisibility(View.GONE);
                 cv.spinner.setVisibility(View.GONE);
+                // v155: run khatam — Close + header X wapas
+                closeBtn.setVisibility(View.VISIBLE);
+                if (cv.headerX != null) cv.headerX.setVisibility(View.VISIBLE);
                 if (!cancelPressed[0]) {
                     cv.status.setText(exit == 0
                         ? BulkRunSettings.showpieceDone(a,
@@ -1445,6 +1460,9 @@ public final class BulkRunHelper {
         // run khatam hone par ye chhupati hai or Close nazar ata hai
         LinearLayout runActions;
         TextView closeBtn;
+        // v155: header wala X — showpiece panel ise run ke
+        // dauran chhupata hai (Close ke sath hi wapas ata hai)
+        LinearLayout headerX;
     }
 
     /**
@@ -1524,6 +1542,7 @@ public final class BulkRunHelper {
         xp.leftMargin = BulkTheme.dp(a, 8);
         closeX.setLayoutParams(xp);
         chrome.addView(closeX);
+        cv.headerX = closeX;
         panel.addView(chrome);
 
         View line = new View(a);

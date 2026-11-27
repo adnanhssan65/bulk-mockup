@@ -81,6 +81,10 @@ public final class BulkStrings {
     public static final String REMOVE_BTN = "remove_btn";
     public static final String REMOVED_TOAST = "removed_toast";
     public static final String REMOVE_FAILED = "remove_failed";
+    // v155 — Projects screen ki Status strip + popup
+    public static final String STATUS_LABEL = "status_label";
+    public static final String STATUS_ALL_EMPTY = "status_all_empty";
+    public static final String STATUS_READY_COUNT = "status_ready_count";
 
     public static final String ADD_WALLPAPERS_SUBTITLE = "add_wallpapers_subtitle";
     public static final String STEP1_SELECT_PROJECT = "step1_select_project";
@@ -494,6 +498,9 @@ public final class BulkStrings {
         put(REMOVE_BTN, "Remove", "Remove Karo");
         put(REMOVED_TOAST, "%s removed", "%s remove ho gaya");
         put(REMOVE_FAILED, "Project could not be removed.", "Project remove nahi ho saka.");
+        put(STATUS_LABEL, "Status", "Status");
+        put(STATUS_ALL_EMPTY, "All projects are empty", "Sab projects khali hain");
+        put(STATUS_READY_COUNT, "Ready count", "Ready count");
 
         // Add Wallpapers screen
         put(ADD_WALLPAPERS_SUBTITLE, "Select project first, then pick images",

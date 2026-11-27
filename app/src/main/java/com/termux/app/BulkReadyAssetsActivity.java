@@ -131,6 +131,20 @@ public class BulkReadyAssetsActivity extends Activity {
         if (mDropList) showStagedDrop();
         else if (mOpenProject != null) showFolder();
         else showList();
+        // v155 Auto Recreate: ye screen Pairs folders parhti
+        // hai — ghayab folders peeche ensure kar do, kuch naya
+        // bana ho to list ek dafa taaza (sirf list wali halat
+        // me; folder/drop view ko beech me nahi chhedte)
+        new Thread(() -> {
+            int[] counts = BulkDropFolders.ensureDropFoldersFull(
+                BulkDropFolders.knownNumbers());
+            if (counts[0] > 0) {
+                runOnUiThread(() -> {
+                    mProjects = loadProjects();
+                    if (!mDropList && mOpenProject == null) showList();
+                });
+            }
+        }).start();
     }
 
     @Override

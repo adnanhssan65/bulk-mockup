@@ -773,6 +773,12 @@ public final class BulkMediaRegister {
                     }
                 }
             }
+            // v155 Auto Recreate: scan se pehle is project ka
+            // drop set ensure karo — folder ghayab ho to khud
+            // ban jata hai, warna pass khamoshi se 0 de kar
+            // guzar jata tha (v154 wala phone masla: folders
+            // hi nahi thay, Gallery Scan "0 files" kehta raha)
+            BulkDropFolders.ensureProjectFolders(n);
             File dropDir = new File(BulkDropFolders.rootDir(),
                 BulkDropFolders.dropFolderName(n));
             if (!dropDir.isDirectory()) return 0;

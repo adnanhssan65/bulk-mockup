@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * Termux Mod v154 test (owner-approved 2026-11-27 — v152 ke
+ * Termux Mod v155 test (owner-approved 2026-11-27 — v152 ke
  * phone test ke baad ke hukm):
  *
  *  1) PANEL KA NAYA DESIGN (Run/Batch/Delete ka shared
@@ -57,7 +57,7 @@ import java.nio.file.Files;
  *  + ADD-ON: Run View ka fresh-install default wapas
  *    POPUP (stored value ki izzat waisi hi).
  *
- * versionCode 154 + footer v153.
+ * versionCode 155 + footer v153.
  */
 public class BulkV153Test {
 
@@ -235,7 +235,9 @@ public class BulkV153Test {
     public void panelUsesFilteredSnapshotAndLiveNumbers() throws Exception {
         String src = findSource(HELPER);
         assertNotNull(src);
-        String panel = window(src, "private static void showRunViewPanel", 12000);
+        // v155: window 12000 -> 15000 (item 4 ke Close/X GONE+VISIBLE
+        // blocks ne method lamba kar diya; asal asserts wese ke wese)
+        String panel = window(src, "private static void showRunViewPanel", 15000);
         assertFalse(panel.isEmpty());
         // filter shuda chhota snapshot + asal ginti + tez refresh
         assertTrue(panel.contains("panelDisplayText(raw, 4)"));
@@ -392,10 +394,10 @@ public class BulkV153Test {
     public void versionIs153() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 154"));
+        assertTrue(gradle.contains("versionCode 155"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v154"));
+        assertTrue(dash.contains("Termux Mod v155"));
         assertFalse(dash.contains("Termux Mod v153"));
     }
 }

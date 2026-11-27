@@ -191,6 +191,8 @@ public class BulkMoreSettingsActivity extends Activity {
             dialog.getWindow().setLayout(BulkTheme.dp(this, 320),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        // v155: popup sirf button se band hoga (bahir click / Back nahi)
+        BulkTheme.lockDialog(dialog);
         dialog.show();
     }
 
@@ -597,6 +599,8 @@ public class BulkMoreSettingsActivity extends Activity {
             dialog.getWindow().setLayout(BulkTheme.dp(this, 320),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        // v155: popup sirf button se band hoga (bahir click / Back nahi)
+        BulkTheme.lockDialog(dialog);
         dialog.show();
     }
 

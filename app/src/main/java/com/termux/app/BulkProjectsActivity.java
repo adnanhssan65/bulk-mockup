@@ -49,6 +49,11 @@ public class BulkProjectsActivity extends Activity {
     private LinearLayout mSearchRow;
     private android.widget.EditText mSearchField;
 
+    // v155: Status strip (Remove Project se upar) + us ka taaza data
+    private LinearLayout mStatusStrip;
+    private int[] mStatusNumbers = new int[0];
+    private int[] mStatusReady = new int[0];
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,6 +86,10 @@ public class BulkProjectsActivity extends Activity {
         root.setBackgroundColor(BulkTheme.appBg(this));
         root.addView(buildHeader());
         root.addView(buildSearchRow());
+        // v155: Status strip — Remove Project se bhi upar
+        // (owner: "uper status wala laga do, pata chal jaye
+        // kis kis me pare hue hain")
+        root.addView(buildStatusStrip());
         // v138: Remove Project ki chhoti si row screen ke TOP par
         // (owner ki hidayat: har project ke sath alag button NAHI)
         root.addView(buildRemoveProjectRow());
@@ -241,6 +250,9 @@ public class BulkProjectsActivity extends Activity {
         if (mBody == null) return;
         mBody.removeAllViews();
         List<BulkProjects.ProjectInfo> projects = loadProjects();
+        // v155: Status strip hamesha UNFILTERED poori list se
+        // taaza hoti hai (search filter is par lagu nahi)
+        refreshStatusStrip(projects);
         if (projects.isEmpty()) {
             mBody.addView(emptyState());
             BulkFonts.applyToTree(this, mBody);
@@ -796,6 +808,181 @@ public class BulkProjectsActivity extends Activity {
             BulkTheme.dp(this, 13), BulkTheme.dp(this, 13)));
         row.addView(chev);
         return row;
+    }
+
+    // ------------------------------------------------------------ v155: Status strip + popup
+
+    /**
+     * v155 (PURE): status entries — {number, ready} jore, input
+     * order me. number <= 0 wale skip; onlyPositive ho to
+     * ready <= 0 wale bhi skip. Null / lambai ka farq mehfooz.
+     */
+    static java.util.List<int[]> statusEntries(int[] numbers, int[] readyCounts,
+                                               boolean onlyPositive) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        if (numbers == null || readyCounts == null) return out;
+        int len = Math.min(numbers.length, readyCounts.length);
+        for (int i = 0; i < len; i++) {
+            if (numbers[i] <= 0) continue;
+            if (onlyPositive && readyCounts[i] <= 0) continue;
+            out.add(new int[]{numbers[i], readyCounts[i]});
+        }
+        return out;
+    }
+
+    /** v155 (PURE): strip ka compact text — "P1 6 · P18 5 · P20 5"; khaali par "". */
+    static String statusStripText(java.util.List<int[]> entries) {
+        if (entries == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int[] e : entries) {
+            if (e == null || e.length < 2) continue;
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append('P').append(e[0]).append(' ').append(e[1]);
+        }
+        return sb.toString();
+    }
+
+    /** v155 (PURE): popup ki rows — har row me zyada se zyada 2 entries (do column). */
+    static java.util.List<java.util.List<int[]>> statusPairRows(
+            java.util.List<int[]> entries) {
+        java.util.List<java.util.List<int[]>> rows = new java.util.ArrayList<>();
+        if (entries == null) return rows;
+        for (int i = 0; i < entries.size(); i += 2) {
+            java.util.List<int[]> row = new java.util.ArrayList<>();
+            row.add(entries.get(i));
+            if (i + 1 < entries.size()) row.add(entries.get(i + 1));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * v155: Status strip ka khaali dabba — ek slim si row
+     * (Remove Project wali row jesi unchai). Andar ka text
+     * refreshStatusStrip bharti hai. Tap par popup khulta
+     * hai jahan sab projects theek se dikhte hain.
+     */
+    private LinearLayout buildStatusStrip() {
+        mStatusStrip = new LinearLayout(this);
+        mStatusStrip.setOrientation(LinearLayout.HORIZONTAL);
+        mStatusStrip.setGravity(Gravity.CENTER_VERTICAL);
+        mStatusStrip.setBackground(BulkTheme.pillBg(this));
+        mStatusStrip.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 8),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 8));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(BulkTheme.dp(this, 18), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 18), 0);
+        mStatusStrip.setLayoutParams(lp);
+        mStatusStrip.setClickable(true);
+        mStatusStrip.setOnClickListener(v -> showStatusPopup());
+        return mStatusStrip;
+    }
+
+    /** Strip ka text taaza karo — cards wali hi Pairs parity ginti (Ready). */
+    private void refreshStatusStrip(List<BulkProjects.ProjectInfo> projects) {
+        if (mStatusStrip == null) return;
+        int size = projects != null ? projects.size() : 0;
+        int[] numbers = new int[size];
+        int[] ready = new int[size];
+        for (int i = 0; i < size; i++) {
+            BulkProjects.ProjectInfo p = projects.get(i);
+            numbers[i] = p != null ? p.number : 0;
+            ready[i] = numbers[i] > 0
+                ? BulkProjects.pairsCounts(BulkProjects.pairsDir(numbers[i]))[1] : 0;
+        }
+        mStatusNumbers = numbers;
+        mStatusReady = ready;
+
+        mStatusStrip.removeAllViews();
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.STATUS_LABEL));
+        label.setTextSize(13.5f);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setTextColor(BulkTheme.accent(this));
+        mStatusStrip.addView(label);
+
+        java.util.List<int[]> entries = statusEntries(numbers, ready, true);
+        TextView body = new TextView(this);
+        if (entries.isEmpty()) {
+            body.setText(BulkStrings.t(this, BulkStrings.STATUS_ALL_EMPTY));
+            body.setTextColor(BulkTheme.textMuted(this));
+        } else {
+            body.setText(statusStripText(entries));
+            body.setTextColor(BulkTheme.textMain(this));
+        }
+        body.setTextSize(13);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        blp.leftMargin = BulkTheme.dp(this, 10);
+        body.setLayoutParams(blp);
+        mStatusStrip.addView(body);
+
+        TextView caption = new TextView(this);
+        caption.setText(BulkStrings.t(this, BulkStrings.STATUS_READY_COUNT));
+        caption.setTextSize(10.5f);
+        caption.setTextColor(BulkTheme.textMuted(this));
+        mStatusStrip.addView(caption);
+        BulkFonts.applyToTree(this, mStatusStrip);
+    }
+
+    /**
+     * v155: Status popup — TAMAM projects owner ki text form
+     * me ("Project 1. 6"), ek line me do. Ready hi count hai
+     * (Mockups har card par wese hi dikhta hai — owner ka
+     * sketch sirf Ready wala tha). Band sirf button se
+     * (modalPanel ka X + neeche Close; bahir click band hai).
+     */
+    private void showStatusPopup() {
+        final Dialog dialog = new Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.STATUS_LABEL), dialog);
+        java.util.List<int[]> all = statusEntries(mStatusNumbers, mStatusReady, false);
+        if (all.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText(BulkStrings.t(this, BulkStrings.STATUS_ALL_EMPTY));
+            none.setTextColor(BulkTheme.textMuted(this));
+            none.setTextSize(13);
+            panel.addView(none);
+        } else {
+            ScrollView scroll = new ScrollView(this);
+            LinearLayout list = new LinearLayout(this);
+            list.setOrientation(LinearLayout.VERTICAL);
+            for (java.util.List<int[]> row : statusPairRows(all)) {
+                LinearLayout r = new LinearLayout(this);
+                r.setOrientation(LinearLayout.HORIZONTAL);
+                for (int[] e : row) {
+                    TextView cell = new TextView(this);
+                    cell.setText("Project " + e[0] + ". " + e[1]);
+                    cell.setTextSize(14);
+                    cell.setTextColor(BulkTheme.textMain(this));
+                    cell.setPadding(0, BulkTheme.dp(this, 5), 0, BulkTheme.dp(this, 5));
+                    r.addView(cell, new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                }
+                if (row.size() == 1) {
+                    // Akeli entry wali row me dusra column khaali
+                    // rakho — columns hamesha seedh me rahen
+                    r.addView(new TextView(this), new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                }
+                list.addView(r);
+            }
+            scroll.addView(list);
+            int scrollH = all.size() > 12
+                ? (int) (getResources().getDisplayMetrics().heightPixels * 0.45)
+                : ViewGroup.LayoutParams.WRAP_CONTENT;
+            panel.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, scrollH));
+        }
+        TextView close = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.CLOSE), v -> dialog.dismiss());
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = BulkTheme.dp(this, 14);
+        close.setLayoutParams(clp);
+        panel.addView(close);
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     /**

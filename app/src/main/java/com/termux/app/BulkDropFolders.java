@@ -234,6 +234,23 @@ public final class BulkDropFolders {
     }
 
     /**
+     * v155 (Auto Recreate — owner ka hukm: "folder ni tu ye
+     * bnaie khud", DEFAULT par): EK project ka poora drop set
+     * (root + Project N + Pairs + Batches) jo na ho bana do —
+     * sirf create, kabhi delete nahi. Run / scan / restore se
+     * pehle har jagah yahi check lagta hai, taake ghayab folder
+     * ki wajah se copies ya registration khamoshi se skip na
+     * ho (v154 wala phone masla).
+     * @return int[]{created, alreadyPresent}
+     */
+    public static int[] ensureProjectFolders(int n) {
+        if (n <= 0) return new int[]{0, 0};
+        Set<Integer> one = new TreeSet<>();
+        one.add(n);
+        return ensureDropFoldersFull(one);
+    }
+
+    /**
      * Ek project ka drop folder (ZIP se naya project ane par).
      * v138: poora set (Mockups / Ready Wallpapers ke sath) banta
      * hai or provision record bhi lag jata hai — sync ki provision
@@ -376,33 +393,20 @@ public final class BulkDropFolders {
     }
 
     /**
-     * Recreate Folders (Permissions): drop folders + mojooda project
-     * folders ke standard subfolders — sirf create, kabhi delete nahi.
+     * Recreate Folders (Permissions): drop folders ka poora set
+     * (root + har project ka Project N / Pairs / Batches) —
+     * sirf create, kabhi delete nahi.
+     * v155 COUNT FIX: pehle yahan ek dusra loop TermuxMod
+     * folders ke andar ENGINE-naam wale subfolders (N_wallpapers
+     * waghera) bhi gin leta tha — wahi "121 already present"
+     * wali phuli hui ghalat count thi (phone par folders asal
+     * me ghayab thay, number kuch aur kehta tha). Ab count
+     * SIRF wahi hai jo owner ko dikhta hai: is call ke
+     * mkdirs/isDirectory ke asal nataij.
      * @return int[]{created, alreadyPresent}
      */
     public static int[] recreateAll(Set<Integer> knownNumbers) {
-        // v136: Recreate = poora set (drop folder + output subfolders)
-        int[] counts = ensureDropFoldersFull(knownNumbers);
-        int created = counts[0], present = counts[1];
-        Set<Integer> candidates = new TreeSet<>();
-        if (knownNumbers != null) candidates.addAll(knownNumbers);
-        try {
-            candidates.addAll(BulkProjects.scanDiskProjects().keySet());
-        } catch (Exception ignored) {}
-        for (int n : candidates) {
-            if (n <= 0) continue;
-            File projectDir = BulkProjects.projectDir(n);
-            if (!projectDir.isDirectory()) continue; // sirf mojooda project folders
-            for (String sub : standardSubfolderNames(n)) {
-                File dir = new File(projectDir, sub);
-                if (dir.isDirectory()) {
-                    present++;
-                } else if (dir.mkdirs() || dir.isDirectory()) {
-                    created++;
-                }
-            }
-        }
-        return new int[]{created, present};
+        return ensureDropFoldersFull(knownNumbers);
     }
 
     // ------------------------------------------------------------ fetch (auto-import)
@@ -593,35 +597,28 @@ public final class BulkDropFolders {
     }
 
     /**
-     * Ek pass: preview videos (sirf mojooda folders me), phir
-     * fetch + mirror. Dashboard / Add / Projects ke khulne par
-     * background thread se chalaya jata hai.
-     * v136 LIFECYCLE (owner ka final rule): pehli-dafa setup
-     * (BulkHomeMigration, dropfolders_initialized) ke BAAD ye pass
-     * koi drop folder KABHI nahi banata — na Dashboard/Add/Projects
-     * khulne par, na sync me. Owner jo folder delete kare wo
-     * delete hi rehta hai or us ki ghair-mojoodgi se kahin koi
-     * masla nahi hota (fetch/mirror sirf mojooda folders par
-     * chalte hain, missing = khamosh skip). Wapas lane ka wahid
-     * rasta Permissions -> Recreate Folders (manual) hai.
+     * Ek pass: folder check + preview videos (sirf mojooda
+     * folders me), phir fetch + registration. Dashboard / Add /
+     * Projects ke khulne par background thread se chalaya
+     * jata hai.
+     * v155 LIFECYCLE (owner ka naya final rule — v136/v138 wala
+     * "delete kiya folder wapas nahi banta" usool khatam):
+     * AUTO RECREATE DEFAULT hai — jahan folder chahiye wahan
+     * pehle check hota hai, na ho to app KHUD bana leti hai
+     * (start/sync, run, scan — har jagah). Is liye ye pass ab
+     * BILA SHART tamam known projects ka poora drop set
+     * (Project N + Pairs + Batches) ensure karti hai; provision
+     * records ab folder banne ko NAHI rokte (wo sirf purani
+     * pehchan ke liye rehte hain). Sirf create hota hai —
+     * delete kabhi nahi.
      * @return project me move hui kul files
      */
     public static int syncNow(Context ctx) {
         Set<Integer> known = knownNumbers();
         if (known.isEmpty()) return 0;
-        // v138: ghayab drop folders ki ONE-TIME provision — sirf
-        // v136 init ke BAAD (fresh install par pehli setup wala
-        // pass hi folders banata hai; us se race nahi karna).
-        // Enumeration wahi hai jo tamam lists istemal karti hain
-        // (mergeProjects: conf + $HOME disk) — is liye purane
-        // versions me ZIP-add hue projects (15/16/17), jin ke
-        // folders v136 init me reh gaye thay, pehli v138 pass me
-        // ban jate hain. Record lag jane ke baad koi folder dobara
-        // kabhi nahi banta (v136 lifecycle waisa ka waisa).
-        if (BulkHomeMigration.isDropInitialized(ctx)) {
-            seedProvisionRecordsForBundled(ctx, known);
-            provisionMissing(ctx, known);
-        }
+        // v155: Auto Recreate — ghayab drop folders khud bante
+        // hain (provision record ka gate khatam)
+        ensureDropFoldersFull(known);
         // v135: Preview Video ka master switch (Control Panel) OFF ho
         // to video kabhi copy nahi hoti — Auto ON ho tab bhi nahi.
         // v136: videos bhi sirf MOJOOD drop folders me jati hain.

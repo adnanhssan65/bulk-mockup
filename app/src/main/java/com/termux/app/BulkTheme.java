@@ -731,6 +731,21 @@ public final class BulkTheme {
         return panel;
     }
 
+    /**
+     * v155 (owner ka hukm — "sirf button sy he ho jobe ho"):
+     * popup bahir kahin bhi click karne se gayab NAHI hota
+     * or Back se bhi nahi — jo bhi hoga SIRF us ke apne
+     * button (X / Close / Cancel / option) se hoga. Har app
+     * dialog ko show karne se pehle yahi lock lagta hai.
+     */
+    public static Dialog lockDialog(Dialog dialog) {
+        if (dialog != null) {
+            dialog.setCanceledOnTouchOutside(false);
+            dialog.setCancelable(false);
+        }
+        return dialog;
+    }
+
     public static Dialog showPanelDialog(Activity a, LinearLayout panel) {
         // v128 fix: modalPanel ne caller ka dialog tag kiya ho to WAHI
         // dikhao (us ke close/dismiss handlers usi par lage hain);
@@ -738,6 +753,7 @@ public final class BulkTheme {
         Dialog dialog = (panel.getTag() instanceof Dialog)
             ? (Dialog) panel.getTag() : new Dialog(a);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        lockDialog(dialog);
         // v127: muntakhab font har popup par bhi lage
         BulkFonts.applyToTree(a, panel);
         dialog.setContentView(panel);
@@ -908,6 +924,7 @@ public final class BulkTheme {
             w.setBackgroundDrawableResource(android.R.color.transparent);
             w.setLayout((int) (a.getResources().getDisplayMetrics().widthPixels * 0.88), ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        lockDialog(dialog);
         dialog.show();
     }
 }
