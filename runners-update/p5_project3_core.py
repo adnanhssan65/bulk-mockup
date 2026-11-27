@@ -273,17 +273,20 @@ if action == 'process':
     _slots = max(1, len(imgs) + (len(imgs) + slots_count - 1) // slots_count)
     _tmode = _time_mode()
     if _tmode == "future":
-        # v155 Time Mode FUTURE — purana (pre-v154) tareeqa:
-        # base = max(abhi, tracker), har file +60s; tracker me
+        # v155 Time Mode FUTURE — purana (pre-v154) tareeqa,
+        # do behtariyon ke sath: step +10s/file (pehle 60s tha)
+        # or tracker ki bhaag-daud par bandish: tracker abhi
+        # se 600s se zyada aage ho to use nazar-andaz karke
+        # anchor abhi par (self-healing pull-back); tracker me
         # aakhri waqt neeche wapas likha jata hai.
         _base = _now0
         if os.path.exists(T_F):
             try:
                 with open(T_F,"r") as f:
                     _lt = float(f.read().strip())
-                    if _lt > _base: _base = _lt
+                    if _lt > _base and _lt <= _now0 + 600: _base = _lt
             except: pass
-        t_step = 60.0
+        t_step = 10.0
         cur_t = _base
     elif _tmode == "current":
         # v155 Time Mode CURRENT — tracker na parho na likho:
@@ -305,14 +308,19 @@ if action == 'process':
             except: pass
         if _floor is None:
             _floor = _end_soft - 86400
+        # v155 behtari (squeeze khatam): window kam az kam
+        # slots x 0.5s ki lazmi ho — warna floor ko PEECHE
+        # (deeper past) le jao taake har file ko >= 0.5s ki
+        # spacing mile. Future me kabhi nahi barhna:
+        # end_soft hamesha abhi-60 hi rehta hai, or tracker
+        # me aakhir me is run ka aakhri waqt hi likha jata
+        # hai (purani convention) — agla run is block ke
+        # baad se hi shuru hota hai.
+        if _end_soft - _floor < _slots * 0.5:
+            _floor = _end_soft - _slots * 0.5
         _raw_step = (_end_soft - _floor) / _slots
-        if _raw_step >= 2:
-            t_step = min(_raw_step, 60.0)
-            cur_t = _end_soft - t_step * _slots
-        else:
-            # Branch B: window tang hai — tracker ke baad min step se chalo
-            t_step = 2.0
-            cur_t = _floor
+        t_step = min(_raw_step, 60.0)
+        cur_t = _end_soft - t_step * _slots
 
     # Chunking logic: 6 (ya jitne bhi slots hain) ka set banaye ga
     chunks = [imgs[i:i + slots_count] for i in range(0, len(imgs), slots_count)]
