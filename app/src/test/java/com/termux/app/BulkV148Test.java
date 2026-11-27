@@ -240,20 +240,22 @@ public class BulkV148Test {
     public void registerHookedAfterMirrorSync() throws Exception {
         String drop = findSource("app/src/main/java/com/termux/app/BulkDropFolders.java");
         assertNotNull("BulkDropFolders source milna chahiye", drop);
-        assertTrue(drop.contains("BulkMediaRegister.registerProject(ctx, n)"));
-        // Hook mirror ke DONO syncOneMirror calls ke BAAD hai
-        int hook = drop.indexOf("BulkMediaRegister.registerProject");
-        int lastMirror = drop.lastIndexOf("syncOneMirror(ctx, n");
-        assertTrue("hook mirror sync ke baad hona chahiye", hook > lastMirror);
+        // v154: mirror BAND — syncNow ke andar plain registration
+        // (registerAllProjects) hook hai; purana mirror rasta gayab
+        assertTrue(drop.contains("BulkMediaRegister.registerAllProjects(ctx, known, false)"));
+        assertFalse(drop.contains("syncOneMirror"));
+        String reg = findSource("app/src/main/java/com/termux/app/BulkMediaRegister.java");
+        assertNotNull(reg);
+        assertTrue(reg.contains("total += registerProject(ctx, n, force)"));
     }
 
     @Test
     public void versionBumpedTo150() throws Exception {
         String dash = findSource("app/src/main/java/com/termux/app/BulkDashboardActivity.java");
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v153"));
+        assertTrue(dash.contains("Termux Mod v154"));
         String gradle = findSource("app/build.gradle");
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 153"));
+        assertTrue(gradle.contains("versionCode 154"));
     }
 }

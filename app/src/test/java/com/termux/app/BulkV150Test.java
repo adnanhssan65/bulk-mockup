@@ -298,21 +298,19 @@ public class BulkV150Test {
     public void registerWiringHasProbeLadderSpacingAndDrain() throws Exception {
         String src = findSource(REGISTER);
         assertNotNull(src);
+        // pure helpers mehfooz hain
         assertTrue(src.contains("DATA_IN_CHUNK = 300"));
-        assertTrue(src.contains("chunkPaths(paths, DATA_IN_CHUNK)"));
-        assertTrue(src.contains("smartFixSuffixWithTies(plan.toRegister, rows)"));
-        assertTrue(src.contains("BulkApiServer.awaitIdle(SERVER_DRAIN_MS)"));
-        // probe: scan → update → read-back → delete-test, cached
-        assertTrue(src.contains("dateadded_probe150"));
-        assertTrue(src.contains("private static boolean runProbe(Context ctx)"));
-        assertTrue(src.contains("bulk_probe150.jpg"));
-        assertTrue(src.contains("applyDateAddedLadder"));
-        assertTrue(src.contains("ContentProviderOperation.newUpdate"));
-        // fallback spacing + progress log
-        assertTrue(src.contains("spacingDelayMs("));
-        assertTrue(src.contains("Order fix \" + done + \"/\" + proceed.size()"));
-        // purani ghair-chunked query gayab
-        assertFalse(src.contains("queryRowOrder"));
+        assertTrue(src.contains("public static List<List<String>> chunkPaths"));
+        // v154: probe / ladder / drain / update machinery KHATAM
+        assertFalse(src.contains("runProbe"));
+        assertFalse(src.contains("applyDateAddedLadder"));
+        assertFalse(src.contains("awaitIdle"));
+        assertFalse(src.contains("ContentProviderOperation"));
+        assertFalse(src.contains("dateadded_probe150"));
+        // naya plain pass: wait (seconds) + Auto Scan gate + scanOne
+        assertTrue(src.contains("resolveWaitSeconds"));
+        assertTrue(src.contains("Thread.sleep(wait * 1000L)"));
+        assertTrue(src.contains("scanOne(ctx, path)"));
     }
 
     // ------------------------------------------------------------ api check row
@@ -350,9 +348,9 @@ public class BulkV150Test {
     public void versionIs151() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 153"));
+        assertTrue(gradle.contains("versionCode 154"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v153"));
+        assertTrue(dash.contains("Termux Mod v154"));
     }
 }

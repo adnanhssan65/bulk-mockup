@@ -159,6 +159,43 @@ public final class BulkRunHelper {
         dispatchView(a, p, pipedCommand, onLaunched);
     }
 
+    /**
+     * v154 (item 9): panel ke teenon button (Cancel / Background
+     * / Close) — har naam EK hi line me, kabhi do lines me na
+     * toote ("Backgrou/nd" wala defect). Barabar width pehle se
+     * weight=1 se hai; yahan sirf single-line + saaf size/padding
+     * pakka hota hai.
+     */
+    private static void oneLine(TextView... bs) {
+        for (TextView b : bs) {
+            b.setSingleLine(true);
+            b.setMaxLines(1);
+            b.setEllipsize(null);
+            b.setTextSize(15.5f);
+            b.setPadding(BulkTheme.dp(b.getContext(), 6), b.getPaddingTop(),
+                BulkTheme.dp(b.getContext(), 6), b.getPaddingBottom());
+        }
+    }
+
+    /**
+     * v154 (item 8): kisi action (process/batch/del) ko is dafa
+     * ke liye seedha TERMINAL view me chalao — Run View ki saved
+     * setting ko hath nahi lagta (wo apni jagah default rehti
+     * hai). Pehle wahi pre-run fetch (syncNow), phir terminal.
+     */
+    public static void startInTerminal(final Activity a, final BulkProjects.ProjectInfo p,
+                                       final String action) {
+        if (a == null || p == null || action == null) return;
+        final String cmd = BulkProjects.effectiveCommand(p, action);
+        if (cmd == null) return;
+        new Thread(() -> {
+            try { BulkDropFolders.syncNow(a); } catch (Exception ignored) {}
+            a.runOnUiThread(() -> {
+                if (!a.isFinishing()) launchInTerminal(a, cmd, null);
+            });
+        }).start();
+    }
+
     /** v151: Projects ka Batch button bhi yahin se — Run wala hi fetch + terminal dispatch. */
     public static void startBatch(final Activity a, final BulkProjects.ProjectInfo p) {
         if (a == null || p == null) return;
@@ -431,6 +468,7 @@ public final class BulkRunHelper {
                 userGone[0] = true;
                 dialog.dismiss();
             });
+        oneLine(cancelBtn, bgBtn, closeBtn);
         closeBtn.setLayoutParams(new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         actions.addView(closeBtn);
@@ -1216,11 +1254,12 @@ public final class BulkRunHelper {
             }
             BulkLog.setStatus(null);
             BulkLog.add(doneMsg);
-            // v134: run ke outputs (mockups + ready) ka mirror
-            // TermuxMod/Project N ke andar — background thread par,
-            // run ki completion is par nahi rukti
+            // v154: run ke baad sirf gallery registration —
+            // Pairs ki nayi files ek dafa scan (mirror band hai;
+            // copies runner khud Pairs me deta hai). Background
+            // thread par, run ki completion is par nahi rukti
             final int mirrorProject = p.number;
-            new Thread(() -> BulkDropFolders.syncMirrorForProject(a, mirrorProject)).start();
+            new Thread(() -> BulkMediaRegister.registerProject(a, mirrorProject)).start();
             final int fExit = exit;
             a.runOnUiThread(() -> {
                 if (!shown.isShowing()) return;

@@ -209,6 +209,42 @@ public final class BulkProjectInstaller {
     public static void removeProject(Context context, int n) throws Exception {
         if (n <= 0) return;
         deleteRecursive(BulkProjects.projectDir(n));
+        unregisterProject(context, n);
+        Logger.logInfo(LOG_TAG, "Project " + n + " removed");
+    }
+
+    /**
+     * v154 — Remove Project ka naya rasta: engine folder delete
+     * NAHI hota, Recycle Bin (BulkRecycleBin) me chala jata hai;
+     * registration ki safai (conf + aliases + provision record)
+     * bilkul removeProject wali hi hai, taake project tamam
+     * lists se foran ghayab ho jaye. Bin se Restore karne par
+     * folder + registration dono wapas aa jate hain.
+     */
+    public static void removeProjectToBin(Context context, int n, String displayName)
+            throws Exception {
+        if (n <= 0) return;
+        File srcDir = BulkProjects.projectDir(n);
+        File binDir = BulkRecycleBin.entryDir(n);
+        if (srcDir.isDirectory()) {
+            deleteRecursive(binDir);
+            File parent = binDir.getParentFile();
+            if (parent != null) {
+                //noinspection ResultOfMethodCallIgnored
+                parent.mkdirs();
+            }
+            if (!srcDir.renameTo(binDir)) {
+                copyDir(srcDir, binDir);
+                deleteRecursive(srcDir);
+            }
+        }
+        BulkRecycleBin.writeMeta(n, displayName);
+        unregisterProject(context, n);
+        Logger.logInfo(LOG_TAG, "Project " + n + " moved to recycle bin");
+    }
+
+    /** removeProject or removeProjectToBin ki mushtaraka registration safai. */
+    private static void unregisterProject(Context context, int n) throws Exception {
         File conf = ProjectsLauncher.projectsConfFile();
         if (conf.exists()) {
             String updated = BulkProjects.removeConfLines(readText(conf), n);
@@ -220,7 +256,6 @@ public final class BulkProjectInstaller {
             if (updated != null) writeText(bashrc, updated);
         }
         BulkDropFolders.clearProvisionRecord(context, n);
-        Logger.logInfo(LOG_TAG, "Project " + n + " removed");
     }
 
     private static void writeText(File f, String content) throws Exception {

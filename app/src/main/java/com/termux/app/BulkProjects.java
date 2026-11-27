@@ -726,6 +726,89 @@ public final class BulkProjects {
         return count;
     }
 
+    // ------------------------------------------------------------ v154: Pairs counts + batch name
+
+    /** v154: TermuxMod/Project N ke andar "Pairs" folder (gallery copies ki ek hi jagah). */
+    public static File pairsDir(int n) {
+        return new File(new File(BulkDropFolders.rootDir(),
+            BulkDropFolders.dropFolderName(n)), BulkMirror.PAIRS_SUB);
+    }
+
+    /**
+     * Pairs folder ki ginti (pure): numbered image files ko
+     * number ki parity se — odd = Mockups, even = Ready.
+     * Number na ho ya image na ho to ginti me nahi. Folder na
+     * ho to {0, 0}.
+     * @return int[]{mockups, ready}
+     */
+    public static int[] pairsCounts(File pairsDir) {
+        int[] out = {0, 0};
+        if (pairsDir == null || !pairsDir.isDirectory()) return out;
+        File[] kids = pairsDir.listFiles();
+        if (kids == null) return out;
+        for (File k : kids) {
+            if (!k.isFile()) continue;
+            String name = k.getName();
+            if (!isImageFile(name)) continue;
+            long stem = BulkMediaRegister.numericStem(name);
+            if (stem < 0) continue;
+            if (stem % 2L == 1L) out[0]++; else out[1]++;
+        }
+        return out;
+    }
+
+    /** Batch naam ki safai (pure): path separators khatam, lambai ki hadd — runner bhi yahi karta hai. */
+    public static String sanitizeBatchName(String raw) {
+        if (raw == null) return "";
+        String nm = raw.replace("/", "_").replace("\\", "_").trim();
+        while (nm.startsWith(".")) nm = nm.substring(1).trim();
+        if (nm.length() > 60) nm = nm.substring(0, 60).trim();
+        return nm;
+    }
+
+    /**
+     * Batch ka default (auto) naam (pure): warehouse ke mojooda
+     * batch folders ki tadaad + 1 — bilkul runner wale hisaab se
+     * (P<N>_Batch_<bn>).
+     */
+    public static String defaultBatchName(File warehouseDir, int n) {
+        int count = 0;
+        if (warehouseDir != null && warehouseDir.isDirectory()) {
+            File[] kids = warehouseDir.listFiles();
+            if (kids != null) {
+                for (File k : kids) if (k.isDirectory()) count++;
+            }
+        }
+        return "P" + n + "_Batch_" + (count + 1);
+    }
+
+    /** Project ke engine warehouse (Ready_Upload_Batches) ka folder. */
+    public static File warehouseDir(int n) {
+        return new File(projectDir(n), "Ready_Upload_Batches");
+    }
+
+    /**
+     * Batch popup ka chuna hua naam runner tak pohanchane ka
+     * rasta: engine folder ki ".batch_name" file. Naam khaali
+     * ho to file hata do — runner apna auto naam istemal
+     * karega. Runner parhne ke baad file khud delete kar deta
+     * hai (ek dafa ka signal hai).
+     */
+    public static void writeBatchName(int n, String name) {
+        try {
+            File f = new File(projectDir(n), ".batch_name");
+            String clean = sanitizeBatchName(name);
+            if (clean.isEmpty()) {
+                //noinspection ResultOfMethodCallIgnored
+                f.delete();
+                return;
+            }
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                out.write(clean.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } catch (Exception ignored) {}
+    }
+
     /** Counts wali line: "Wallpapers: 3 · Mockups: 1 · Ready: 2" */
     public static String countsLine(int wallpapers, int mockups, int ready) {
         return "Wallpapers: " + wallpapers + " · Mockups: " + mockups + " · Ready: " + ready;

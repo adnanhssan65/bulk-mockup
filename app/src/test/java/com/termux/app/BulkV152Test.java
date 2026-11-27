@@ -360,22 +360,21 @@ public class BulkV152Test {
     public void sequencePassWiringIsDeleteFree() throws Exception {
         String src = findSource(REGISTER);
         assertNotNull(src);
-        // gate: teeno switches
-        assertTrue(src.contains(
-            "if (!isOrderFixEnabled(ctx) && !isSequenceFixEnabled(ctx)"));
-        // Alag Second legacy raste me ladder band karta hai
-        assertTrue(src.contains("if (isAlagSecondEnabled(ctx)) fastPath = false;"));
-        // Sequence pass ka apna hissa: insert + update +
-        // applyBatch hai, DELETE bilkul nahi
-        int from = src.indexOf("private static int sequenceFixPass");
-        int to = src.indexOf("private static boolean deleteRows");
+        // v154: sequence pass hi KHATAM — poori file me koi
+        // MediaStore delete/update machinery nahi; pass sirf
+        // scanOne se register karta hai (delete-free se aage:
+        // write-free)
+        assertFalse(src.contains("sequenceFixPass"));
+        assertFalse(src.contains("deleteRows"));
+        assertFalse(src.contains("ContentProviderOperation"));
+        int from = src.indexOf("public static int registerProject(Context ctx, int n, boolean force)");
+        int to = src.indexOf("public static int registerAllProjects");
         assertTrue(from >= 0 && to > from);
-        String seq = src.substring(from, to);
-        assertTrue(seq.contains("applyBatch"));
-        assertTrue(seq.contains("newInsert"));
-        assertTrue(seq.contains("newUpdate"));
-        assertFalse(seq.contains(".delete("));
-        assertTrue(seq.contains("sequenceMismatches"));
+        String pass = src.substring(from, to);
+        assertTrue(pass.contains("scanOne"));
+        assertFalse(pass.contains(".delete("));
+        assertFalse(pass.contains("newUpdate"));
+        assertFalse(pass.contains("newInsert"));
     }
 
     // ------------------------------------------------------------ showpiece
@@ -396,18 +395,21 @@ public class BulkV152Test {
     public void moreSettingsFamilyComplete() throws Exception {
         String src = findSource(MORE_SETTINGS);
         assertNotNull(src);
-        // chaar nayi/family rows body me lagti hain
+        // family rows body me lagti hain (v154: sequence/alag ki
+        // jagah autoScan + waitTime)
         assertTrue(src.contains("body.addView(runViewRow());"));
         assertTrue(src.contains("body.addView(showpieceEditRow());"));
-        assertTrue(src.contains("body.addView(sequenceFixRow());"));
-        assertTrue(src.contains("body.addView(alagSecondRow());"));
+        assertTrue(src.contains("body.addView(autoScanRow());"));
+        assertTrue(src.contains("body.addView(waitTimeRow());"));
+        assertFalse(src.contains("body.addView(sequenceFixRow());"));
+        assertFalse(src.contains("body.addView(alagSecondRow());"));
         // editor teen fields save karta hai
         assertTrue(src.contains("BulkRunSettings.setShowpieceName"));
         assertTrue(src.contains("BulkRunSettings.setShowpieceLoading"));
         assertTrue(src.contains("BulkRunSettings.setShowpieceDone"));
-        // switches apni apni settings par
-        assertTrue(src.contains("BulkMediaRegister.setSequenceFixEnabled"));
-        assertTrue(src.contains("BulkMediaRegister.setAlagSecondEnabled"));
+        // nayi settings apni apni jagah par
+        assertTrue(src.contains("BulkMediaRegister.setAutoScanEnabled"));
+        assertTrue(src.contains("BulkMediaRegister.setWaitSeconds"));
     }
 
     @Test
@@ -426,10 +428,10 @@ public class BulkV152Test {
     public void versionIs152() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 153"));
+        assertTrue(gradle.contains("versionCode 154"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v153"));
+        assertTrue(dash.contains("Termux Mod v154"));
         assertFalse(dash.contains("Termux Mod v151"));
     }
 }

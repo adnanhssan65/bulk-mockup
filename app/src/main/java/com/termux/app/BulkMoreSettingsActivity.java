@@ -67,12 +67,11 @@ public class BulkMoreSettingsActivity extends Activity {
                     Toast.LENGTH_SHORT).show();
             }
         }));
-        body.addView(orderFixRow());
+        body.addView(autoScanRow());
+        body.addView(waitTimeRow());
         body.addView(scanWaqfaRow());
         body.addView(runViewRow());
         body.addView(showpieceEditRow());
-        body.addView(sequenceFixRow());
-        body.addView(alagSecondRow());
         return root;
     }
 
@@ -214,31 +213,6 @@ public class BulkMoreSettingsActivity extends Activity {
         et.setSingleLine(true);
         panel.addView(et);
         return et;
-    }
-
-    /**
-     * v152 — Sequence Fix ki switch wali chhoti row (Run View
-     * wali shakal). Default OFF. ON ho to register pass
-     * delete-free ordered write + self-check wala rasta leta
-     * hai (BulkMediaRegister.sequenceFixPass).
-     */
-    private LinearLayout sequenceFixRow() {
-        return switchRow(BulkStrings.t(this, BulkStrings.SEQ_FIX),
-            BulkStrings.t(this, BulkStrings.SEQ_FIX_SUB),
-            BulkMediaRegister.isSequenceFixEnabled(this),
-            on -> BulkMediaRegister.setSequenceFixEnabled(this, on));
-    }
-
-    /**
-     * v152 — Har File Alag Second ki switch wali chhoti row.
-     * Default OFF. ON ho to register pass ki har registration
-     * ≥1 second ke waqfe se girti hai (ladder fast-path band).
-     */
-    private LinearLayout alagSecondRow() {
-        return switchRow(BulkStrings.t(this, BulkStrings.ALAG_SECOND),
-            BulkStrings.t(this, BulkStrings.ALAG_SECOND_SUB),
-            BulkMediaRegister.isAlagSecondEnabled(this),
-            on -> BulkMediaRegister.setAlagSecondEnabled(this, on));
     }
 
     /** Switch wali chhoti row — Run View wali hi shakal, aam helper. */
@@ -389,14 +363,110 @@ public class BulkMoreSettingsActivity extends Activity {
     }
 
     /**
-     * v149 Item F — Order Fix ki switch wali chhoti row (owner ka
-     * UI rule: ek chhoti row, andar hi wazahat). Switch ka haal
-     * BulkMediaRegister ki persisted setting hai (default ON);
-     * badalna agli register pass se lagu hota hai, restart ki
-     * zaroorat nahi. OFF ho to app nayi files ka gallery order
-     * fix nahi karta.
+     * v154 — Auto Scan ki option: switch wali chhoti row or USI
+     * ke andar (neeche, divider ke baad) ek-dafa wala "Gallery
+     * Scan" button. Switch OFF ho to runs ke baad ki automatic
+     * registration ruk jati hai; Gallery Scan phir bhi ek dafa
+     * ka manual pass chala deta hai. Default ON.
      */
-    private LinearLayout orderFixRow() {
+    private LinearLayout autoScanRow() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(BulkTheme.pillBg(this));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.setMargins(0, 0, 0, BulkTheme.dp(this, 10));
+        box.setLayoutParams(blp);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        top.setClickable(true);
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.AUTO_SCAN));
+        label.setTextSize(14);
+        label.setTypeface(medium());
+        label.setTextColor(BulkTheme.textMain(this));
+        texts.addView(label);
+        TextView sub = new TextView(this);
+        sub.setText(BulkStrings.t(this, BulkStrings.AUTO_SCAN_SUB));
+        sub.setTextSize(11.5f);
+        sub.setTextColor(BulkTheme.textMuted(this));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = BulkTheme.dp(this, 2);
+        sub.setLayoutParams(slp);
+        texts.addView(sub);
+        top.addView(texts, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        final Switch sw = new Switch(this);
+        sw.setChecked(BulkMediaRegister.isAutoScanEnabled(this));
+        sw.setOnCheckedChangeListener((button, on) ->
+            BulkMediaRegister.setAutoScanEnabled(this, on));
+        top.addView(sw);
+        top.setOnClickListener(v -> sw.toggle());
+        box.addView(top);
+
+        View divider = new View(this);
+        divider.setBackground(BulkTheme.hLine(this));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        dlp.leftMargin = BulkTheme.dp(this, 14);
+        dlp.rightMargin = BulkTheme.dp(this, 14);
+        divider.setLayoutParams(dlp);
+        box.addView(divider);
+
+        LinearLayout scan = new LinearLayout(this);
+        scan.setOrientation(LinearLayout.HORIZONTAL);
+        scan.setGravity(Gravity.CENTER_VERTICAL);
+        scan.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        scan.setClickable(true);
+        LinearLayout scanTexts = new LinearLayout(this);
+        scanTexts.setOrientation(LinearLayout.VERTICAL);
+        TextView scanLabel = new TextView(this);
+        scanLabel.setText(BulkStrings.t(this, BulkStrings.GALLERY_SCAN));
+        scanLabel.setTextSize(13.5f);
+        scanLabel.setTypeface(medium());
+        scanLabel.setTextColor(BulkTheme.textMain(this));
+        scanTexts.addView(scanLabel);
+        TextView scanSub = new TextView(this);
+        scanSub.setText(BulkStrings.t(this, BulkStrings.GALLERY_SCAN_SUB));
+        scanSub.setTextSize(11.5f);
+        scanSub.setTextColor(BulkTheme.textMuted(this));
+        scanTexts.addView(scanSub);
+        scan.addView(scanTexts, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        scan.addView(chev);
+        scan.setOnClickListener(v -> {
+            Toast.makeText(this, BulkStrings.t(this, BulkStrings.GALLERY_SCAN_RUNNING),
+                Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                final int done = BulkDropFolders.galleryScanNow(this);
+                runOnUiThread(() -> Toast.makeText(this,
+                    String.format(BulkStrings.t(this, BulkStrings.GALLERY_SCAN_DONE_FMT), done),
+                    Toast.LENGTH_SHORT).show());
+            }).start();
+        });
+        box.addView(scan);
+        return box;
+    }
+
+    /**
+     * v154 — Wait Time ki chhoti row: mojooda seconds sub me
+     * dikhte hain; click par editor (seconds me qeemat) or
+     * editor ke AAKHIR me reset icon jo shipped default
+     * (0 seconds) wapas kar deta hai.
+     */
+    private LinearLayout waitTimeRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -412,13 +482,14 @@ public class BulkMoreSettingsActivity extends Activity {
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);
         TextView label = new TextView(this);
-        label.setText(BulkStrings.t(this, BulkStrings.ORDER_FIX));
+        label.setText(BulkStrings.t(this, BulkStrings.WAIT_TIME));
         label.setTextSize(14);
         label.setTypeface(medium());
         label.setTextColor(BulkTheme.textMain(this));
         texts.addView(label);
-        TextView sub = new TextView(this);
-        sub.setText(BulkStrings.t(this, BulkStrings.ORDER_FIX_SUB));
+        final TextView sub = new TextView(this);
+        sub.setText(String.format(BulkStrings.t(this, BulkStrings.WAIT_TIME_SUB_FMT),
+            BulkMediaRegister.waitSeconds(this)));
         sub.setTextSize(11.5f);
         sub.setTextColor(BulkTheme.textMuted(this));
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
@@ -428,14 +499,105 @@ public class BulkMoreSettingsActivity extends Activity {
         texts.addView(sub);
         row.addView(texts, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-
-        final Switch sw = new Switch(this);
-        sw.setChecked(BulkMediaRegister.isOrderFixEnabled(this));
-        sw.setOnCheckedChangeListener((button, on) ->
-            BulkMediaRegister.setOrderFixEnabled(this, on));
-        row.addView(sw);
-        row.setOnClickListener(v -> sw.toggle());
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+        row.setOnClickListener(v -> showWaitTimeEditor(sub));
         return row;
+    }
+
+    /** Wait Time editor — numeric field (seconds) + neeche reset ki chhoti row. */
+    private void showWaitTimeEditor(final TextView subView) {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(BulkTheme.glassPanelStrong(this));
+        panel.setPadding(BulkTheme.dp(this, 16), BulkTheme.dp(this, 14),
+            BulkTheme.dp(this, 16), BulkTheme.dp(this, 16));
+
+        TextView title = new TextView(this);
+        title.setText(BulkStrings.t(this, BulkStrings.WAIT_TIME));
+        title.setTextSize(15);
+        title.setTypeface(medium());
+        title.setTextColor(BulkTheme.textMain(this));
+        panel.addView(title);
+
+        final android.widget.EditText field = new android.widget.EditText(this);
+        field.setText(String.valueOf(BulkMediaRegister.waitSeconds(this)));
+        field.setHint(BulkStrings.t(this, BulkStrings.WAIT_TIME_HINT));
+        field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        field.setSingleLine(true);
+        field.setTextSize(13.5f);
+        field.setTextColor(BulkTheme.textMain(this));
+        LinearLayout.LayoutParams fLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        fLp.topMargin = BulkTheme.dp(this, 10);
+        field.setLayoutParams(fLp);
+        panel.addView(field);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin = BulkTheme.dp(this, 14);
+        row.setLayoutParams(rowLp);
+        TextView cancel = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.CANCEL), v -> dialog.dismiss());
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cLp.rightMargin = BulkTheme.dp(this, 5);
+        cancel.setLayoutParams(cLp);
+        row.addView(cancel);
+        TextView save = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.SAVE), v -> {
+                int secs = BulkMediaRegister.DEFAULT_WAIT_SECONDS;
+                try {
+                    secs = Integer.parseInt(field.getText().toString().trim());
+                } catch (Exception ignored) {}
+                BulkMediaRegister.setWaitSeconds(this, secs);
+                subView.setText(String.format(
+                    BulkStrings.t(this, BulkStrings.WAIT_TIME_SUB_FMT),
+                    BulkMediaRegister.waitSeconds(this)));
+                dialog.dismiss();
+            });
+        LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        sLp.leftMargin = BulkTheme.dp(this, 5);
+        save.setLayoutParams(sLp);
+        row.addView(save);
+        panel.addView(row);
+
+        // Option ke aakhir me reset ki chhoti row: shipped default wapas
+        TextView reset = new TextView(this);
+        reset.setText("\u21BA  " + BulkStrings.t(this, BulkStrings.RESET_DEFAULT));
+        reset.setTextSize(12.5f);
+        reset.setTextColor(BulkTheme.textMuted(this));
+        reset.setGravity(Gravity.CENTER);
+        reset.setClickable(true);
+        LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rLp.topMargin = BulkTheme.dp(this, 12);
+        reset.setLayoutParams(rLp);
+        reset.setOnClickListener(v -> {
+            BulkMediaRegister.setWaitSeconds(this, BulkMediaRegister.DEFAULT_WAIT_SECONDS);
+            subView.setText(String.format(
+                BulkStrings.t(this, BulkStrings.WAIT_TIME_SUB_FMT),
+                BulkMediaRegister.DEFAULT_WAIT_SECONDS));
+            dialog.dismiss();
+        });
+        panel.addView(reset);
+
+        dialog.setContentView(panel);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(
+                new android.graphics.drawable.ColorDrawable(
+                    android.graphics.Color.TRANSPARENT));
+            dialog.getWindow().setLayout(BulkTheme.dp(this, 320),
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        dialog.show();
     }
 
     /** Chhoti si tappable row: label + chevron (owner ka UI rule). */

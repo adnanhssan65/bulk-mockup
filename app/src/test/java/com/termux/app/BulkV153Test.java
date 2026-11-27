@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * Termux Mod v153 test (owner-approved 2026-11-27 — v152 ke
+ * Termux Mod v154 test (owner-approved 2026-11-27 — v152 ke
  * phone test ke baad ke hukm):
  *
  *  1) PANEL KA NAYA DESIGN (Run/Batch/Delete ka shared
@@ -57,7 +57,7 @@ import java.nio.file.Files;
  *  + ADD-ON: Run View ka fresh-install default wapas
  *    POPUP (stored value ki izzat waisi hi).
  *
- * versionCode 153 + footer v153.
+ * versionCode 154 + footer v153.
  */
 public class BulkV153Test {
 
@@ -392,10 +392,10 @@ public class BulkV153Test {
     public void versionIs153() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 153"));
+        assertTrue(gradle.contains("versionCode 154"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v153"));
-        assertFalse(dash.contains("Termux Mod v152"));
+        assertTrue(dash.contains("Termux Mod v154"));
+        assertFalse(dash.contains("Termux Mod v153"));
     }
 }

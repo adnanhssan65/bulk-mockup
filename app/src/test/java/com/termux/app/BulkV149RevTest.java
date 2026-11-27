@@ -274,13 +274,14 @@ public class BulkV149RevTest {
     public void smartPassWiring() throws Exception {
         String src = findSource(REGISTER);
         assertNotNull(src);
-        // v150: wiring ab tie-aware suffix + chunked queryRows
-        // par hai (purani smartFixSuffix/queryRowOrder wiring
-        // superseded — pure smartFixSuffix tests oper wese hi).
-        assertTrue(src.contains("smartFixSuffixWithTies(plan.toRegister, rows)"));
-        assertTrue(src.contains("queryRows"));
-        assertTrue(src.contains("DATE_ADDED"));
-        assertTrue(src.contains("order pehle se sahi hai"));
+        // v154: pass ab PLAIN REGISTRATION hai — Pairs folder ki
+        // sirf na-registered files, signature plan ke sath; purani
+        // tie-suffix/queryRows/DATE_ADDED wiring superseded
+        assertTrue(src.contains("public static int registerProject(Context ctx, int n, boolean force)"));
+        assertTrue(src.contains("BulkMirror.PAIRS_SUB"));
+        assertTrue(src.contains("plan(ordered, sigs, registered)"));
+        assertFalse(src.contains("sequenceFixPass"));
+        assertFalse(src.contains("applyDateAddedLadder"));
     }
 
     // ------------------------------------------------------------ R2

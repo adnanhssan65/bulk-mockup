@@ -22,6 +22,12 @@ public final class BulkMirror {
     public static final String MOCKUPS_SUB = "Mockups";
     public static final String READY_SUB = "Ready Wallpapers";
 
+    /** v154: gallery copies ka EK hi folder — jori (mockup + wallpaper)
+     *  production tartib me isi me rehti hai. */
+    public static final String PAIRS_SUB = "Pairs";
+    /** v154: batch folders ka parent (har batch apna naam wala folder). */
+    public static final String BATCHES_SUB = "Batches";
+
     private BulkMirror() {}
 
     public static final class Plan {

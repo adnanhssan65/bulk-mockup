@@ -399,7 +399,7 @@ public class BulkProjectsActivity extends Activity {
             // v151: Batch bhi BulkRunHelper se — pehle drop sync,
             // phir terminal session (Run wala hi rasta/view)
             TextView batch = BulkTheme.secondaryButton(this, BulkStrings.t(this, BulkStrings.BATCH),
-                v -> BulkRunHelper.startBatch(this, p));
+                v -> showBatchNamePopup(p, () -> BulkRunHelper.startBatch(this, p)));
             batch.setTextSize(12);
             setEnabledStyle(batch, BulkProjects.effectiveCommand(p, "batch") != null);
             actions.addView(batch, actionLp(first ? 0 : BulkTheme.dp(this, 8)));
@@ -418,8 +418,167 @@ public class BulkProjectsActivity extends Activity {
             actions.addView(delete, actionLp(BulkTheme.dp(this, 8)));
 
             panel.addView(actions);
+
+            // v154: Terminal ki chhoti si row — is dafa ke liye
+            // Run/Batch/Delete seedha terminal view me. Run View
+            // ki saved setting (Popup default) is se nahi badalti.
+            LinearLayout termRow = new LinearLayout(this);
+            termRow.setOrientation(LinearLayout.HORIZONTAL);
+            termRow.setGravity(Gravity.CENTER_VERTICAL);
+            termRow.setBackground(BulkTheme.pillBg(this));
+            termRow.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 8),
+                BulkTheme.dp(this, 12), BulkTheme.dp(this, 8));
+            LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tLp.topMargin = BulkTheme.dp(this, 10);
+            termRow.setLayoutParams(tLp);
+            termRow.setClickable(true);
+            ImageView tIcon = BulkTheme.icon(this, R.drawable.ic_bulk_terminal,
+                BulkTheme.textMain(this), 15);
+            tIcon.setLayoutParams(new LinearLayout.LayoutParams(
+                BulkTheme.dp(this, 15), BulkTheme.dp(this, 15)));
+            termRow.addView(tIcon);
+            TextView tLabel = new TextView(this);
+            tLabel.setText(BulkStrings.t(this, BulkStrings.TERMINAL));
+            tLabel.setTextSize(13);
+            tLabel.setTextColor(BulkTheme.textMain(this));
+            LinearLayout.LayoutParams tlLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+            tlLp.leftMargin = BulkTheme.dp(this, 8);
+            tLabel.setLayoutParams(tlLp);
+            termRow.addView(tLabel);
+            ImageView tChev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+                BulkTheme.textMuted(this), 13);
+            tChev.setLayoutParams(new LinearLayout.LayoutParams(
+                BulkTheme.dp(this, 13), BulkTheme.dp(this, 13)));
+            termRow.addView(tChev);
+            termRow.setOnClickListener(v -> showTerminalPopup(p));
+            panel.addView(termRow);
         }
         return panel;
+    }
+
+    /** Terminal popup: Run / Batch / Delete — teeno is dafa terminal me. */
+    private void showTerminalPopup(final BulkProjects.ProjectInfo p) {
+        if (p == null || p.number <= 0) return;
+        final Dialog dialog = new Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            p.name + " — " + BulkStrings.t(this, BulkStrings.TERMINAL), dialog);
+        panel.addView(terminalActionRow(BulkStrings.t(this, BulkStrings.RUN),
+            BulkProjects.effectiveCommand(p, "process") != null, () -> {
+                dialog.dismiss();
+                BulkRunHelper.startInTerminal(this, p, "process");
+            }));
+        panel.addView(terminalActionRow(BulkStrings.t(this, BulkStrings.BATCH),
+            BulkProjects.effectiveCommand(p, "batch") != null, () -> {
+                dialog.dismiss();
+                showBatchNamePopup(p, () -> BulkRunHelper.startInTerminal(this, p, "batch"));
+            }));
+        panel.addView(terminalActionRow(BulkStrings.t(this, BulkStrings.DELETE),
+            BulkProjects.effectiveCommand(p, "del") != null, () -> {
+                dialog.dismiss();
+                runInTerminal(BulkProjects.effectiveCommand(p, "del"));
+            }));
+        BulkTheme.showPanelDialog(this, panel);
+    }
+
+    private LinearLayout terminalActionRow(String label, boolean enabled,
+                                           final Runnable onTap) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = BulkTheme.dp(this, 8);
+        row.setLayoutParams(lp);
+        TextView name = new TextView(this);
+        name.setText(label);
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(13.5f);
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        row.addView(name, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        row.setEnabled(enabled);
+        row.setAlpha(enabled ? 1f : 0.4f);
+        row.setClickable(enabled);
+        row.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
+        return row;
+    }
+
+    /**
+     * v154 (item 11 — sirf NAAM): Batch dabane par naam wala
+     * popup. Field me default (auto) naam pehle se likha hota
+     * hai, sath \u00D7 (clear) icon se field saaf karke apna
+     * naam likha ja sakta hai, neeche Done. Chuna hua naam
+     * engine folder ki ".batch_name" file se runner tak jata
+     * hai or batch folder usi naam se banta hai — files apne
+     * purane naamon/silsile ke sath EK hi flat folder me jati
+     * hain. Batch ka baqi flow 100% original hai.
+     */
+    private void showBatchNamePopup(final BulkProjects.ProjectInfo p,
+                                    final Runnable proceed) {
+        if (p == null || p.number <= 0) return;
+        final Dialog dialog = new Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            p.name + " — " + BulkStrings.t(this, BulkStrings.BATCH_NAME), dialog);
+
+        LinearLayout fieldRow = new LinearLayout(this);
+        fieldRow.setOrientation(LinearLayout.HORIZONTAL);
+        fieldRow.setGravity(Gravity.CENTER_VERTICAL);
+        final android.widget.EditText field = new android.widget.EditText(this);
+        field.setText(BulkProjects.defaultBatchName(
+            BulkProjects.warehouseDir(p.number), p.number));
+        field.setSingleLine(true);
+        field.setTextSize(14);
+        field.setTextColor(BulkTheme.textMain(this));
+        field.setSelectAllOnFocus(true);
+        fieldRow.addView(field, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView clear = new TextView(this);
+        clear.setText("\u00D7");
+        clear.setTextSize(20);
+        clear.setGravity(Gravity.CENTER);
+        clear.setTextColor(BulkTheme.textMuted(this));
+        clear.setClickable(true);
+        clear.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 36), BulkTheme.dp(this, 36)));
+        clear.setOnClickListener(v -> {
+            field.setText("");
+            field.requestFocus();
+        });
+        fieldRow.addView(clear);
+        panel.addView(fieldRow);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin = BulkTheme.dp(this, 10);
+        row.setLayoutParams(rowLp);
+        TextView cancel = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.CANCEL), v -> dialog.dismiss());
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cLp.rightMargin = BulkTheme.dp(this, 5);
+        cancel.setLayoutParams(cLp);
+        row.addView(cancel);
+        TextView done = BulkTheme.primaryButton(this,
+            BulkStrings.t(this, BulkStrings.DONE_BTN), v -> {
+                BulkProjects.writeBatchName(p.number, field.getText().toString());
+                dialog.dismiss();
+                if (proceed != null) proceed.run();
+            });
+        LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        dLp.leftMargin = BulkTheme.dp(this, 5);
+        done.setLayoutParams(dLp);
+        row.addView(done);
+        panel.addView(row);
+
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     private LinearLayout.LayoutParams actionLp(int leftMargin) {
@@ -438,8 +597,12 @@ public class BulkProjectsActivity extends Activity {
     private SpannableStringBuilder countsSpans(int n) {
         File dir = BulkProjects.projectDir(n);
         int w = BulkProjects.countFiles(new File(dir, n + "_wallpapers"));
-        int m = BulkProjects.countFiles(new File(dir, n + "_Mockups"));
-        int r = BulkProjects.countFiles(new File(dir, n + "_Ready_Wallpapers"));
+        // v154: Mockups/Ready ab engine folders se NAHI — TermuxMod
+        // ke EK hi "Pairs" folder se, number ki parity par
+        // (odd = Mockups, even = Ready)
+        int[] pairs = BulkProjects.pairsCounts(BulkProjects.pairsDir(n));
+        int m = pairs[0];
+        int r = pairs[1];
 
         SpannableStringBuilder sb = new SpannableStringBuilder();
         java.util.List<int[]> ranges = new java.util.ArrayList<>();
@@ -593,21 +756,24 @@ public class BulkProjectsActivity extends Activity {
     // ------------------------------------------------------------ v138 Remove Project
 
     /**
-     * Screen ke TOP par ek chhoti si "Remove Project" row —
-     * trash icon + label (danger rang). Tap par number-sort
-     * picker khulta hai. Asal removal confirm ke baad
-     * BulkProjectInstaller.removeProject se hoti hai
-     * (engine folder + conf line + bashrc aliases + provision
-     * record); TermuxMod/Project N + images mehfooz rehte hain.
+     * v154 — Screen ke TOP par "Remove Project" ki CHHOTI slim
+     * row (approved preview v2): pill, chhota trash icon + naam
+     * + arrow — project cards se wazeh chhoti. Tap par ek hi
+     * popup khulta hai: multi-select removal + Recycle Bin.
+     * TermuxMod/Project N + images mehfooz rehte hain.
      */
     private LinearLayout buildRemoveProjectRow() {
-        LinearLayout wrap = new LinearLayout(this);
-        wrap.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(BulkTheme.dp(this, 20), BulkTheme.dp(this, 9),
-            BulkTheme.dp(this, 20), BulkTheme.dp(this, 9));
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 7),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 7));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(BulkTheme.dp(this, 18), BulkTheme.dp(this, 10),
+            BulkTheme.dp(this, 18), 0);
+        row.setLayoutParams(lp);
         row.setClickable(true);
         row.setOnClickListener(v -> showRemoveProjectPicker());
         ImageView icon = BulkTheme.icon(this, R.drawable.ic_bulk_trash, BulkTheme.danger(this), 15);
@@ -616,65 +782,183 @@ public class BulkProjectsActivity extends Activity {
         row.addView(icon);
         TextView label = new TextView(this);
         label.setText(BulkStrings.t(this, BulkStrings.REMOVE_PROJECT));
-        label.setTextSize(13);
+        label.setTextSize(14);
         label.setTypeface(Typeface.DEFAULT_BOLD);
         label.setTextColor(BulkTheme.danger(this));
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         llp.leftMargin = BulkTheme.dp(this, 8);
         label.setLayoutParams(llp);
         row.addView(label);
-        wrap.addView(row);
-        View line = new View(this);
-        line.setBackground(BulkTheme.hLine(this));
-        wrap.addView(line, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f))));
-        return wrap;
+        ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 13);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 13), BulkTheme.dp(this, 13)));
+        row.addView(chev);
+        return row;
     }
 
-    /** Picker: mergeProjects ki number-sort list (loadProjects pehle se sorted deta hai). */
+    /**
+     * v154 — Remove popup: upar tamam projects ki checkbox
+     * list (kitne bhi select karke ek sath Recycle Bin me),
+     * neeche USI popup me Recycle Bin ki list — har entry ke
+     * sath Restore or Delete Forever. Removal = bin me move
+     * (BulkProjectInstaller.removeProjectToBin); permanent
+     * delete sirf bin ke andar se hota hai.
+     */
     private void showRemoveProjectPicker() {
-        final java.util.List<BulkProjects.ProjectInfo> projects = new java.util.ArrayList<>();
-        for (BulkProjects.ProjectInfo p : loadProjects()) {
-            if (p != null && p.number > 0) projects.add(p);
-        }
-        if (projects.isEmpty()) {
-            Toast.makeText(this, BulkStrings.t(this, BulkStrings.NO_PROJECTS),
-                Toast.LENGTH_SHORT).show();
-            return;
-        }
         final Dialog dialog = new Dialog(this);
         LinearLayout panel = BulkTheme.modalPanel(this,
             BulkStrings.t(this, BulkStrings.REMOVE_PROJECT), dialog);
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        for (final BulkProjects.ProjectInfo p : projects) {
-            list.addView(removePickerRow(p, () -> {
-                dialog.dismiss();
-                confirmRemoveProject(p);
-            }));
-        }
-        scroll.addView(list);
-        int scrollH = projects.size() > 6
-            ? (int) (getResources().getDisplayMetrics().heightPixels * 0.55)
-            : ViewGroup.LayoutParams.WRAP_CONTENT;
-        panel.addView(scroll, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, scrollH));
+        final LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        panel.addView(content);
+
+        final Runnable[] rebuild = new Runnable[1];
+        rebuild[0] = () -> {
+            content.removeAllViews();
+            final java.util.List<BulkProjects.ProjectInfo> projects =
+                new java.util.ArrayList<>();
+            for (BulkProjects.ProjectInfo p : loadProjects()) {
+                if (p != null && p.number > 0) projects.add(p);
+            }
+            final java.util.Set<Integer> checked = new java.util.HashSet<>();
+            final TextView[] removeBtn = new TextView[1];
+
+            ScrollView scroll = new ScrollView(this);
+            LinearLayout list = new LinearLayout(this);
+            list.setOrientation(LinearLayout.VERTICAL);
+            for (final BulkProjects.ProjectInfo p : projects) {
+                list.addView(removeCheckRow(p, on -> {
+                    if (on) checked.add(p.number); else checked.remove(p.number);
+                    if (removeBtn[0] != null) {
+                        setEnabledStyle(removeBtn[0], !checked.isEmpty());
+                    }
+                }));
+            }
+            if (projects.isEmpty()) {
+                TextView none = new TextView(this);
+                none.setText(BulkStrings.t(this, BulkStrings.NO_PROJECTS));
+                none.setTextColor(BulkTheme.textMuted(this));
+                none.setTextSize(13);
+                list.addView(none);
+            }
+            scroll.addView(list);
+            int scrollH = projects.size() > 5
+                ? (int) (getResources().getDisplayMetrics().heightPixels * 0.38)
+                : ViewGroup.LayoutParams.WRAP_CONTENT;
+            content.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, scrollH));
+
+            TextView remove = new TextView(this);
+            remove.setText(BulkStrings.t(this, BulkStrings.REMOVE_SELECTED));
+            remove.setTextSize(13);
+            remove.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            remove.setTextColor(BulkTheme.danger(this));
+            remove.setGravity(Gravity.CENTER);
+            remove.setBackground(BulkTheme.dangerBg(this));
+            remove.setPadding(BulkTheme.dp(this, 8), BulkTheme.dp(this, 9),
+                BulkTheme.dp(this, 8), BulkTheme.dp(this, 9));
+            LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rLp.topMargin = BulkTheme.dp(this, 6);
+            remove.setLayoutParams(rLp);
+            removeBtn[0] = remove;
+            setEnabledStyle(remove, false);
+            remove.setOnClickListener(v -> {
+                if (checked.isEmpty()) return;
+                final java.util.List<BulkProjects.ProjectInfo> sel =
+                    new java.util.ArrayList<>();
+                StringBuilder names = new StringBuilder();
+                for (BulkProjects.ProjectInfo p : projects) {
+                    if (checked.contains(p.number)) {
+                        sel.add(p);
+                        if (names.length() > 0) names.append(", ");
+                        names.append(p.name);
+                    }
+                }
+                BulkTheme.showConfirm(this,
+                    BulkStrings.t(this, BulkStrings.REMOVE_PROJECT),
+                    names + " — Recycle Bin me chale jayenge. TermuxMod ki"
+                        + " images mehfooz rahengi.",
+                    BulkStrings.t(this, BulkStrings.REMOVE_BTN), true,
+                    () -> new Thread(() -> {
+                        int moved = 0;
+                        for (BulkProjects.ProjectInfo p : sel) {
+                            try {
+                                BulkProjectInstaller.removeProjectToBin(
+                                    this, p.number, p.name);
+                                moved++;
+                            } catch (Exception e) {
+                                Logger.logError(LOG_TAG, "Bin move fail Project "
+                                    + p.number + ": " + e.getMessage());
+                            }
+                        }
+                        final int doneCount = moved;
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, BulkStrings.format(this,
+                                BulkStrings.REMOVED_TO_BIN_FMT, doneCount),
+                                Toast.LENGTH_SHORT).show();
+                            refreshList();
+                            rebuild[0].run();
+                        });
+                    }).start());
+            });
+            content.addView(remove);
+
+            // ---- Recycle Bin section (usi popup ke andar)
+            TextView binTitle = new TextView(this);
+            binTitle.setText(BulkStrings.t(this, BulkStrings.RECYCLE_BIN));
+            binTitle.setTextSize(13.5f);
+            binTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            binTitle.setTextColor(BulkTheme.textMain(this));
+            LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bLp.topMargin = BulkTheme.dp(this, 14);
+            binTitle.setLayoutParams(bLp);
+            content.addView(binTitle);
+
+            java.util.List<Integer> bin = BulkRecycleBin.entries();
+            if (bin.isEmpty()) {
+                TextView empty = new TextView(this);
+                empty.setText(BulkStrings.t(this, BulkStrings.BIN_EMPTY));
+                empty.setTextColor(BulkTheme.textMuted(this));
+                empty.setTextSize(12.5f);
+                LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+                eLp.topMargin = BulkTheme.dp(this, 4);
+                empty.setLayoutParams(eLp);
+                content.addView(empty);
+            } else {
+                for (final int bn : bin) {
+                    content.addView(binEntryRow(bn, rebuild[0]));
+                }
+            }
+        };
+        rebuild[0].run();
         BulkTheme.showPanelDialog(this, panel);
     }
 
-    private LinearLayout removePickerRow(final BulkProjects.ProjectInfo p, final Runnable onTap) {
+    private interface CheckChange { void onChange(boolean on); }
+
+    /** Remove popup ki checkbox wali project row. */
+    private LinearLayout removeCheckRow(final BulkProjects.ProjectInfo p,
+                                        final CheckChange onChange) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(BulkTheme.pillBg(this));
-        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 10),
-            BulkTheme.dp(this, 12), BulkTheme.dp(this, 10));
+        row.setPadding(BulkTheme.dp(this, 10), BulkTheme.dp(this, 8),
+            BulkTheme.dp(this, 12), BulkTheme.dp(this, 8));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = BulkTheme.dp(this, 8);
         row.setLayoutParams(lp);
+        row.setClickable(true);
+        final android.widget.CheckBox cb = new android.widget.CheckBox(this);
+        cb.setOnCheckedChangeListener((button, on) -> onChange.onChange(on));
+        row.addView(cb);
         TextView name = new TextView(this);
         name.setText(p.name);
         name.setTextColor(BulkTheme.textMain(this));
@@ -682,35 +966,68 @@ public class BulkProjectsActivity extends Activity {
         name.setTypeface(Typeface.DEFAULT_BOLD);
         row.addView(name, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        row.setOnClickListener(v -> { if (onTap != null) onTap.run(); });
+        row.setOnClickListener(v -> cb.toggle());
         return row;
     }
 
-    /** Confirm (danger) — saaf likha hai kya remove hoga or kya NAHI hoga. */
-    private void confirmRemoveProject(final BulkProjects.ProjectInfo p) {
-        BulkTheme.showConfirm(this,
-            BulkStrings.format(this, BulkStrings.REMOVE_PROJECT_CONFIRM_TITLE, p.name),
-            BulkStrings.format(this, BulkStrings.REMOVE_PROJECT_CONFIRM_MSG, p.number),
-            BulkStrings.t(this, BulkStrings.REMOVE_BTN), true,
-            () -> new Thread(() -> {
-                boolean ok = true;
-                try {
-                    BulkProjectInstaller.removeProject(this, p.number);
-                } catch (Exception e) {
-                    ok = false;
-                    Logger.logError(LOG_TAG, "Remove Project " + p.number
-                        + " fail: " + e.getMessage());
-                }
-                final boolean done = ok;
+    /** Recycle Bin ki ek entry: naam + Restore + Delete Forever. */
+    private LinearLayout binEntryRow(final int n, final Runnable rebuild) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 12), BulkTheme.dp(this, 8),
+            BulkTheme.dp(this, 8), BulkTheme.dp(this, 8));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = BulkTheme.dp(this, 8);
+        row.setLayoutParams(lp);
+        TextView name = new TextView(this);
+        name.setText(BulkRecycleBin.displayName(n));
+        name.setTextColor(BulkTheme.textMain(this));
+        name.setTextSize(13.5f);
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        row.addView(name, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        final String entryName = BulkRecycleBin.displayName(n);
+        TextView restore = BulkTheme.secondaryButton(this,
+            BulkStrings.t(this, BulkStrings.RESTORE), v -> new Thread(() -> {
+                boolean ok = BulkRecycleBin.restoreProject(this, n);
                 runOnUiThread(() -> {
-                    if (sExpandedNumber == p.number) sExpandedNumber = Integer.MIN_VALUE;
-                    Toast.makeText(this, done
-                            ? BulkStrings.format(this, BulkStrings.REMOVED_TOAST, p.name)
-                            : BulkStrings.t(this, BulkStrings.REMOVE_FAILED),
-                        Toast.LENGTH_SHORT).show();
+                    if (ok) {
+                        Toast.makeText(this, entryName + " wapas aa gaya",
+                            Toast.LENGTH_SHORT).show();
+                    }
                     refreshList();
+                    rebuild.run();
                 });
             }).start());
+        restore.setTextSize(11.5f);
+        row.addView(restore);
+        TextView del = new TextView(this);
+        del.setText(BulkStrings.t(this, BulkStrings.DELETE_FOREVER));
+        del.setTextSize(11.5f);
+        del.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        del.setTextColor(BulkTheme.danger(this));
+        del.setGravity(Gravity.CENTER);
+        del.setBackground(BulkTheme.dangerBg(this));
+        del.setPadding(BulkTheme.dp(this, 8), BulkTheme.dp(this, 8),
+            BulkTheme.dp(this, 8), BulkTheme.dp(this, 8));
+        del.setClickable(true);
+        LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dLp.leftMargin = BulkTheme.dp(this, 6);
+        del.setLayoutParams(dLp);
+        del.setOnClickListener(v -> BulkTheme.showConfirm(this,
+            BulkStrings.t(this, BulkStrings.DELETE_FOREVER),
+            BulkRecycleBin.displayName(n),
+            BulkStrings.t(this, BulkStrings.DELETE), true,
+            () -> {
+                BulkRecycleBin.deleteForever(n);
+                rebuild.run();
+            }));
+        row.addView(del);
+        return row;
     }
 
     /** Command ko terminal me chalao — TermuxActivity khol kar wahan type ho jati hai. */

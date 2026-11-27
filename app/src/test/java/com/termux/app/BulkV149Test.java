@@ -323,29 +323,32 @@ public class BulkV149Test {
     public void mediaRegisterWiringForV149() throws Exception {
         String src = findSource(REGISTER);
         assertNotNull(src);
-        assertTrue(src.contains("order fix ho gaya"));
-        assertTrue(src.contains("seeded149_"));
-        // v152: gate ab teeno switches (Order Fix / Sequence
-        // Fix / Har File Alag Second) ka hai — koi ek ON ho
-        // tab hi pass chalta hai
-        assertTrue(src.contains("if (!isOrderFixEnabled(ctx) && !isSequenceFixEnabled(ctx)"));
-        assertTrue(src.contains("MediaStore.Files.getContentUri"));
-        assertTrue(src.contains("ContentResolver"));
+        // v154: gate ab Auto Scan switch hai (force = manual scan)
+        assertTrue(src.contains("if (!force && !isAutoScanEnabled(ctx)) return 0;"));
+        assertTrue(src.contains("KEY_AUTO_SCAN = \"auto_scan_enabled\""));
+        assertTrue(src.contains("KEY_WAIT_SECONDS = \"register_wait_seconds\""));
+        assertTrue(src.contains("MediaScannerConnection"));
+        // legacy pref key mehfooz (purani values ki compatibility)
         assertTrue(src.contains("KEY_ENABLED = \"order_fix_enabled\""));
+        assertTrue(src.contains("gallery scan ho gaya"));
     }
 
     @Test
     public void orderFixRowOnMoreSettings() throws Exception {
         String src = findSource(MORE_SETTINGS);
         assertNotNull(src);
-        assertTrue(src.contains("orderFixRow"));
-        assertTrue(src.contains("BulkStrings.ORDER_FIX"));
-        assertTrue(src.contains("BulkStrings.ORDER_FIX_SUB"));
-        assertTrue(src.contains("Switch"));
-        assertTrue(src.contains("BulkMediaRegister.setOrderFixEnabled"));
-        assertTrue(BulkStrings.hasBothLanguages(BulkStrings.ORDER_FIX));
-        assertTrue(BulkStrings.hasBothLanguages(BulkStrings.ORDER_FIX_SUB));
-        assertEquals("Order Fix", BulkStrings.get(BulkStrings.ORDER_FIX, false));
+        // v154: Order Fix / Sequence Fix / Alag Second rows KHATAM;
+        // un ki jagah Auto Scan (Gallery Scan ke sath) + Wait Time
+        assertFalse(src.contains("orderFixRow"));
+        assertFalse(src.contains("sequenceFixRow"));
+        assertFalse(src.contains("alagSecondRow"));
+        assertTrue(src.contains("autoScanRow"));
+        assertTrue(src.contains("waitTimeRow"));
+        assertTrue(src.contains("BulkMediaRegister.setAutoScanEnabled"));
+        assertTrue(src.contains("BulkDropFolders.galleryScanNow"));
+        assertTrue(src.contains("BulkMediaRegister.setWaitSeconds"));
+        assertTrue(BulkStrings.hasBothLanguages(BulkStrings.AUTO_SCAN));
+        assertTrue(BulkStrings.hasBothLanguages(BulkStrings.WAIT_TIME));
     }
 
     // ------------------------------------------------------------ Item D
@@ -471,9 +474,9 @@ public class BulkV149Test {
     public void versionIs150() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 153"));
+        assertTrue(gradle.contains("versionCode 154"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v153"));
+        assertTrue(dash.contains("Termux Mod v154"));
     }
 }

@@ -58,6 +58,24 @@ public final class BulkStrings {
     public static final String DELETE = "delete";
     // v138 — Remove Project (Projects screen ke top wali row)
     public static final String REMOVE_PROJECT = "remove_project";
+    // v154 — More Settings (Auto Scan / Wait Time), batch naam, recycle bin
+    public static final String AUTO_SCAN = "auto_scan";
+    public static final String AUTO_SCAN_SUB = "auto_scan_sub";
+    public static final String GALLERY_SCAN = "gallery_scan";
+    public static final String GALLERY_SCAN_SUB = "gallery_scan_sub";
+    public static final String GALLERY_SCAN_RUNNING = "gallery_scan_running";
+    public static final String GALLERY_SCAN_DONE_FMT = "gallery_scan_done_fmt";
+    public static final String WAIT_TIME = "wait_time";
+    public static final String WAIT_TIME_SUB_FMT = "wait_time_sub_fmt";
+    public static final String WAIT_TIME_HINT = "wait_time_hint";
+    public static final String RESET_DEFAULT = "reset_default";
+    public static final String BATCH_NAME = "batch_name";
+    public static final String REMOVE_SELECTED = "remove_selected";
+    public static final String REMOVED_TO_BIN_FMT = "removed_to_bin_fmt";
+    public static final String RECYCLE_BIN = "recycle_bin";
+    public static final String BIN_EMPTY = "bin_empty";
+    public static final String RESTORE = "restore";
+    public static final String DELETE_FOREVER = "delete_forever";
     public static final String REMOVE_PROJECT_CONFIRM_TITLE = "remove_project_confirm_title";
     public static final String REMOVE_PROJECT_CONFIRM_MSG = "remove_project_confirm_msg";
     public static final String REMOVE_BTN = "remove_btn";
@@ -449,6 +467,26 @@ public final class BulkStrings {
         put(BATCH, "Batch", "Batch");
         put(DELETE, "Delete", "Delete Karo");
         put(REMOVE_PROJECT, "Remove Project", "Project Remove Karo");
+        put(AUTO_SCAN, "Auto Scan", "Auto Scan");
+        put(AUTO_SCAN_SUB, "Runs ke baad gallery registration khud ho jati hai",
+            "Runs ke baad gallery registration khud ho jati hai");
+        put(GALLERY_SCAN, "Gallery Scan", "Gallery Scan");
+        put(GALLERY_SCAN_SUB, "Ek dafa abhi scan karo", "Ek dafa abhi scan karo");
+        put(GALLERY_SCAN_RUNNING, "Gallery scan is running…", "Gallery scan chal raha hai…");
+        put(GALLERY_SCAN_DONE_FMT, "Gallery scan done — %d files registered",
+            "Gallery scan ho gaya — %d files register huin");
+        put(WAIT_TIME, "Wait Time", "Wait Time");
+        put(WAIT_TIME_SUB_FMT, "%d seconds", "%d seconds");
+        put(WAIT_TIME_HINT, "Seconds (0 = no wait)", "Seconds likho (0 = koi intezar nahi)");
+        put(RESET_DEFAULT, "Reset to Default", "Default par Wapas");
+        put(BATCH_NAME, "Batch Name", "Batch ka Naam");
+        put(REMOVE_SELECTED, "Remove Selected", "Select Wale Hatao");
+        put(REMOVED_TO_BIN_FMT, "%d projects moved to Recycle Bin",
+            "%d projects Recycle Bin me chale gaye");
+        put(RECYCLE_BIN, "Recycle Bin", "Recycle Bin");
+        put(BIN_EMPTY, "Recycle Bin is empty", "Recycle Bin khaali hai");
+        put(RESTORE, "Restore", "Wapas Lao");
+        put(DELETE_FOREVER, "Delete Forever", "Hamesha ke liye Delete");
         put(REMOVE_PROJECT_CONFIRM_TITLE, "Remove %s?", "%s Remove Karun?");
         put(REMOVE_PROJECT_CONFIRM_MSG,
             "This removes the project's engine folder, its entry in the projects list, and its w%1$d / d%1$d / b%1$d terminal shortcuts.\n\nNOT removed: your TermuxMod/Project %1$d folder and its images — they stay safe.\n\nIf the project came with the app, a fresh copy is installed next time the app opens. If you added it from a ZIP, it stays removed until you add the ZIP again.",
