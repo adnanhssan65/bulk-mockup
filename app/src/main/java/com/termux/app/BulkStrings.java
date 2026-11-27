@@ -85,6 +85,15 @@ public final class BulkStrings {
     public static final String STATUS_LABEL = "status_label";
     public static final String STATUS_ALL_EMPTY = "status_all_empty";
     public static final String STATUS_READY_COUNT = "status_ready_count";
+    // v155 — Time Mode (More Settings) + Time Reset
+    public static final String TIME_MODE = "time_mode";
+    public static final String TIME_MODE_SUB_FMT = "time_mode_sub_fmt";
+    public static final String TIME_MODE_PAST = "time_mode_past";
+    public static final String TIME_MODE_CURRENT = "time_mode_current";
+    public static final String TIME_MODE_FUTURE = "time_mode_future";
+    public static final String TIME_RESET = "time_reset";
+    public static final String TIME_RESET_SUB = "time_reset_sub";
+    public static final String TIME_RESET_DONE = "time_reset_done";
 
     public static final String ADD_WALLPAPERS_SUBTITLE = "add_wallpapers_subtitle";
     public static final String STEP1_SELECT_PROJECT = "step1_select_project";
@@ -501,6 +510,15 @@ public final class BulkStrings {
         put(STATUS_LABEL, "Status", "Status");
         put(STATUS_ALL_EMPTY, "All projects are empty", "Sab projects khali hain");
         put(STATUS_READY_COUNT, "Ready count", "Ready count");
+        put(TIME_MODE, "Time Mode", "Time Mode");
+        put(TIME_MODE_SUB_FMT, "File times: %s", "Files ki time: %s");
+        put(TIME_MODE_PAST, "Past", "Past");
+        put(TIME_MODE_CURRENT, "Current", "Current");
+        put(TIME_MODE_FUTURE, "Future", "Future");
+        put(TIME_RESET, "Time Reset", "Time Reset");
+        put(TIME_RESET_SUB, "Shared time tracker saaf — agli ladder fresh shuru hogi",
+            "Shared time tracker saaf — agli ladder fresh shuru hogi");
+        put(TIME_RESET_DONE, "Time tracker reset ho gaya", "Time tracker reset ho gaya");
 
         // Add Wallpapers screen
         put(ADD_WALLPAPERS_SUBTITLE, "Select project first, then pick images",

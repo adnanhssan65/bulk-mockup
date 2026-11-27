@@ -84,6 +84,9 @@ public class BulkDashboardActivity extends Activity {
         // har app start par saved setting se taaza — runners ko
         // hamesha mojooda halat mile. Best-effort, kabhi crash nahi.
         BulkScanWaqfa.syncMarker(this);
+        // v155: Time Mode marker (TermuxMod/.time_mode) bhi har
+        // app start par saved setting se taaza
+        BulkTimeMode.syncMarker(this);
         setTitle(BulkPanelSettings.appName(this));
 
         if (!BulkMockupSetup.isSetupDone()) {

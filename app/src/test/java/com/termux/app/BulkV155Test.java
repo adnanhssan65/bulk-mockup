@@ -96,6 +96,29 @@ public class BulkV155Test {
         assertArrayEquals(new int[]{0, 0}, BulkDropFolders.ensureProjectFolders(-7));
     }
 
+    // ------------------------------------------------------------ Time Mode
+
+    @Test
+    public void timeModeResolveDefaultsToPast() {
+        assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode(null));
+        assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode(""));
+        assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode("garbage"));
+        assertEquals(BulkTimeMode.MODE_PAST, BulkTimeMode.resolveMode("past"));
+        assertEquals(BulkTimeMode.MODE_CURRENT, BulkTimeMode.resolveMode("current"));
+        assertEquals(BulkTimeMode.MODE_FUTURE, BulkTimeMode.resolveMode("future"));
+    }
+
+    @Test
+    public void timeModeMarkerContentIsResolvedMode() {
+        assertEquals("past", BulkTimeMode.markerContent(null));
+        assertEquals("past", BulkTimeMode.markerContent("xyz"));
+        assertEquals("current", BulkTimeMode.markerContent("current"));
+        assertEquals("future", BulkTimeMode.markerContent("future"));
+        assertEquals(".time_mode", BulkTimeMode.markerFile().getName());
+        assertEquals("TermuxMod", BulkTimeMode.markerFile().getParentFile().getName());
+        assertEquals(".mockup_time_tracker.txt", BulkTimeMode.trackerFile().getName());
+    }
+
     // ------------------------------------------------------------ Recreate count fix
 
     @Test

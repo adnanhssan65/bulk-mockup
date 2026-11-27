@@ -69,6 +69,7 @@ public class BulkMoreSettingsActivity extends Activity {
         }));
         body.addView(autoScanRow());
         body.addView(waitTimeRow());
+        body.addView(timeModeRow());
         body.addView(scanWaqfaRow());
         body.addView(runViewRow());
         body.addView(showpieceEditRow());
@@ -508,6 +509,139 @@ public class BulkMoreSettingsActivity extends Activity {
         row.addView(chev);
         row.setOnClickListener(v -> showWaitTimeEditor(sub));
         return row;
+    }
+
+    /**
+     * v155 — Time Mode ki chhoti row: mojooda mode sub me
+     * dikhta hai; click par popup — teen choices (Past
+     * default / Current / Future) or USI popup ke andar
+     * Time Reset. Halat BulkTimeMode me save hoti hai or
+     * TermuxMod/.time_mode marker se runners tak jati hai.
+     */
+    private LinearLayout timeModeRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, BulkTheme.dp(this, 10));
+        row.setLayoutParams(lp);
+        row.setClickable(true);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.TIME_MODE));
+        label.setTextSize(14);
+        label.setTypeface(medium());
+        label.setTextColor(BulkTheme.textMain(this));
+        texts.addView(label);
+        final TextView sub = new TextView(this);
+        sub.setText(String.format(BulkStrings.t(this, BulkStrings.TIME_MODE_SUB_FMT),
+            timeModeLabel(BulkTimeMode.currentMode(this))));
+        sub.setTextSize(11.5f);
+        sub.setTextColor(BulkTheme.textMuted(this));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = BulkTheme.dp(this, 2);
+        sub.setLayoutParams(slp);
+        texts.addView(sub);
+        row.addView(texts, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+        row.setOnClickListener(v -> showTimeModePopup(sub));
+        return row;
+    }
+
+    /** Mode ki label (dono zubano me mode ka naam waisa hi rehta hai). */
+    private String timeModeLabel(String mode) {
+        if (BulkTimeMode.MODE_CURRENT.equals(mode)) {
+            return BulkStrings.t(this, BulkStrings.TIME_MODE_CURRENT);
+        }
+        if (BulkTimeMode.MODE_FUTURE.equals(mode)) {
+            return BulkStrings.t(this, BulkStrings.TIME_MODE_FUTURE);
+        }
+        return BulkStrings.t(this, BulkStrings.TIME_MODE_PAST);
+    }
+
+    /**
+     * Time Mode popup: teen radio choices + neeche Time Reset
+     * ki chhoti row (shared tracker delete + toast). Band
+     * sirf button se (showPanelDialog ka lock).
+     */
+    private void showTimeModePopup(final TextView subView) {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.TIME_MODE), dialog);
+        final String current = BulkTimeMode.currentMode(this);
+        String[] modes = {BulkTimeMode.MODE_PAST, BulkTimeMode.MODE_CURRENT,
+            BulkTimeMode.MODE_FUTURE};
+        for (final String mode : modes) {
+            TextView opt = new TextView(this);
+            opt.setText((mode.equals(current) ? "●  " : "○  ") + timeModeLabel(mode));
+            opt.setTextSize(14);
+            opt.setTypeface(medium());
+            opt.setTextColor(mode.equals(current)
+                ? BulkTheme.accent(this) : BulkTheme.textMain(this));
+            opt.setPadding(BulkTheme.dp(this, 4), BulkTheme.dp(this, 11),
+                BulkTheme.dp(this, 4), BulkTheme.dp(this, 11));
+            opt.setClickable(true);
+            opt.setOnClickListener(v -> {
+                BulkTimeMode.setMode(this, mode);
+                subView.setText(String.format(
+                    BulkStrings.t(this, BulkStrings.TIME_MODE_SUB_FMT),
+                    timeModeLabel(mode)));
+                dialog.dismiss();
+            });
+            panel.addView(opt, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        View line = new View(this);
+        line.setBackground(BulkTheme.hLine(this));
+        LinearLayout.LayoutParams lineLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, BulkTheme.dp(this, 0.6f)));
+        lineLp.setMargins(0, BulkTheme.dp(this, 8), 0, BulkTheme.dp(this, 4));
+        line.setLayoutParams(lineLp);
+        panel.addView(line);
+
+        // Time Reset — usi popup ke andar: shared tracker
+        // delete, toast, popup band (Wait Time wale reset
+        // ki hi surat)
+        TextView reset = new TextView(this);
+        reset.setText("↺  " + BulkStrings.t(this, BulkStrings.TIME_RESET));
+        reset.setTextSize(13.5f);
+        reset.setTypeface(medium());
+        reset.setTextColor(BulkTheme.danger(this));
+        reset.setGravity(Gravity.CENTER);
+        reset.setClickable(true);
+        reset.setPadding(0, BulkTheme.dp(this, 10), 0, 0);
+        panel.addView(reset);
+        TextView resetSub = new TextView(this);
+        resetSub.setText(BulkStrings.t(this, BulkStrings.TIME_RESET_SUB));
+        resetSub.setTextSize(11f);
+        resetSub.setTextColor(BulkTheme.textMuted(this));
+        resetSub.setGravity(Gravity.CENTER);
+        resetSub.setPadding(0, BulkTheme.dp(this, 3), 0, BulkTheme.dp(this, 2));
+        panel.addView(resetSub);
+        reset.setOnClickListener(v -> new Thread(() -> {
+            BulkTimeMode.resetTracker();
+            runOnUiThread(() -> {
+                Toast.makeText(this, BulkStrings.t(this, BulkStrings.TIME_RESET_DONE),
+                    Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            });
+        }).start());
+
+        BulkTheme.showPanelDialog(this, panel);
     }
 
     /** Wait Time editor — numeric field (seconds) + neeche reset ki chhoti row. */
