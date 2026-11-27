@@ -810,19 +810,23 @@ if action == 'process':
             except: pass
         if _floor is None:
             _floor = _end_soft - 86400
-        # v155 behtari (squeeze khatam): window kam az kam
-        # slots x 0.5s ki lazmi ho — warna floor ko PEECHE
-        # (deeper past) le jao taake har file ko >= 0.5s ki
-        # spacing mile. Future me kabhi nahi barhna:
-        # end_soft hamesha abhi-60 hi rehta hai, or tracker
-        # me aakhir me is run ka aakhri waqt hi likha jata
-        # hai (purani convention) — agla run is block ke
-        # baad se hi shuru hota hai.
-        if _end_soft - _floor < _slots * 0.5:
-            _floor = _end_soft - _slots * 0.5
-        _raw_step = (_end_soft - _floor) / _slots
-        t_step = min(_raw_step, 60.0)
-        cur_t = _end_soft - t_step * _slots
+        # v155 Past SELF-SIZING: ye run jitni outputs banata
+        # hai (slots — triples x3 sameet) utni hi time-jagah
+        # leta hai: har file 1.0s. Block pichle block ke end
+        # (tracker) ke BAAD se shuru ho kar end (abhi-60) par
+        # khatam hota hai. Sirf gin-ti + hisaab hai, ek dafa
+        # per run — koi scan ya hash nahi, fauri ho jata hai.
+        # Pathological back-to-back surat me step 0.5s se
+        # neeche jaye to start deeper past me (end - slots
+        # x 0.5) — future me kabhi nahi barhna. Tracker me
+        # aakhir me is run ka aakhri waqt hi likha jata hai
+        # (purani convention) — agla run wahi se aage.
+        _start = max(_end_soft - _slots * 1.0, _floor)
+        t_step = (_end_soft - _start) / _slots
+        if t_step < 0.5:
+            _start = _end_soft - _slots * 0.5
+            t_step = 0.5
+        cur_t = _start
     print("")
     desc_text = "✨ HD Mode " if is_hd else "⚙️ Normal "
     desc_text += "| Crop 9:16 " if crop_916 else "| Original "
