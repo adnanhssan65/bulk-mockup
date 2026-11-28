@@ -394,10 +394,10 @@ public class BulkV153Test {
     public void versionIs153() throws Exception {
         String gradle = findSource(GRADLE);
         assertNotNull(gradle);
-        assertTrue(gradle.contains("versionCode 155"));
+        assertTrue(gradle.contains("versionCode 156"));
         String dash = findSource(DASH);
         assertNotNull(dash);
-        assertTrue(dash.contains("Termux Mod v155"));
+        assertTrue(dash.contains("Termux Mod v156"));
         assertFalse(dash.contains("Termux Mod v153"));
     }
 }

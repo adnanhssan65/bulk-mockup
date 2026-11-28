@@ -88,7 +88,7 @@ public class BulkStageActivity extends Activity {
     private static final String KEY_PROJECT = "project";
     private static final String KEY_COLS = "cols";
     private static final String KEY_MOVE_URIS = "move_uris";
-    private static final String KEY_PENDING_DELETES = "pending_move_deletes";
+    // v156: pending deletes ki key ab BulkPendingDeletes.KEY hai (wahi purani value)
 
     private List<BulkProjects.ProjectInfo> mProjects = new ArrayList<>();
     private int mSelectedNumber = -1;
@@ -111,6 +111,15 @@ public class BulkStageActivity extends Activity {
     private boolean mDeletingOriginals = false;
     private int mPendingDeleteCount = 0;
     private int mDeletedSoFar = 0;
+    // v156: API 30+ batch popup ke URIs — result OK aye to
+    // yehi items pending list se nikalte hain (cancel par
+    // list me rehte hain)
+    private List<Uri> mBatchUris = null;
+    // v156: is delete run ke saboot counters — finish par ek
+    // BulkLog line (kis raste se kitne delete hue)
+    private String mDeleteRunMode = BulkMoveDelete.MODE_AUTO;
+    private int mDeleteViaMs = 0;
+    private int mDeleteViaDirect = 0;
     private List<ConsentItem> mConsentQueue = null;
 
     /** API 29: ek original ki delete-consent (exception ke sath). */
@@ -1876,26 +1885,34 @@ public class BulkStageActivity extends Activity {
 
     // ------------------------------------------------------------ v130 MOVE — originals delete
 
-    /** Copy verify hue move items ko delete-queue (prefs) me daalo — process alag se hota hai. */
+    /**
+     * Copy verify hue move items ko DURABLE pending list
+     * (BulkPendingDeletes) me daalo — process alag se hota
+     * hai. Ye list ka ek hi writer hai: sirf copy-verify
+     * hue move originals hi yahan ate hain.
+     */
     private void queuePendingDeletes(List<Uri> uris) {
-        SharedPreferences sp = stagePrefs();
-        Set<String> pending = decodeUriSet(sp.getString(KEY_PENDING_DELETES, ""));
-        for (Uri u : uris) pending.add(u.toString());
-        sp.edit().putString(KEY_PENDING_DELETES, encodeUriSet(pending)).apply();
+        List<String> strs = new ArrayList<>();
+        for (Uri u : uris) strs.add(u.toString());
+        BulkPendingDeletes.addAll(this, strs);
     }
 
     /**
-     * Queue me pare move-originals ka asal delete. Ek dafa me ek hi
-     * process; list pehle saaf kar di jati hai taake dobara launch na ho
-     * (consent cancel ho to original mehfooz rehta hai — copy project
-     * me pehle se mehfooz hai).
+     * Pending list ke move-originals ka asal delete. Ek
+     * dafa me ek hi process (in-memory mDeletingOriginals
+     * flag hi dohri launch ki hifazat hai).
+     *
+     * v156: list process shuru hone par pehle se SAAF
+     * NAHI hoti — har item apne asal delete ke kamyab
+     * hone par hi list se nikalta hai. Jo reh jaye
+     * (fail / popup cancel / app band) wahi Pending
+     * rehta hai or More Settings / Home badge par
+     * dikhta hai; copy project me pehle se mehfooz hai.
      */
     private void processPendingDeletes() {
         if (mDeletingOriginals || mCopying) return;
-        SharedPreferences sp = stagePrefs();
-        Set<String> pending = decodeUriSet(sp.getString(KEY_PENDING_DELETES, ""));
+        Set<String> pending = BulkPendingDeletes.load(this);
         if (pending.isEmpty()) return;
-        sp.edit().putString(KEY_PENDING_DELETES, "").apply();
         List<Uri> uris = new ArrayList<>();
         for (String s : pending) uris.add(Uri.parse(s));
         mDeletingOriginals = true;
@@ -1905,33 +1922,156 @@ public class BulkStageActivity extends Activity {
     }
 
     /**
-     * v133: pehle SEEDHA delete (All Files Access ho to) — har
-     * original ka asal path (MediaStore DATA) nikaal kar File.delete;
-     * jo seedha na hate (path na mile / delete fail) sirf wohi purane
-     * MediaStore raste (system dialog) par jata hai.
+     * v156: Move Delete setting (BulkMoveDelete) ka order.
+     *
+     * POPUP mode ya storage access na ho to seedha purana
+     * (pre-v133) rasta — deleteOriginalsLegacy.
+     *
+     * AUTO (default): har original par —
+     *  1. asal path PEHLE nikalo (delete ke baad row gayab
+     *     ho jati hai, path phir nahi milta);
+     *  2. MediaStore delete ki EK koshish: file + gallery
+     *     record ek sath, usi waqt khatam. Pehli
+     *     SecurityException ke baad baqi files par ye
+     *     koshish dobara nahi hoti (seedha step 3);
+     *  3. fallback: seedha File.delete + reh gayi gallery
+     *     entry DATA se delete + scan (purana order);
+     *  4. jis file ka FILE phir bhi na hate, sirf wohi
+     *     aakhir me EK batch popup (legacy machinery).
+     * Har step har file par EK hi dafa — koi retry loop
+     * nahi, move kabhi atak nahi sakta. Queue/commit ka
+     * design barqarar: delete sirf copy-verify hue items
+     * par, pending list prefs me process shuru hone tak.
      */
     private void deleteOriginals(final List<Uri> uris) {
-        if (!BulkStorageAccess.hasAccess(this)) {
+        mDeleteRunMode = BulkMoveDelete.currentMode(this);
+        mDeleteViaMs = 0;
+        mDeleteViaDirect = 0;
+        if (BulkMoveDelete.isPopup(mDeleteRunMode)
+            || !BulkStorageAccess.hasAccess(this)) {
             deleteOriginalsLegacy(uris);
             return;
         }
         new Thread(() -> {
-            int deleted = 0;
-            List<Uri> remaining = new ArrayList<>();
+            int viaMs = 0, viaDirect = 0;
+            Uri firstMsUri = null;
+            boolean msBlocked = false;
+            List<Uri> popupUris = new ArrayList<>();
+            List<String> doneStrings = new ArrayList<>();
             for (Uri u : uris) {
-                if (tryDirectDelete(u)) deleted++;
-                else remaining.add(u);
+                String path = resolveMediaPath(u);
+                boolean done = false;
+                if (BulkMoveDelete.shouldTryMediaStore(msBlocked)) {
+                    int msResult;
+                    try {
+                        msResult = getContentResolver().delete(u, null, null) > 0
+                            ? BulkMoveDelete.MS_OK : BulkMoveDelete.MS_ZERO;
+                    } catch (SecurityException se) {
+                        // RecoverableSecurityException bhi isi
+                        // ki subclass hai — dono yahi pakre jate
+                        msResult = BulkMoveDelete.MS_SECURITY;
+                    } catch (Exception e) {
+                        msResult = BulkMoveDelete.MS_ERROR;
+                    }
+                    int route = BulkMoveDelete.routeForMsResult(msResult);
+                    if (route == BulkMoveDelete.ROUTE_DONE) {
+                        viaMs++;
+                        done = true;
+                        doneStrings.add(u.toString());
+                        if (firstMsUri == null) firstMsUri = u;
+                        // Record ke sath file bhi gayi hoti
+                        // hai — phir bhi reh gayi ho to saaf
+                        if (path != null) {
+                            try {
+                                File f = new File(path);
+                                if (f.exists()) f.delete();
+                            } catch (Exception ignored) {}
+                        }
+                    } else if (route == BulkMoveDelete.ROUTE_FALLBACK_BLOCK) {
+                        msBlocked = true;
+                    }
+                }
+                if (!done) {
+                    if (tryDirectDeleteWithRow(path)) {
+                        viaDirect++;
+                        doneStrings.add(u.toString());
+                    } else {
+                        popupUris.add(u);
+                    }
+                }
             }
-            final int fDeleted = deleted;
-            final List<Uri> fRemaining = remaining;
+            // Kamyab hue items pending list se abhi nikaal
+            // do — app yahan band bhi ho jaye to list asal
+            // halat hi dikhayegi (popup wale abhi rehte hain)
+            if (!doneStrings.isEmpty()) {
+                BulkPendingDeletes.removeAll(BulkStageActivity.this, doneStrings);
+            }
+            final int fMs = viaMs, fDirect = viaDirect;
+            final List<Uri> fPopup = popupUris;
+            if (firstMsUri != null) scheduleRowRecheck(firstMsUri);
             runOnUiThread(() -> {
-                mDeletedSoFar = fDeleted;
-                if (fRemaining.isEmpty()) {
-                    finishDeleteOriginals(fDeleted);
+                mDeleteViaMs = fMs;
+                mDeleteViaDirect = fDirect;
+                mDeletedSoFar = fMs + fDirect;
+                if (fPopup.isEmpty()) {
+                    finishDeleteOriginals(mDeletedSoFar);
                 } else {
-                    deleteOriginalsLegacy(fRemaining);
+                    deleteOriginalsLegacy(fPopup);
                 }
             });
+        }).start();
+    }
+
+    /**
+     * v156 AUTO fallback (step 3): seedha File.delete, phir
+     * MediaStore ki reh gayi entry DATA se delete, aakhir
+     * me scan (jaisa aaj hota hai). Kamyabi tab hi jab
+     * file asal me gayab ho jaye.
+     */
+    private boolean tryDirectDeleteWithRow(String path) {
+        if (!BulkStorageAccess.shouldDeleteDirectly(true, path)) return false;
+        try {
+            File f = new File(path);
+            if (f.exists() && (!f.delete() || f.exists())) return false;
+            try {
+                getContentResolver().delete(
+                    MediaStore.Files.getContentUri("external"),
+                    MediaStore.MediaColumns.DATA + "=?",
+                    new String[]{path});
+            } catch (Exception ignored) {}
+            android.media.MediaScannerConnection.scanFile(this,
+                new String[]{path}, null, null);
+            return !f.exists();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * v156 saboot: MediaStore raste se delete hui pehli
+     * file ka gallery record ~30 second baad dobara check
+     * — record gayab = system theek chal raha hai; record
+     * mojood magar file gayab = gallery app ki apni cache
+     * ki deri (app ke control se bahir). Sirf BulkLog —
+     * flow par koi asar nahi, har ghalti khamoshi se.
+     */
+    private void scheduleRowRecheck(final Uri uri) {
+        new Thread(() -> {
+            try {
+                Thread.sleep(30000);
+            } catch (Exception ignored) {}
+            try {
+                Cursor c = getContentResolver().query(uri,
+                    new String[]{MediaStore.Images.Media._ID}, null, null, null);
+                boolean present = false;
+                if (c != null) {
+                    present = c.moveToFirst();
+                    c.close();
+                }
+                BulkLog.add(present
+                    ? "Move check: gallery record 30s baad bhi hai — gallery cache ki deri"
+                    : "Move check: gallery record 30s ke andar saaf");
+            } catch (Exception ignored) {}
         }).start();
     }
 
@@ -1980,19 +2120,32 @@ public class BulkStageActivity extends Activity {
             try {
                 // Poore batch ke liye EK system confirmation dialog
                 PendingIntent pi = MediaStore.createDeleteRequest(getContentResolver(), uris);
+                // v156: result OK aye to yehi batch pending
+                // list se nikalega (cancel par rehta hai)
+                mBatchUris = uris;
                 startIntentSenderForResult(pi.getIntentSender(), REQ_DELETE, null, 0, 0, 0);
                 return;
             } catch (Exception e) {
+                mBatchUris = null;
                 Logger.logError(LOG_TAG, "Delete request nahi bana, seedha rasta: " + e);
             }
         }
         new Thread(() -> {
             int deleted = 0;
             List<ConsentItem> consent = new ArrayList<>();
+            List<String> doneStrings = new ArrayList<>();
             for (Uri u : uris) {
                 try {
-                    if (getContentResolver().delete(u, null, null) > 0) { deleted++; continue; }
-                    if (deleteFileFallback(u)) { deleted++; continue; }
+                    if (getContentResolver().delete(u, null, null) > 0) {
+                        deleted++;
+                        doneStrings.add(u.toString());
+                        continue;
+                    }
+                    if (deleteFileFallback(u)) {
+                        deleted++;
+                        doneStrings.add(u.toString());
+                        continue;
+                    }
                 } catch (RecoverableSecurityException rse) {
                     // API 29: is item ke liye user ki razamandi chahiye
                     consent.add(new ConsentItem(u, rse));
@@ -2002,6 +2155,10 @@ public class BulkStageActivity extends Activity {
                     continue;
                 }
                 Logger.logError(LOG_TAG, "Original delete nahi hua: " + u);
+            }
+            // v156: kamyab hue items pending list se nikaal do
+            if (!doneStrings.isEmpty()) {
+                BulkPendingDeletes.removeAll(BulkStageActivity.this, doneStrings);
             }
             final int fDeleted = deleted;
             final List<ConsentItem> fConsent = consent;
@@ -2071,18 +2228,38 @@ public class BulkStageActivity extends Activity {
                     ok = getContentResolver().delete(item.uri, null, null) > 0
                         || deleteFileFallback(item.uri);
                 } catch (Exception ignored) {}
-                if (ok) mDeletedSoFar++;
+                if (ok) {
+                    mDeletedSoFar++;
+                    // v156: kamyab item pending list se nikaal do
+                    List<String> one = new ArrayList<>();
+                    one.add(item.uri.toString());
+                    BulkPendingDeletes.removeAll(BulkStageActivity.this, one);
+                }
                 runOnUiThread(this::launchNextConsent);
             }).start();
             return;
         }
         // API 30+ batch request: OK = poora batch delete ho gaya
+        if (resultCode == RESULT_OK && mBatchUris != null) {
+            // v156: batch ke items pending list se nikaal do
+            // (cancel par list me rehte hain — Pending)
+            List<String> strs = new ArrayList<>();
+            for (Uri u : mBatchUris) strs.add(u.toString());
+            BulkPendingDeletes.removeAll(this, strs);
+        }
         finishDeleteOriginals(resultCode == RESULT_OK ? mPendingDeleteCount : mDeletedSoFar);
     }
 
     private void finishDeleteOriginals(int deleted) {
         mDeletingOriginals = false;
         mConsentQueue = null;
+        mBatchUris = null;
+        // v156 saboot: is run me kis raste se kitne delete
+        // hue (popup wala hissa = kul − store − direct)
+        int viaPopup = Math.max(0, deleted - mDeleteViaMs - mDeleteViaDirect);
+        int failed = Math.max(0, mPendingDeleteCount - deleted);
+        BulkLog.add(BulkMoveDelete.runSummary(mDeleteRunMode,
+            mDeleteViaMs, mDeleteViaDirect, viaPopup, failed));
         if (deleted > 0) {
             String msg = BulkStrings.format(this, BulkStrings.MOVED_ORIGINALS_TOAST, deleted);
             BulkTheme.showToast(this, msg);

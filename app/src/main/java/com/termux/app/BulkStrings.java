@@ -93,6 +93,16 @@ public final class BulkStrings {
     public static final String TIME_RESET = "time_reset";
     public static final String TIME_RESET_SUB = "time_reset_sub";
     public static final String TIME_RESET_DONE = "time_reset_done";
+    // v156 — Move Delete (More Settings)
+    public static final String MOVE_DELETE = "move_delete";
+    public static final String MOVE_DELETE_SUB_FMT = "move_delete_sub_fmt";
+    public static final String MOVE_DELETE_AUTO = "move_delete_auto";
+    public static final String MOVE_DELETE_POPUP = "move_delete_popup";
+    // v156 — Pending Delete (More Settings row + Home badge)
+    public static final String PENDING_DELETE = "pending_delete";
+    public static final String PENDING_DELETE_SUB_FMT = "pending_delete_sub_fmt";
+    public static final String PENDING_DELETE_EMPTY = "pending_delete_empty";
+    public static final String PENDING_DELETE_NOW = "pending_delete_now";
 
     public static final String ADD_WALLPAPERS_SUBTITLE = "add_wallpapers_subtitle";
     public static final String STEP1_SELECT_PROJECT = "step1_select_project";
@@ -517,6 +527,14 @@ public final class BulkStrings {
         put(TIME_RESET_SUB, "Shared time tracker saaf — agli ladder fresh shuru hogi",
             "Shared time tracker saaf — agli ladder fresh shuru hogi");
         put(TIME_RESET_DONE, "Time tracker reset ho gaya", "Time tracker reset ho gaya");
+        put(MOVE_DELETE, "Move Delete", "Move Delete");
+        put(MOVE_DELETE_SUB_FMT, "Originals delete: %s", "Originals delete: %s");
+        put(MOVE_DELETE_AUTO, "Auto", "Auto");
+        put(MOVE_DELETE_POPUP, "Popup wala", "Popup wala");
+        put(PENDING_DELETE, "Pending Delete", "Pending Delete");
+        put(PENDING_DELETE_SUB_FMT, "%d pending", "%d pending");
+        put(PENDING_DELETE_EMPTY, "No pending items", "Koi pending item nahi");
+        put(PENDING_DELETE_NOW, "Delete Now", "Delete Now");
 
         // Add Wallpapers screen
         put(ADD_WALLPAPERS_SUBTITLE, "Select project first, then pick images",

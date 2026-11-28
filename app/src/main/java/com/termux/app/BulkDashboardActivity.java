@@ -59,9 +59,18 @@ public class BulkDashboardActivity extends Activity {
     private final Runnable mLogTicker = new Runnable() {
         @Override public void run() {
             refreshLogCard();
+            refreshPendingBadge();
             mLogHandler.postDelayed(this, 1000);
         }
     };
+
+    // v156: Home ke top-right par Pending Delete badge icon —
+    // sirf jab pending list khali na ho; tap par wahi Pending
+    // popup (BulkPendingUi). Is ki zindagi sirf list hai: popup
+    // band karne se gayab nahi hota, list khali hone par hota
+    // hai; restart ke baad bhi persisted list se wapas banta hai.
+    private FrameLayout mPendingBadge;
+    private TextView mPendingBadgeText;
 
     // v129: storage permission ghayab ho to design popup — ek "missing
     // episode" me ek dafa (process ke andar); access milte hi reset,
@@ -143,6 +152,10 @@ public class BulkDashboardActivity extends Activity {
         mLogHandler.removeCallbacks(mLogTicker);
         mLogHandler.post(mLogTicker);
         maybeShowPermissionPopup();
+        // v156: Home badge — persisted pending list se refresh
+        // (restart ke baad bhi); pehle ghosts prune
+        BulkPendingUi.pruneGhosts(this, this::refreshPendingBadge);
+        refreshPendingBadge();
         // App ke andar wale projects: jo folder na ho, peeche lag jata hai
         BulkProjectBundles.installInBackground(this, () -> runOnUiThread(() -> {
             if (!isFinishing() && !mDrawerOpen) buildUi();
@@ -271,6 +284,23 @@ public class BulkDashboardActivity extends Activity {
             }
         });
         BulkTheme.showPanelDialog(this, panel);
+    }
+
+    /**
+     * v156: Home badge ko pending list ki halat par taza karo —
+     * count > 0 ho to icon + count badge, warna poora GONE.
+     * Popup band karna isay NAHI hatata; sirf list ka khali
+     * hona (kamyab delete ya ghost-prune) hatata hai.
+     */
+    private void refreshPendingBadge() {
+        if (mPendingBadge == null || mPendingBadgeText == null) return;
+        int count = BulkPendingDeletes.countNow(this);
+        if (count <= 0) {
+            mPendingBadge.setVisibility(View.GONE);
+            return;
+        }
+        mPendingBadgeText.setText(count > 99 ? "99+" : String.valueOf(count));
+        mPendingBadge.setVisibility(View.VISIBLE);
     }
 
     /** Hero card ki log lines taaza karo (BulkLog ki aakhri ~6 lines). */
@@ -688,6 +718,38 @@ public class BulkDashboardActivity extends Activity {
             // v133: toggle ki jagah Themes popup (baqi screens jesa)
             BulkTheme.showThemesPopup(this);
         }));
+        // v156: Pending Delete badge — top-right kone me EK
+        // chhota trash icon + count badge; pending list khali
+        // ho to poora GONE (jagah bhi nahi leta). Tap par wahi
+        // Pending popup jo More Settings ki row kholti hai.
+        mPendingBadge = new FrameLayout(this);
+        LinearLayout.LayoutParams pendingBadgeLp = new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34));
+        pendingBadgeLp.leftMargin = BulkTheme.dp(this, 10);
+        mPendingBadge.setLayoutParams(pendingBadgeLp);
+        View badgeBtn = BulkTheme.circleButton(this, R.drawable.ic_bulk_trash, 34,
+            v -> BulkPendingUi.showPendingPopup(this));
+        badgeBtn.setLayoutParams(new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 34), BulkTheme.dp(this, 34)));
+        mPendingBadge.addView(badgeBtn);
+        mPendingBadgeText = new TextView(this);
+        mPendingBadgeText.setTextSize(9.5f);
+        mPendingBadgeText.setTypeface(Typeface.DEFAULT_BOLD);
+        mPendingBadgeText.setTextColor(0xFFFFFFFF);
+        mPendingBadgeText.setGravity(Gravity.CENTER);
+        GradientDrawable pendingBadgeBg = new GradientDrawable();
+        pendingBadgeBg.setShape(GradientDrawable.OVAL);
+        pendingBadgeBg.setColor(BulkTheme.danger(this));
+        mPendingBadgeText.setBackground(pendingBadgeBg);
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(
+            BulkTheme.dp(this, 17), BulkTheme.dp(this, 17));
+        blp.gravity = Gravity.TOP | Gravity.END;
+        mPendingBadgeText.setLayoutParams(blp);
+        mPendingBadge.addView(mPendingBadgeText);
+        mPendingBadge.setVisibility(View.GONE);
+        mPendingBadge.setOnClickListener(v -> BulkPendingUi.showPendingPopup(this));
+        topBar.addView(mPendingBadge);
+        refreshPendingBadge();
         column.addView(topBar);
 
         // Hero
@@ -1138,7 +1200,7 @@ public class BulkDashboardActivity extends Activity {
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         TextView version = new TextView(this);
-        version.setText("Termux Mod v155");
+        version.setText("Termux Mod v156");
         version.setTextSize(11);
         version.setTextColor(BulkTheme.textMuted(this));
         footer.addView(version, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));

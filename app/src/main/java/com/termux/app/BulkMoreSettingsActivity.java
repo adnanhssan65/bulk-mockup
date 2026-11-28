@@ -29,12 +29,27 @@ import com.termux.R;
  */
 public class BulkMoreSettingsActivity extends Activity {
 
+    /** v156: Pending Delete row ka count text (onResume par refresh). */
+    private TextView mPendingSub;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
         setContentView(buildUi());
         BulkFonts.apply(this);
+    }
+
+    /**
+     * v156: screen wapas khulne par ghost entries (file + media
+     * row dono gayab) pending list se khamoshi se saaf hoti
+     * hain aur row ka count refresh hota hai.
+     */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        BulkPendingUi.pruneGhosts(this, this::refreshPendingSub);
+        refreshPendingSub();
     }
 
     private View buildUi() {
@@ -70,6 +85,8 @@ public class BulkMoreSettingsActivity extends Activity {
         body.addView(autoScanRow());
         body.addView(waitTimeRow());
         body.addView(timeModeRow());
+        body.addView(moveDeleteRow());
+        body.addView(pendingDeleteRow());
         body.addView(scanWaqfaRow());
         body.addView(runViewRow());
         body.addView(showpieceEditRow());
@@ -638,6 +655,157 @@ public class BulkMoreSettingsActivity extends Activity {
             });
         }).start());
 
+        BulkTheme.showPanelDialog(this, panel);
+    }
+
+    /**
+     * v156 — Move Delete ki chhoti row (Time Mode wali hi
+     * shakal): mojooda choice sub me dikhti hai; click par
+     * popup — do choices (Auto default / Popup wala).
+     * Halat BulkMoveDelete me save hoti hai (sirf app-side
+     * pref — koi marker nahi, runners nahi parhte).
+     */
+    private LinearLayout moveDeleteRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, BulkTheme.dp(this, 10));
+        row.setLayoutParams(lp);
+        row.setClickable(true);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.MOVE_DELETE));
+        label.setTextSize(14);
+        label.setTypeface(medium());
+        label.setTextColor(BulkTheme.textMain(this));
+        texts.addView(label);
+        final TextView sub = new TextView(this);
+        sub.setText(String.format(BulkStrings.t(this, BulkStrings.MOVE_DELETE_SUB_FMT),
+            moveDeleteLabel(BulkMoveDelete.currentMode(this))));
+        sub.setTextSize(11.5f);
+        sub.setTextColor(BulkTheme.textMuted(this));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = BulkTheme.dp(this, 2);
+        sub.setLayoutParams(slp);
+        texts.addView(sub);
+        row.addView(texts, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+        row.setOnClickListener(v -> showMoveDeletePopup(sub));
+        return row;
+    }
+
+    /** Choice ki label (Auto / Popup wala). */
+    private String moveDeleteLabel(String mode) {
+        if (BulkMoveDelete.MODE_POPUP.equals(mode)) {
+            return BulkStrings.t(this, BulkStrings.MOVE_DELETE_POPUP);
+        }
+        return BulkStrings.t(this, BulkStrings.MOVE_DELETE_AUTO);
+    }
+
+    /**
+     * v156 — Pending Delete ki chhoti row (Move Delete wali hi
+     * shakal): sub me live count; click par wahi shared popup
+     * (BulkPendingUi) — list + Delete Now. List DURABLE hai:
+     * app band ho jaye to bhi items yahin rehte hain (sirf
+     * kamyab delete ya ghost-prune par nikalte hain).
+     */
+    private LinearLayout pendingDeleteRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(BulkTheme.pillBg(this));
+        row.setPadding(BulkTheme.dp(this, 14), BulkTheme.dp(this, 12),
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, BulkTheme.dp(this, 10));
+        row.setLayoutParams(lp);
+        row.setClickable(true);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView label = new TextView(this);
+        label.setText(BulkStrings.t(this, BulkStrings.PENDING_DELETE));
+        label.setTextSize(14);
+        label.setTypeface(medium());
+        label.setTextColor(BulkTheme.textMain(this));
+        texts.addView(label);
+        mPendingSub = new TextView(this);
+        mPendingSub.setTextSize(11.5f);
+        mPendingSub.setTextColor(BulkTheme.textMuted(this));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = BulkTheme.dp(this, 2);
+        mPendingSub.setLayoutParams(slp);
+        texts.addView(mPendingSub);
+        row.addView(texts, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        android.widget.ImageView chev = BulkTheme.icon(this, R.drawable.ic_bulk_chevron,
+            BulkTheme.textMuted(this), 14);
+        chev.setLayoutParams(new LinearLayout.LayoutParams(
+            BulkTheme.dp(this, 14), BulkTheme.dp(this, 14)));
+        row.addView(chev);
+        refreshPendingSub();
+        row.setOnClickListener(v -> BulkPendingUi.showPendingPopup(this));
+        return row;
+    }
+
+    /** Pending row ke count text ko taza karo (0 = empty text). */
+    private void refreshPendingSub() {
+        if (mPendingSub == null) return;
+        int count = BulkPendingDeletes.countNow(this);
+        if (count > 0) {
+            mPendingSub.setText(String.format(
+                BulkStrings.t(this, BulkStrings.PENDING_DELETE_SUB_FMT), count));
+        } else {
+            mPendingSub.setText(BulkStrings.t(this, BulkStrings.PENDING_DELETE_EMPTY));
+        }
+    }
+
+    /**
+     * Move Delete popup: do radio choices (Auto / Popup
+     * wala). Band sirf button se (showPanelDialog ka lock).
+     */
+    private void showMoveDeletePopup(final TextView subView) {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        LinearLayout panel = BulkTheme.modalPanel(this,
+            BulkStrings.t(this, BulkStrings.MOVE_DELETE), dialog);
+        final String current = BulkMoveDelete.currentMode(this);
+        String[] modes = {BulkMoveDelete.MODE_AUTO, BulkMoveDelete.MODE_POPUP};
+        for (final String mode : modes) {
+            TextView opt = new TextView(this);
+            opt.setText((mode.equals(current) ? "●  " : "○  ") + moveDeleteLabel(mode));
+            opt.setTextSize(14);
+            opt.setTypeface(medium());
+            opt.setTextColor(mode.equals(current)
+                ? BulkTheme.accent(this) : BulkTheme.textMain(this));
+            opt.setPadding(BulkTheme.dp(this, 4), BulkTheme.dp(this, 11),
+                BulkTheme.dp(this, 4), BulkTheme.dp(this, 11));
+            opt.setClickable(true);
+            opt.setOnClickListener(v -> {
+                BulkMoveDelete.setMode(this, mode);
+                subView.setText(String.format(
+                    BulkStrings.t(this, BulkStrings.MOVE_DELETE_SUB_FMT),
+                    moveDeleteLabel(mode)));
+                dialog.dismiss();
+            });
+            panel.addView(opt, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
         BulkTheme.showPanelDialog(this, panel);
     }
 
