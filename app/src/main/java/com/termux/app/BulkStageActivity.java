@@ -122,6 +122,25 @@ public class BulkStageActivity extends Activity {
     private int mDeleteViaDirect = 0;
     private List<ConsentItem> mConsentQueue = null;
 
+    // v157 PRE-RUN GATE: dusri screen (Dashboard / Projects)
+    // se Run dabane par ye activity gate HOST banti hai —
+    // intent extras me intezar wale run ka project number
+    // (or terminal dispatch hai ya nahi). OnResume ka
+    // processPendingDeletes wahi asal flow chalata hai;
+    // flow khatam hote hi continueGate intezar wala run
+    // shuru karke ye screen band kar deti hai.
+    public static final String EXTRA_GATE_PROJECT = "bulk_gate_project";
+    public static final String EXTRA_GATE_TERMINAL = "bulk_gate_terminal";
+    private int mGateProject = -1;
+    private boolean mGateTerminal = false;
+    private boolean mGateContinued = false;
+    // v157: is screen ke apne Run Now ka intezar — commit
+    // ke baad pehle deletes, phir run (finishDeleteOriginals
+    // isay shuru karti hai). Flow chalte hue naye items
+    // queue hon to pehle un ka reprocess (mReprocessAfterFinish).
+    private BulkProjects.ProjectInfo mRunNowProject = null;
+    private boolean mReprocessAfterFinish = false;
+
     /** API 29: ek original ki delete-consent (exception ke sath). */
     private static final class ConsentItem {
         final Uri uri;
@@ -179,6 +198,12 @@ public class BulkStageActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         BulkTheme.applyWindow(this);
+        // v157: pre-run gate ke extras (host mode hai ya nahi)
+        Intent gateIntent = getIntent();
+        if (gateIntent != null) {
+            mGateProject = gateIntent.getIntExtra(EXTRA_GATE_PROJECT, -1);
+            mGateTerminal = gateIntent.getBooleanExtra(EXTRA_GATE_TERMINAL, false);
+        }
         if (!BulkStorageAccess.hasAccess(this)) {
             setContentView(buildPermissionUi());
             return;
@@ -208,6 +233,14 @@ public class BulkStageActivity extends Activity {
         // v130: pichle commit ke reh gaye move-deletes (masalan Run ke
         // baad activity band ho gayi thi) — Stage khulte hi mukammal karo
         processPendingDeletes();
+        // v157: gate host hon or delete karne ko kuch bacha
+        // hi na ho (list beech me khaali ho gayi ho) to
+        // intezar wala run foran aage barhao — gate latka
+        // kabhi nahi rehta. Flow chal raha ho to us ka
+        // finishDeleteOriginals hi continueGate bulayega.
+        if (mGateProject > 0 && !mGateContinued && !mDeletingOriginals) {
+            continueGate();
+        }
     }
 
     @Override
@@ -1759,12 +1792,34 @@ public class BulkStageActivity extends Activity {
                 BulkTheme.showToast(BulkStageActivity.this, msg);
                 BulkLog.add(msg); // v129: Home live-log card ke liye
                 if (runNow) {
-                    // v127: run ke sawal app manage karti hai (BulkRunHelper).
-                    // Move-deletes yahan process nahi hote — run ke baad
-                    // activity band ho jati hai; queue prefs me mehfooz
-                    // hai, agli dafa Stage khulte hi process hogi.
-                    BulkRunHelper.startRun(BulkStageActivity.this, sel,
-                        () -> finish());
+                    // v157 (owner ka hukm: "pehle ye popup aye,
+                    // delete kry phr run kry agr move wla hy tu"):
+                    // pehle pending deletes mukammal, PHIR run.
+                    // v127–v156 me ye step yahan SKIP hota tha —
+                    // run foran shuru, activity band, or deletes
+                    // kabhi hote hi nahi thay (owner ke phone par
+                    // 4 items Pending me atke rahe, koi popup
+                    // kabhi nahi aya — yahi asal defect tha).
+                    // Ab run ka intezar mRunNowProject me rehta
+                    // hai; finishDeleteOriginals use shuru karegi
+                    // (delete kamyab / cancel / fail — har surat
+                    // me run aage barhta hai).
+                    mRunNowProject = sel;
+                    if (mDeletingOriginals) {
+                        // Pichla delete flow chal raha hai — is
+                        // commit ke naye items us flow me nahi
+                        // hain; wo khatam hote hi pehle in ka
+                        // reprocess hoga, phir run.
+                        mReprocessAfterFinish = true;
+                    } else {
+                        processPendingDeletes();
+                        if (!mDeletingOriginals) {
+                            // Delete karne ko kuch nahi — seedha run
+                            mRunNowProject = null;
+                            BulkRunHelper.startRunAfterGate(
+                                BulkStageActivity.this, sel, () -> finish());
+                        }
+                    }
                 } else {
                     processPendingDeletes();
                 }
@@ -2264,6 +2319,52 @@ public class BulkStageActivity extends Activity {
             String msg = BulkStrings.format(this, BulkStrings.MOVED_ORIGINALS_TOAST, deleted);
             BulkTheme.showToast(this, msg);
             BulkLog.add(msg);
+        }
+        // v157: koi run is delete ke khatam hone ka intezar
+        // kar raha ho (is screen ka Run Now, ya dusri screen
+        // se aya pre-run gate) to ab use shuru karo. Delete
+        // kamyab ho, user ne popup cancel kiya ho ya kuch
+        // items fail hue hon — run KABHI nahi rukta; jo
+        // items reh gaye wo Pending me rehte hain.
+        if (mReprocessAfterFinish) {
+            mReprocessAfterFinish = false;
+            processPendingDeletes();
+            if (mDeletingOriginals) return; // naya flow — us ka finish aage barhayega
+        }
+        if (mRunNowProject != null) {
+            BulkProjects.ProjectInfo p = mRunNowProject;
+            mRunNowProject = null;
+            BulkRunHelper.startRunAfterGate(this, p, () -> finish());
+            return;
+        }
+        continueGate();
+    }
+
+    /**
+     * v157: pre-run gate ka dusra hissa — delete flow
+     * khatam (ya karne ko kuch tha hi nahi) to intezar
+     * wala run ab shuru karo or ye host screen band karo.
+     * Project list me na mile (beech me remove ho gaya
+     * ho) to sirf band — run ka koi rasta hi nahi bacha.
+     * Ek dafa se zyada kabhi nahi chalta (mGateContinued).
+     */
+    private void continueGate() {
+        if (mGateProject <= 0 || mGateContinued) return;
+        mGateContinued = true;
+        BulkProjects.ProjectInfo target = null;
+        for (BulkProjects.ProjectInfo p : mProjects) {
+            if (p.number == mGateProject) { target = p; break; }
+        }
+        BulkLog.add(BulkRunGate.gateDoneLine(BulkPendingDeletes.countNow(this)));
+        if (target == null) {
+            finish();
+            return;
+        }
+        if (mGateTerminal) {
+            BulkRunHelper.startInTerminalAfterGate(this, target, "process",
+                () -> finish());
+        } else {
+            BulkRunHelper.startRunAfterGate(this, target, () -> finish());
         }
     }
 

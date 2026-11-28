@@ -77,13 +77,80 @@ public final class BulkRunHelper {
 
     // ------------------------------------------------------------ entry points
 
-    /** Har Run yahin se guzarta hai (Quick Run, Projects, Stage Run Now). */
+    /**
+     * Har Run yahin se guzarta hai (Quick Run, Projects,
+     * Stage Run Now). v157: pehle pre-run gate (BulkRunGate)
+     * — pending deletes hon to pehle wo, phir run; Stage
+     * Run Now apne deletes in-place karke seedha
+     * startRunAfterGate se ata hai.
+     */
     public static void startRun(final Activity a, final BulkProjects.ProjectInfo p) {
         startRun(a, p, null);
     }
 
     public static void startRun(final Activity a, final BulkProjects.ProjectInfo p,
                                 final Runnable onLaunched) {
+        if (a == null || p == null) return;
+        // v157 PRE-RUN GATE (owner ka hukm: "pehle ye popup
+        // aye, delete kry phr run kry agr move wla hy tu"):
+        // pending move-deletes hon to pehle wahi v156 delete
+        // flow foreground me mukammal hota hai, run us ke
+        // baad hi shuru hota hai. Host BulkStageActivity hai
+        // (wahi asal flow + consent result leti hai); gate
+        // wahan khatam hote hi startRunAfterGate se yehi run
+        // shuru ho jata hai — delete kamyab ho, cancel ho ya
+        // fail, run kabhi nahi rukta. Pending khaali ho to
+        // gate bilkul nahi lagta (koi deri, koi UI nahi).
+        // BulkStageActivity khud caller ho to gate yahan
+        // nahi lagta — wo apna Run Now khud sequence karti
+        // hai (startCommit ka v157 rasta).
+        if (!(a instanceof BulkStageActivity)
+            && BulkRunGate.decide(BulkPendingDeletes.countNow(a), false)
+                == BulkRunGate.DELETE_FIRST) {
+            BulkLog.add(BulkRunGate.gateLogLine(
+                BulkPendingDeletes.countNow(a)));
+            if (launchDeleteGate(a, p, false)) return;
+            // Gate host na khul saka to bhi run nahi rukta —
+            // seedha dispatch (items Pending me rehte hain)
+        }
+        doStartRun(a, p, onLaunched);
+    }
+
+    /**
+     * v157: gate ke baad wala seedha Run dispatch — gate
+     * dobara NAHI lagta (warna cancel par reh gaye items
+     * gate ko loop bana dete). Gate host (BulkStageActivity)
+     * delete flow khatam hote hi isay bulati hai.
+     */
+    static void startRunAfterGate(final Activity a, final BulkProjects.ProjectInfo p,
+                                  final Runnable onLaunched) {
+        if (a == null || p == null) return;
+        doStartRun(a, p, onLaunched);
+    }
+
+    /**
+     * v157: gate host kholo — BulkStageActivity gate extras
+     * ke sath. Khul jaye to true (run wahan se aage barhe
+     * ga); koi khami ho to false — caller run ko seedha
+     * dispatch kar deta hai, run kabhi host ke bharose
+     * nahi rukta.
+     */
+    private static boolean launchDeleteGate(final Activity a,
+                                            final BulkProjects.ProjectInfo p,
+                                            final boolean terminal) {
+        try {
+            Intent gate = new Intent(a, BulkStageActivity.class);
+            gate.putExtra(BulkStageActivity.EXTRA_GATE_PROJECT, p.number);
+            gate.putExtra(BulkStageActivity.EXTRA_GATE_TERMINAL, terminal);
+            a.startActivity(gate);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static void doStartRun(final Activity a, final BulkProjects.ProjectInfo p,
+                                   final Runnable onLaunched) {
         if (a == null || p == null) return;
         // v138: command snapshot (p.workCmd) par bharosa NAHI —
         // asal command number + TAAZA script se yahin, run ke waqt
@@ -186,12 +253,41 @@ public final class BulkRunHelper {
     public static void startInTerminal(final Activity a, final BulkProjects.ProjectInfo p,
                                        final String action) {
         if (a == null || p == null || action == null) return;
+        // v157: pre-run gate yahan bhi — lekin SIRF Run
+        // ("process") par; Batch/Delete par gate kabhi
+        // nahi (BulkRunGate.gatesAction). Rasta wahi hai:
+        // pehle deletes (host BulkStageActivity), phir ye
+        // terminal dispatch startInTerminalAfterGate se.
+        if (!(a instanceof BulkStageActivity)
+            && BulkRunGate.gatesAction(action)
+            && BulkRunGate.decide(BulkPendingDeletes.countNow(a), false)
+                == BulkRunGate.DELETE_FIRST) {
+            BulkLog.add(BulkRunGate.gateLogLine(
+                BulkPendingDeletes.countNow(a)));
+            if (launchDeleteGate(a, p, true)) return;
+        }
+        doStartInTerminal(a, p, action, null);
+    }
+
+    /** v157: gate ke baad wala terminal dispatch — gate dobara nahi lagta. */
+    static void startInTerminalAfterGate(final Activity a, final BulkProjects.ProjectInfo p,
+                                         final String action, final Runnable onLaunched) {
+        if (a == null || p == null || action == null) return;
+        doStartInTerminal(a, p, action, onLaunched);
+    }
+
+    private static void doStartInTerminal(final Activity a, final BulkProjects.ProjectInfo p,
+                                          final String action, final Runnable onLaunched) {
         final String cmd = BulkProjects.effectiveCommand(p, action);
-        if (cmd == null) return;
+        if (cmd == null) {
+            if (onLaunched != null) onLaunched.run();
+            return;
+        }
         new Thread(() -> {
             try { BulkDropFolders.syncNow(a); } catch (Exception ignored) {}
             a.runOnUiThread(() -> {
-                if (!a.isFinishing()) launchInTerminal(a, cmd, null);
+                if (!a.isFinishing()) launchInTerminal(a, cmd, onLaunched);
+                else if (onLaunched != null) onLaunched.run();
             });
         }).start();
     }
